@@ -52,8 +52,16 @@ Checagem rápida de sintaxe sem subir o app:
 - `R/core/core_ui_components.R` → toggles/inputs compartilhados (usados no painel de métricas).
 - `R/dpsir/core_dpsir_pathways.R` → versão original (categorias fixas), mantida no disco
   mas **não sourceada**; superada por `R/pathways.R`.
-- `R/dpsir/core_dpsir_responses.R` → lógica de simulação de respostas, **preservada mas
-  não sourceada**; reservada para a Fase 3 (`apply_response`, cenários).
+- `R/dpsir/core_dpsir_responses.R` → versão original de onde `R/responses.R` foi
+  adaptada, mantida no disco mas **não sourceada**.
+- `R/responses.R` → simulação de respostas schema-aware (`get_feedback_categories`,
+  `find_response_targets`, `apply_response`, `compute_node_impact_score`,
+  `summarize_response_impact`, `compare_states`, `compare_multiple_states`).
+- `R/report.R` → montagem do relatório HTML autocontido (`build_full_report_html`,
+  `report_html_table`, `format_report_cell`, `matrix_to_report_df`), usado só por
+  `mod_report.R`. Seções (grafo/métricas gerais/centralidades/descritores/cenários)
+  são todas opcionais via flags — nenhuma é recomputada aqui, só reaproveita as
+  funções de `R/metrics.R`/`R/responses.R` já usadas nas outras abas.
 - `R/modules/mod_data.R` → editor por formulário (passos Início/Modelo/Nós/Arestas/Revisar
   do wizard); estado em `reactiveValues`, não-reativo até "Construir/Reconstruir grafo".
 - `R/modules/mod_graph.R` → painel de exploração do grafo (filtros de subsistema/escala
@@ -66,9 +74,19 @@ Checagem rápida de sintaxe sem subir o app:
   Propagation) desenhada com `build_community_visual` (com arestas, ao contrário da
   versão pré-Fase-1).
 - `R/modules/mod_metrics.R` → painel único de métricas (Gerais / Centralidades / Descritores DPSIR).
+- `R/modules/mod_responses.R` → aba "Scenarios": ativar respostas (nós de categoria
+  feedback) com força 0-100%, aplicar cenário combinado, salvar e comparar múltiplos
+  cenários lado a lado (comparação rápida em tela — a exportação em si vive em
+  `mod_report.R`, ver abaixo).
+- `R/modules/mod_report.R` → aba "Report" (última do Explorar): checkboxes para
+  escolher o que entra no HTML final — grafo (imagem), métricas gerais,
+  centralidades, descritores DPSIR, e seleção múltipla de cenários salvos
+  (baseline sempre incluído). Um único botão "Download report (HTML)" gera tudo
+  via `build_full_report_html`.
 - `R/modules/mod_wizard.R` → casca do wizard (passo atual, Voltar/Avançar com validação,
   download do savepoint disponível em qualquer passo); o passo Explorar é um
-  `tabsetPanel` (Graph/Communities/Metrics).
+  `tabsetPanel` (Graph/Communities/Scenarios/Metrics/Report) e também dispara a
+  captura da imagem do grafo (ver seção de Fase 3 abaixo).
 - `R/ui_main.R`, `R/server_main.R` → UI e server principais (chamam só `mod_wizard_*`).
 - `data/` → CSVs de exemplo.
 
@@ -149,11 +167,78 @@ Matriz de conexões livre e aninhamento hierárquico de níveis ficam de fora po
 mudam a arquitetura do schema e serão discutidos numa conversa própria antes de
 planejar (ver plano em `.claude/` ou pedir para reabrir a discussão).
 
+**Fase 3 concluída, na branch `fase-3`** (cenários de resposta e relatório exportável,
+ver PLANO seção 8 e restrição do usuário: gestores não são especialistas em DPSIR/grafos,
+então a aba evita jargão de grafo na tela). Novos arquivos:
+- `R/responses.R` — adaptado de `R/dpsir/core_dpsir_responses.R` (que continua
+  preservado no disco, não sourceado), mais `find_response_targets` restaurada (vivia
+  no `core_dpsir_pathways.R` antigo e tinha ficado faltando desde a Fase 2).
+  `get_feedback_categories(schema)` generaliza a categoria "Response" fixa para
+  qualquer categoria com `role == "feedback"`. `compare_multiple_states` generaliza
+  `compare_states` para N grafos nomeados (baseline + cenários lado a lado).
+- `R/modules/mod_responses.R` — aba "Scenarios": uma linha (checkbox + slider 0-100%)
+  por nó de categoria feedback existente na rede; "Apply scenario" encadeia
+  `apply_response` para cada resposta marcada sobre o mesmo grafo (combinação de
+  respostas é só um loop). Mostra "Effect on the network" (`compare_states`) e "Effect
+  on each factor" (`summarize_response_impact`, com Improves/Worsens/Stable em
+  linguagem simples — os scores numéricos ficam ocultos por padrão via `columnDefs
+  visible=FALSE` mas continuam no export CSV/Excel). Cenários salvos ficam em
+  `reactiveValues` só na sessão (não entram no savepoint ainda). Selecionar 2+
+  cenários salvos habilita "Compare selected scenarios" (baseline sempre incluído
+  automaticamente) — comparação rápida só em tela, exportação em HTML vive na aba
+  Report (ver abaixo).
+
+Testado ponta a ponta rodando o app: rede de 6 nós (D1/P1/S1/I1/R1/R2) com R1 e R2 como
+Response, dois cenários salvos (R1 a 60%; R1+R2 a 60%/80%), comparação mostrando
+`total_edge_weight` caindo corretamente (9→6.6→5.0) — sem erros no console do
+servidor em nenhum passo.
+
+`R/dpsir/core_dpsir_pathways.R` e `R/dpsir/core_dpsir_responses.R` continuam no disco,
+não sourceados — foram só a base de onde `R/pathways.R` e `R/responses.R` foram
+adaptados; podem ser removidos numa limpeza futura se não houver mais uso previsto.
+
+**Relatório redesenhado como aba própria "Report"** (última do Explorar), a pedido do
+usuário: a primeira versão do relatório (Fase 3 original) vivia dentro da aba Scenarios
+e só cobria comparação de cenários — achado "muito simples" e pouco informativo. Agora
+`R/report.R` (`build_full_report_html`) + `R/modules/mod_report.R` deixam o usuário
+escolher, via checkboxes, quais seções entram no HTML final: grafo (imagem), métricas
+gerais, centralidades, descritores DPSIR, e seleção múltipla de cenários salvos
+(baseline sempre incluído automaticamente). Continua sem rmarkdown/pandoc (mesma razão
+da Fase 3: `rmarkdown::pandoc_available()` é `FALSE` nesta máquina) — HTML montado com
+`htmltools::tagList`/`save_html()`, `report_html_table` arredondando números a 2 casas
+(inteiros sem `.00` via `format_report_cell`, ajustado depois do teste ter mostrado
+"2.00" em contagens de nós/arestas — pouco legível). Comunidades (imagem + tabela de
+membership) ficou de fora deste primeiro corte por decisão do usuário — fica como
+próximo passo natural, reaproveitando a mesma mecânica de captura de imagem abaixo.
+
+**Bug real de captura de imagem, encontrado e corrigido só ao testar em runtime** (não
+aparecia em teste estático): a ideia inicial era capturar o grafo com `html2canvas`
+(já carregado pelo `visExport()` do widget, sem dependência nova) no momento em que o
+usuário marca "Include network graph" — mas isso é feito *na aba Report*, e nesse
+momento a aba Graph está com `display:none`. `html2canvas` sobre um elemento oculto
+(e o próprio `<canvas>` do vis-network, verificado diretamente via
+`network.canvas.frame.canvas`) sempre retornava `width=0, height=0` →
+`toDataURL()` virava `"data:,"`, uma imagem inválida, mas que passava sem erro pelo
+`is.null()` do lado R (silenciosamente quebrado). Corrigido invertendo quem dispara a
+captura: `mod_wizard_server` (que tem acesso a `input$current_step` e ao
+`tabsetPanel(id=...)` da aba Explorar) dispara a captura sempre que a aba Graph fica
+de fato visível — ao chegar no passo Explorar (Graph é a aba padrão) e sempre que o
+usuário volta pra ela — enviando o resultado direto pro input da aba Report via
+`session$sendCustomMessage`. O handler em `mod_report.R` só registra o listener e
+descarta capturas de tamanho zero (`canvas.width > 0 && canvas.height > 0`), então uma
+tentativa falha (ex.: primeiro carregamento antes do layout assentar) não sobrescreve
+uma captura boa anterior. A legenda do grafo é um `vis.Network` separado (visível no
+grep de `visNetwork.js`: `document.getElementById("legend"+el.id).network`), então a
+imagem capturada inclui a legenda porque `html2canvas` rasteriza a div inteira do
+widget (não só o canvas principal) — mantido assim de propósito.
+
 ## Próximo
 
 Retomar matriz de conexões livre e aninhamento hierárquico de níveis (Fase 2,
-itens restantes) quando desenhados, ou avançar para a Fase 3 (cenários de resposta,
-`apply_response`, `R/dpsir/core_dpsir_responses.R`).
+itens restantes) quando desenhados. Considerar incluir cenários salvos no savepoint
+(hoje só duram a sessão) se isso vier a ser pedido. Relatório: adicionar seção de
+Comunidades (imagem + tabela) como fast-follow, reaproveitando a mecânica de captura
+já existente.
 
 ## Princípios
 

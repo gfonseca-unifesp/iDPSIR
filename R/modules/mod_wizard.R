@@ -30,9 +30,12 @@ mod_wizard_ui <- function(id) {
     conditionalPanel(
       condition = step_condition(6),
       tabsetPanel(
+        id = ns("explore_tabs"),
         tabPanel("Graph", mod_graph_ui(ns("graph"))),
         tabPanel("Communities", mod_communities_ui(ns("communities"))),
-        tabPanel("Metrics", mod_metrics_ui(ns("metrics")))
+        tabPanel("Scenarios", mod_responses_ui(ns("responses"))),
+        tabPanel("Metrics", mod_metrics_ui(ns("metrics"))),
+        tabPanel("Report", mod_report_ui(ns("report")))
       )
     ),
 
@@ -52,7 +55,36 @@ mod_wizard_server <- function(id) {
     data <- mod_data_server("data")
     mod_graph_server("graph", data$schema, data$nodes, data$edges, data$graph)
     mod_communities_server("communities", data$schema, data$nodes, data$edges, data$graph)
+    responses <- mod_responses_server("responses", data$schema, data$nodes, data$edges, data$graph)
     mod_metrics_server("metrics", data$schema, data$graph)
+    mod_report_server("report", data$schema, data$nodes, data$edges, data$graph, responses$saved_scenarios)
+
+    # =================================================
+    # GRAPH IMAGE CAPTURE (for the Report tab)
+    # =================================================
+    #
+    # html2canvas (and vis-network's own <canvas>) both collapse to 0x0 once
+    # their tab is display:none, so capturing on-demand from the Report tab
+    # never works - the Graph pane has to actually be visible at capture
+    # time. Trigger it here instead, whenever the Graph pane becomes visible:
+    # once when Explore is first reached (Graph is its default tab, so no
+    # tab-switch event fires for that initial view) and again every time the
+    # user switches back to the Graph tab.
+
+    request_graph_capture <- function() {
+      session$sendCustomMessage(
+        "idpsir_capture_element",
+        list(elementId = paste0(ns("graph"), "-network"), inputId = paste0(ns("report"), "-captured_graph_image"))
+      )
+    }
+
+    observeEvent(input$current_step, {
+      if (identical(input$current_step, 6)) request_graph_capture()
+    })
+
+    observeEvent(input$explore_tabs, {
+      if (identical(input$explore_tabs, "Graph")) request_graph_capture()
+    })
 
     output$progress_ui <- renderUI({
       req(input$current_step)

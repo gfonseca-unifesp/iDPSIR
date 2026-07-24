@@ -39,6 +39,8 @@ source("R/validate.R")
 source("R/graph.R")
 source("R/metrics.R")
 source("R/pathways.R")
+source("R/responses.R")
+source("R/report.R")
 source("R/io.R")
 
 source("R/core/core_ui_components.R")
@@ -51,6 +53,8 @@ source("R/modules/mod_data.R")
 source("R/modules/mod_graph.R")
 source("R/modules/mod_communities.R")
 source("R/modules/mod_metrics.R")
+source("R/modules/mod_responses.R")
+source("R/modules/mod_report.R")
 source("R/modules/mod_wizard.R")
 
 # =========================
