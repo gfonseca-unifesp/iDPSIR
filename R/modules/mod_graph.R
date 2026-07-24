@@ -5,7 +5,11 @@
 # Lightweight panel (not a wizard step): receives schema/nodes/edges/graph
 # from mod_data and applies filters (subsystem, temporal scale) + display
 # options (palette, node/edge emphasis, spacing), without altering the
-# saved project state.
+# saved project state. Pathway highlighting lives here too (not a separate
+# tab): a "Highlight pathway" dropdown, same pattern as "Select by group" /
+# "Node size based on", so picking a pathway updates this same graph
+# instead of sending the user to another tab and back. The nodes table
+# below the network is kept in sync with graph clicks in both directions.
 
 mod_graph_ui <- function(id) {
   ns <- NS(id)
@@ -56,7 +60,19 @@ mod_graph_ui <- function(id) {
       column(width = 6, sliderInput(ns("legend_font_size"), "Legend font size", min = 8, max = 40, value = 14, step = 1))
     ),
 
-    visNetworkOutput(ns("network"), height = "700px")
+    tags$hr(),
+    fluidRow(
+      column(width = 3, selectInput(ns("path_from_category"), "Pathway from category", choices = character())),
+      column(width = 3, selectInput(ns("path_to_category"), "Pathway to category", choices = character())),
+      column(width = 6, selectInput(ns("path_highlight"), "Highlight pathway", choices = c("None" = "none"), width = "100%"))
+    ),
+
+    visNetworkOutput(ns("network"), height = "700px"),
+
+    tags$hr(),
+    h5("Nodes"),
+    p("Click a node in the graph to select it here, or select a row to focus it in the graph."),
+    DTOutput(ns("nodes_table"))
   )
 }
 
@@ -70,6 +86,49 @@ mod_graph_server <- function(id, schema, nodes, edges, graph) {
 
       temporals <- sort(unique(n$temporal_scale[nzchar(n$temporal_scale)]))
       updateSelectInput(session, "temporal_filter", choices = c("All", temporals), selected = "All")
+    })
+
+    # =================================================
+    # PATHWAY HIGHLIGHT (dropdown, same pattern as the other display options)
+    # =================================================
+
+    observeEvent(schema(), {
+      categories <- schema_categories(schema())
+      updateSelectInput(session, "path_from_category", choices = categories, selected = categories[1])
+      updateSelectInput(session, "path_to_category", choices = categories, selected = categories[length(categories)])
+    })
+
+    path_candidates <- reactive({
+      req(graph(), input$path_from_category, input$path_to_category)
+
+      paths <- find_dpsir_paths(graph(), input$path_from_category, input$path_to_category, schema = schema())
+      compute_critical_pathways(graph(), paths, top_n = 10)
+    })
+
+    observeEvent(path_candidates(), {
+      candidates <- path_candidates()
+
+      if (nrow(candidates) == 0) {
+        updateSelectInput(session, "path_highlight", choices = c("None" = "none"), selected = "none")
+        return()
+      }
+
+      choices <- setNames(
+        as.character(seq_len(nrow(candidates))),
+        sprintf("%s (score %.2f)", candidates$nodes, candidates$score)
+      )
+      updateSelectInput(session, "path_highlight", choices = c("None" = "none", choices), selected = "none")
+    })
+
+    highlighted_nodes <- reactive({
+      sel <- input$path_highlight
+
+      if (is.null(sel) || sel == "none") {
+        return(NULL)
+      }
+
+      row <- path_candidates()[as.integer(sel), ]
+      trimws(strsplit(row$nodes, " -> ", fixed = TRUE)[[1]])
     })
 
     filtered_nodes <- reactive({
@@ -122,8 +181,62 @@ mod_graph_server <- function(id, schema, nodes, edges, graph) {
         y_spacing = input$y_spacing,
         avoid_overlap = input$avoid_overlap,
         node_font_size = input$node_font_size,
-        legend_font_size = input$legend_font_size
+        legend_font_size = input$legend_font_size,
+        highlighted_nodes = highlighted_nodes()
+      ) %>%
+        visEvents(select = sprintf(
+          "function(properties) { Shiny.setInputValue('%s', properties.nodes, {priority: 'event'}); }",
+          session$ns("node_click")
+        ))
+    })
+
+    # =================================================
+    # CROSS-SELECTION: GRAPH <-> NODES TABLE
+    # =================================================
+
+    output$nodes_table <- renderDT({
+      datatable(
+        filtered_nodes()[, c("id", "label", "dpsir_category", "subsystem")],
+        selection = "single",
+        rownames = FALSE,
+        options = list(pageLength = 10, scrollX = TRUE)
       )
+    })
+
+    # Only the table -> graph direction needs a reentrancy guard: selectRows()
+    # re-triggers nodes_table_rows_selected, which would otherwise call
+    # visSelectNodes() again. visNetworkProxy's visSelectNodes() does NOT
+    # re-emit vis.js's "select" event, so the graph -> table direction has
+    # no feedback loop to guard against.
+    suppress_table_sync <- reactiveVal(FALSE)
+
+    observeEvent(input$node_click, {
+      ids <- input$node_click
+      proxy <- dataTableProxy("nodes_table")
+
+      if (length(ids) == 0) {
+        selectRows(proxy, NULL)
+        return()
+      }
+
+      idx <- match(ids[1], filtered_nodes()$id)
+      if (!is.na(idx)) {
+        suppress_table_sync(TRUE)
+        selectRows(proxy, idx)
+      }
+    })
+
+    observeEvent(input$nodes_table_rows_selected, {
+      if (isTRUE(suppress_table_sync())) {
+        suppress_table_sync(FALSE)
+        return()
+      }
+
+      sel <- input$nodes_table_rows_selected
+      if (is.null(sel)) return()
+
+      node_id <- filtered_nodes()$id[sel]
+      visNetworkProxy(session$ns("network")) %>% visSelectNodes(id = node_id)
     })
   })
 }

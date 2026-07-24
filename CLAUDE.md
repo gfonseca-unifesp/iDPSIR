@@ -47,16 +47,28 @@ Checagem rápida de sintaxe sem subir o app:
   transições, Impactos sem Resposta, Pressões não cobertas, médias de incerteza/controlabilidade).
 - `R/io.R` → importar matrizes CSV (`import_matrices`) e savepoint `.idpsir.json`
   (`build_savepoint`/`write_savepoint`/`read_savepoint`, com checagem de `format_version`).
+- `R/pathways.R` → análise de caminhos causais schema-aware (`find_dpsir_paths`,
+  `compute_critical_pathways`, `score_pathway`), adaptado de `R/dpsir/core_dpsir_pathways.R`.
 - `R/core/core_ui_components.R` → toggles/inputs compartilhados (usados no painel de métricas).
-- `R/dpsir/core_dpsir_pathways.R`, `core_dpsir_responses.R` → lógica de pathways/respostas
-  **preservada mas não sourceada** em `global.R`; reservada para reuso nas Fases 2/3.
+- `R/dpsir/core_dpsir_pathways.R` → versão original (categorias fixas), mantida no disco
+  mas **não sourceada**; superada por `R/pathways.R`.
+- `R/dpsir/core_dpsir_responses.R` → lógica de simulação de respostas, **preservada mas
+  não sourceada**; reservada para a Fase 3 (`apply_response`, cenários).
 - `R/modules/mod_data.R` → editor por formulário (passos Início/Modelo/Nós/Arestas/Revisar
   do wizard); estado em `reactiveValues`, não-reativo até "Construir/Reconstruir grafo".
-- `R/modules/mod_graph.R` → painel leve de exploração do grafo (filtros de subsistema/escala
-  temporal, paleta de exibição, layout em camadas).
+- `R/modules/mod_graph.R` → painel de exploração do grafo (filtros de subsistema/escala
+  temporal, paleta de exibição, layout em camadas, tabela de nós com seleção cruzada
+  grafo↔tabela). Destaque de caminhos causais vive aqui também, como dropdown "Highlight
+  pathway" (From/To categoria + seleção do caminho, mesmo padrão de "Select by group" /
+  "Node size based on") — não é uma aba separada, para não forçar o usuário a trocar de
+  aba e voltar toda vez que quiser ver o destaque no grafo.
+- `R/modules/mod_communities.R` → aba de comunidades (Louvain/Walktrap/Infomap/Label
+  Propagation) desenhada com `build_community_visual` (com arestas, ao contrário da
+  versão pré-Fase-1).
 - `R/modules/mod_metrics.R` → painel único de métricas (Gerais / Centralidades / Descritores DPSIR).
 - `R/modules/mod_wizard.R` → casca do wizard (passo atual, Voltar/Avançar com validação,
-  download do savepoint disponível em qualquer passo).
+  download do savepoint disponível em qualquer passo); o passo Explorar é um
+  `tabsetPanel` (Graph/Communities/Metrics).
 - `R/ui_main.R`, `R/server_main.R` → UI e server principais (chamam só `mod_wizard_*`).
 - `data/` → CSVs de exemplo.
 
@@ -102,11 +114,46 @@ usava o atributo `weight` da aresta como distância automaticamente (comportamen
 padrão do igraph), inflando o diâmetro. Corrigido com `weights = NA` para diâmetro
 topológico (hop count). O mesmo cuidado já tinha sido aplicado a betweenness/closeness.
 
-## Próximo: Fase 2 (ver PLANO seção 8)
+**Fase 2 (parcial) concluída, na branch `fase-2`** (ver PLANO seção 8): dos 6 itens da
+Fase 2, os 4 de ganho claro e baixo risco foram feitos — destaque de caminhos causais
+no grafo (`highlighted_nodes` em `build_network_visual`, grafo/edges fora do caminho
+ficam cinza), seleção cruzada grafo↔tabela (clique no nó seleciona a linha na tabela e
+vice-versa, `mod_graph.R`) e comunidades redesenhadas com arestas (`mod_communities.R`
++ `build_community_visual`, corrigindo o bug da versão antiga que só mostrava pontos
+coloridos sem conexões). Testado ponta a ponta rodando o app.
 
-Destaque de caminhos no grafo, aba de pathways enxuta, comunidades corrigidas (com
-arestas desenhadas), seleção cruzada grafo↔tabela, matriz de conexões livre e
-aninhamento hierárquico de níveis.
+Pathways **não é uma aba separada**: a primeira versão colocava a análise de caminhos
+numa aba própria, mas isso obrigava o usuário a selecionar o caminho lá e voltar para a
+aba Graph para ver o destaque — pouco intuitivo. Reajustado a pedido do usuário: os
+controles (From/To categoria + dropdown "Highlight pathway", com o score no label)
+ficam dentro da própria aba Graph, no mesmo padrão de "Select by group"/"Node size
+based on". `R/modules/mod_pathways.R` foi removido; a lógica (`R/pathways.R`) passou a
+ser usada diretamente por `mod_graph.R`.
+
+**Dois bugs reais encontrados e corrigidos durante o teste em runtime** (nenhum dos
+dois aparecia em teste estático, só ao clicar de verdade na UI):
+- `dataTableProxy(session$ns("nodes_table"))` estava com namespace duplicado — o
+  pacote DT já aplica `session$ns()` internamente ao outputId quando chamado dentro de
+  um module, então passar o id já qualificado apontava para um elemento inexistente e
+  a seleção grafo→tabela nunca chegava a mudar a tabela. Corrigido para
+  `dataTableProxy("nodes_table")` (sem `session$ns()` manual). `visNetworkProxy`, ao
+  contrário, precisa do `session$ns()` explícito — os dois pacotes têm convenções
+  diferentes, vale conferir sempre que usar proxies de htmlwidgets dentro de módulos.
+- A trava anti-loop `suppress_graph_sync` nunca era consumida (porque
+  `visNetworkProxy() %>% visSelectNodes()` não reemite o evento `select` do vis.js),
+  então ficava presa em `TRUE` e engolia o próximo clique real no grafo. Removida —
+  só a direção tabela→grafo precisa de trava (`suppress_table_sync`), porque
+  `selectRows()` sim reaciona `input$..._rows_selected`.
+
+Matriz de conexões livre e aninhamento hierárquico de níveis ficam de fora por ora —
+mudam a arquitetura do schema e serão discutidos numa conversa própria antes de
+planejar (ver plano em `.claude/` ou pedir para reabrir a discussão).
+
+## Próximo
+
+Retomar matriz de conexões livre e aninhamento hierárquico de níveis (Fase 2,
+itens restantes) quando desenhados, ou avançar para a Fase 3 (cenários de resposta,
+`apply_response`, `R/dpsir/core_dpsir_responses.R`).
 
 ## Princípios
 

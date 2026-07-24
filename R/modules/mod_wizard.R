@@ -29,8 +29,11 @@ mod_wizard_ui <- function(id) {
     conditionalPanel(condition = step_condition(5), uiOutput(ns("data-review_step"))),
     conditionalPanel(
       condition = step_condition(6),
-      mod_graph_ui(ns("graph")),
-      mod_metrics_ui(ns("metrics"))
+      tabsetPanel(
+        tabPanel("Graph", mod_graph_ui(ns("graph"))),
+        tabPanel("Communities", mod_communities_ui(ns("communities"))),
+        tabPanel("Metrics", mod_metrics_ui(ns("metrics")))
+      )
     ),
 
     tags$hr(),
@@ -48,6 +51,7 @@ mod_wizard_server <- function(id) {
 
     data <- mod_data_server("data")
     mod_graph_server("graph", data$schema, data$nodes, data$edges, data$graph)
+    mod_communities_server("communities", data$schema, data$nodes, data$edges, data$graph)
     mod_metrics_server("metrics", data$schema, data$graph)
 
     output$progress_ui <- renderUI({
