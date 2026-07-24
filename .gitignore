@@ -22,3 +22,9 @@ desktop.ini
 # Temporários
 *.tmp
 *~
+
+# Claude Code (config local, especifico da maquina)
+.claude/settings.local.json
+
+# Savepoints exportados pelo app (dados de teste do usuario, nao codigo)
+*.idpsir.json

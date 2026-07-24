@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "idpsir-shiny",
+      "runtimeExecutable": "C:\\Program Files\\R\\R-4.3.2\\bin\\Rscript.exe",
+      "runtimeArgs": ["-e", "shiny::runApp(port=8901, host='127.0.0.1')"],
+      "port": 8901
+    }
+  ]
+}

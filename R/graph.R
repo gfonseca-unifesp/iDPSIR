@@ -1,0 +1,422 @@
+# =====================================================
+# GRAFO - CONSTRUCAO, LAYOUT EM CAMADAS E VISUAL
+# =====================================================
+
+# =====================================================
+# BUILD IGRAPH
+# =====================================================
+
+create_empty_graph_edges <- function() {
+  data.frame(
+    from = character(),
+    to = character(),
+    weight = numeric(),
+    confidence = numeric(),
+    arrows = character(),
+    width = numeric(),
+    stringsAsFactors = FALSE
+  )
+}
+
+prepare_nodes_for_graph <- function(nodes, schema) {
+  nodes <- normalize_dpsir_nodes(nodes)
+  nodes <- apply_schema_visual_mapping(nodes, schema)
+  nodes
+}
+
+prepare_edges_for_graph <- function(edges) {
+  if (is.null(edges) || nrow(edges) == 0) {
+    edges <- create_empty_graph_edges()
+  }
+
+  edges <- normalize_dpsir_edges(edges)
+
+  if (!"weight" %in% names(edges)) {
+    edges$weight <- if (nrow(edges) == 0) numeric() else 1
+  }
+
+  if (!"confidence" %in% names(edges)) {
+    edges$confidence <- if (nrow(edges) == 0) numeric() else 1
+  }
+
+  if (!"arrows" %in% names(edges)) {
+    edges$arrows <- if (nrow(edges) == 0) character() else "to"
+  }
+
+  if (!"width" %in% names(edges)) {
+    edges$width <- if (nrow(edges) == 0) {
+      numeric()
+    } else {
+      pmax(as.numeric(edges$weight), 1)
+    }
+  }
+
+  edges
+}
+
+build_igraph <- function(
+    nodes,
+    edges = NULL,
+    schema = get_default_dpsir_schema(),
+    verbose = FALSE
+) {
+  validate_graph_inputs(nodes, edges, schema)
+
+  nodes <- prepare_nodes_for_graph(nodes, schema)
+  edges <- prepare_edges_for_graph(edges)
+
+  if (verbose) {
+    message("Building DPSIR graph with ", nrow(nodes), " nodes and ", nrow(edges), " edges.")
+  }
+
+  g <- graph_from_data_frame(
+    d = edges,
+    vertices = nodes,
+    directed = TRUE
+  )
+
+  graph_attr(g, "network_type") <- "DPSIR"
+  graph_attr(g, "directed") <- TRUE
+  graph_attr(g, "created_at") <- Sys.time()
+
+  g
+}
+
+graph_to_nodes <- function(g) {
+  stopifnot(inherits(g, "igraph"))
+  nodes <- igraph::as_data_frame(g, what = "vertices")
+  names(nodes)[names(nodes) == "name"] <- "id"
+  nodes
+}
+
+graph_to_edges <- function(g) {
+  stopifnot(inherits(g, "igraph"))
+  igraph::as_data_frame(g, what = "edges")
+}
+
+# =====================================================
+# MAPEAMENTO VISUAL (SCHEMA-DRIVEN)
+# =====================================================
+
+apply_schema_visual_mapping <- function(nodes, schema, use_shapes = TRUE) {
+  validate_required_fields(nodes, "dpsir_category", "Nodes table")
+  validate_dpsir_categories(nodes, schema)
+
+  colors <- schema_colors(schema)
+  shapes <- schema_shapes(schema)
+
+  nodes$group <- nodes$dpsir_category
+  nodes$color <- unname(colors[nodes$dpsir_category])
+  nodes$shape <- if (isTRUE(use_shapes)) {
+    unname(shapes[nodes$dpsir_category])
+  } else {
+    "dot"
+  }
+
+  nodes
+}
+
+# =====================================================
+# LAYOUT EM CAMADAS (POSICAO X FIXA POR NIVEL)
+# =====================================================
+
+compute_layered_layout <- function(nodes, schema, x_spacing = 200, y_spacing = 80) {
+  validate_schema(schema)
+
+  categories <- schema_categories(schema)
+  order_index <- setNames(seq_along(categories), categories)
+
+  category_rank <- unname(order_index[nodes$dpsir_category])
+  x <- category_rank * x_spacing
+
+  y <- ave(seq_len(nrow(nodes)), category_rank, FUN = function(idx) {
+    n <- length(idx)
+    (seq_len(n) - (n + 1) / 2) * y_spacing
+  })
+
+  data.frame(id = nodes$id, x = x, y = y, stringsAsFactors = FALSE)
+}
+
+# =====================================================
+# TOOLTIPS
+# =====================================================
+
+build_node_tooltip <- function(nodes) {
+  glue::glue(
+    "<b>{nodes$label}</b><br>",
+    "Category: {nodes$dpsir_category}<br>",
+    "Subsystem: {ifelse(is.na(nodes$subsystem) | nodes$subsystem == '', '-', nodes$subsystem)}<br>",
+    "Uncertainty: {ifelse(is.na(nodes$uncertainty) | nodes$uncertainty == '', '-', nodes$uncertainty)}<br>",
+    "Controllability: {ifelse(is.na(nodes$controllability) | nodes$controllability == '', '-', nodes$controllability)}<br>",
+    "Temporal scale: {ifelse(is.na(nodes$temporal_scale) | nodes$temporal_scale == '', '-', nodes$temporal_scale)}"
+  )
+}
+
+build_edge_tooltip <- function(edges) {
+  glue::glue(
+    "{edges$from} &rarr; {edges$to}<br>",
+    "Weight: {ifelse(is.na(edges$weight), '-', edges$weight)}<br>",
+    "Confidence: {ifelse(is.na(edges$confidence), '-', edges$confidence)}<br>",
+    "Interaction: {ifelse(is.na(edges$interaction_type) | edges$interaction_type == '', '-', edges$interaction_type)}<br>",
+    "Evidence: {ifelse(is.na(edges$evidence_type) | edges$evidence_type == '', '-', edges$evidence_type)}"
+  )
+}
+
+# =====================================================
+# BUILD NETWORK VISUAL
+# =====================================================
+
+get_interaction_type_colors <- function() {
+  c(
+    increases = "#d62728",
+    triggers = "#d62728",
+    reduces = "#2ca02c",
+    mitigates = "#2ca02c",
+    improves = "#2ca02c"
+  )
+}
+
+build_edge_legend <- function(confidence_threshold = 0.5) {
+  colors <- get_interaction_type_colors()
+
+  legend <- data.frame(
+    label = names(colors),
+    color = unname(colors),
+    arrows = "to",
+    dashes = FALSE,
+    stringsAsFactors = FALSE
+  )
+
+  rbind(
+    legend,
+    data.frame(
+      label = paste0("Low confidence (< ", confidence_threshold, ")"),
+      color = "#848484",
+      arrows = "to",
+      dashes = TRUE,
+      stringsAsFactors = FALSE
+    )
+  )
+}
+
+rescale_safe <- function(x, to) {
+  x <- as.numeric(x)
+
+  if (length(unique(x)) <= 1) {
+    return(rep(mean(to), length(x)))
+  }
+
+  scales::rescale(x, to = to)
+}
+
+build_network_visual <- function(
+    nodes,
+    edges,
+    graph,
+    schema,
+    use_dpsir_shapes = TRUE,
+    node_size_mode = "all",
+    node_size_weighted = FALSE,
+    edge_width_by = "weight",
+    confidence_threshold = 0.5,
+    x_spacing = 200,
+    y_spacing = 80,
+    avoid_overlap = 0.5,
+    node_font_size = 14,
+    legend_font_size = 14
+) {
+  req(nodes)
+
+  if (is.null(edges) || !is.data.frame(edges)) {
+    edges <- data.frame(
+      id = character(),
+      from = character(),
+      to = character(),
+      width = numeric(),
+      dashes = logical(),
+      arrows = character(),
+      stringsAsFactors = FALSE
+    )
+  }
+
+  nodes$id <- trimws(as.character(nodes$id))
+  nodes <- apply_schema_visual_mapping(nodes, schema, use_shapes = use_dpsir_shapes)
+
+  edges$from <- trimws(as.character(edges$from))
+  edges$to <- trimws(as.character(edges$to))
+
+  valid_nodes <- nodes$id
+  edges <- edges[edges$from %in% valid_nodes & edges$to %in% valid_nodes, ]
+
+  # ===================================================
+  # LAYERED LAYOUT (fixed X per category, free Y)
+  # ===================================================
+
+  layout <- compute_layered_layout(nodes, schema, x_spacing = x_spacing, y_spacing = y_spacing)
+  nodes <- merge(nodes, layout, by = "id", sort = FALSE)
+  nodes$`fixed.x` <- TRUE
+  nodes$`fixed.y` <- FALSE
+
+  # ===================================================
+  # NODE SIZE (degree, optionally weighted by edge strength)
+  # ===================================================
+
+  if (vcount(graph) > 0) {
+    deg <- compute_degree(graph, mode = node_size_mode, weighted = node_size_weighted)
+
+    nodes$edge_count <- if (length(deg) > 0) {
+      deg[match(nodes$id, names(deg))]
+    } else {
+      0
+    }
+  } else {
+    nodes$edge_count <- 0
+  }
+
+  nodes$edge_count[is.na(nodes$edge_count)] <- 0
+  nodes$size <- rescale_safe(nodes$edge_count, to = c(15, 45))
+
+  # ===================================================
+  # UNCERTAINTY -> BORDER WIDTH
+  # ===================================================
+
+  uncertainty_border <- c(low = 1, medium = 2.5, high = 4)
+  nodes$borderWidth <- unname(uncertainty_border[nodes$uncertainty])
+  nodes$borderWidth[is.na(nodes$borderWidth)] <- 2
+
+  # ===================================================
+  # NODE TOOLTIP AND LABEL FONT SIZE
+  # ===================================================
+
+  nodes$title <- build_node_tooltip(nodes)
+  nodes$`font.size` <- node_font_size
+
+  # ===================================================
+  # EDGES: DIRECTION ARROW, WIDTH, DASH BY CONFIDENCE,
+  # COLOR BY INTERACTION TYPE
+  # ===================================================
+
+  if (nrow(edges) > 0) {
+    edges$arrows <- "to"
+
+    edges$width <- switch(
+      edge_width_by,
+      weight = rescale_safe(edges$weight, to = c(1, 8)),
+      confidence = rescale_safe(edges$confidence, to = c(1, 8)),
+      rep(2, nrow(edges))
+    )
+
+    edges$dashes <- !is.na(edges$confidence) & edges$confidence < confidence_threshold
+
+    interaction_colors <- get_interaction_type_colors()
+    edges$color <- unname(interaction_colors[edges$interaction_type])
+    edges$color[is.na(edges$color)] <- "#848484"
+
+    edges$title <- build_edge_tooltip(edges)
+  }
+
+  # ===================================================
+  # LEGEND AND RENDER
+  # ===================================================
+
+  legend_nodes <- build_dpsir_legend(schema)
+  legend_nodes$`font.size` <- legend_font_size
+
+  legend_edges <- build_edge_legend(confidence_threshold)
+  legend_edges$`font.size` <- legend_font_size
+
+  visNetwork(
+    nodes,
+    edges,
+    width = "100%",
+    height = "900px"
+  ) %>%
+    visNodes(
+      shadow = TRUE
+    ) %>%
+    visEdges(
+      smooth = FALSE
+    ) %>%
+    visPhysics(
+      solver = "forceAtlas2Based",
+      stabilization = TRUE,
+      forceAtlas2Based = list(avoidOverlap = avoid_overlap)
+    ) %>%
+    visLayout(
+      randomSeed = 123
+    ) %>%
+    visInteraction(
+      navigationButtons = TRUE,
+      keyboard = TRUE,
+      multiselect = TRUE
+    ) %>%
+    visExport(
+      type = "png",
+      name = "iDPSIR_network"
+    ) %>%
+    visOptions(
+      highlightNearest = list(
+        enabled = TRUE,
+        hover = TRUE
+      ),
+      selectedBy = "group"
+    ) %>%
+    visLegend(
+      useGroups = FALSE,
+      addNodes = legend_nodes,
+      addEdges = legend_edges,
+      position = "right",
+      main = "DPSIR"
+    )
+}
+
+# =====================================================
+# SANITIZE EDGES
+# =====================================================
+
+sanitize_edges <- function(edges, nodes) {
+  if (is.null(edges) || nrow(edges) == 0) {
+    return(
+      data.frame(
+        id = character(),
+        from = character(),
+        to = character(),
+        width = numeric(),
+        dashes = logical(),
+        arrows = character(),
+        stringsAsFactors = FALSE
+      )
+    )
+  }
+
+  nodes$id <- trimws(as.character(nodes$id))
+  edges$from <- trimws(as.character(edges$from))
+  edges$to <- trimws(as.character(edges$to))
+
+  edges <- edges[!is.na(edges$from) & !is.na(edges$to), ]
+  edges <- edges[edges$from %in% nodes$id & edges$to %in% nodes$id, ]
+
+  if (!"id" %in% names(edges)) {
+    edges$id <- paste0("edge_", seq_len(nrow(edges)))
+  }
+
+  if (!"width" %in% names(edges)) {
+    edges$width <- 1
+  }
+
+  if (!"dashes" %in% names(edges)) {
+    edges$dashes <- FALSE
+  }
+
+  if (!"arrows" %in% names(edges)) {
+    edges$arrows <- "to"
+  }
+
+  edges$id <- as.character(edges$id)
+  edges$width <- as.numeric(edges$width)
+  edges$dashes <- as.logical(edges$dashes)
+  edges$arrows <- as.character(edges$arrows)
+
+  edges <- unique(edges)
+  edges
+}

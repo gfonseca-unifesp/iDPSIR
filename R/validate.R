@@ -1,20 +1,6 @@
 # =====================================================
-# DPSIR VALIDATION
+# VALIDACAO - NOS E ARESTAS (SCHEMA-DRIVEN)
 # =====================================================
-
-get_valid_dpsir_categories <- function() {
-  c("Driver", "Pressure", "State", "Impact", "Response")
-}
-
-get_allowed_dpsir_connections <- function() {
-  list(
-    Driver = c("Pressure"),
-    Pressure = c("State"),
-    State = c("Impact"),
-    Impact = c("Response"),
-    Response = c("Driver", "Pressure", "State", "Impact")
-  )
-}
 
 get_required_dpsir_node_fields <- function() {
   c("id", "label", "dpsir_category")
@@ -70,9 +56,11 @@ validate_required_fields <- function(data, required_fields, object_name) {
   invisible(TRUE)
 }
 
-validate_dpsir_categories <- function(nodes) {
+validate_dpsir_categories <- function(nodes, schema) {
+  valid_categories <- schema_categories(schema)
+
   invalid <- is.na(nodes$dpsir_category) |
-    !nodes$dpsir_category %in% get_valid_dpsir_categories()
+    !nodes$dpsir_category %in% valid_categories
 
   if (any(invalid)) {
     stop(
@@ -100,7 +88,7 @@ validate_unique_node_ids <- function(nodes) {
   invisible(TRUE)
 }
 
-validate_dpsir_nodes <- function(nodes) {
+validate_dpsir_nodes <- function(nodes, schema = get_default_dpsir_schema()) {
   validate_required_fields(
     nodes,
     get_required_dpsir_node_fields(),
@@ -110,7 +98,7 @@ validate_dpsir_nodes <- function(nodes) {
   nodes <- normalize_dpsir_nodes(nodes)
 
   validate_unique_node_ids(nodes)
-  validate_dpsir_categories(nodes)
+  validate_dpsir_categories(nodes, schema)
 
   invisible(TRUE)
 }
@@ -142,8 +130,8 @@ validate_edge_node_existence <- function(nodes, edges) {
   invisible(TRUE)
 }
 
-validate_dpsir_edge_logic <- function(nodes, edges) {
-  allowed_connections <- get_allowed_dpsir_connections()
+validate_dpsir_edge_logic <- function(nodes, edges, schema) {
+  allowed_connections <- schema_allowed_connections(schema)
   node_categories <- setNames(nodes$dpsir_category, nodes$id)
   invalid_edges <- character()
 
@@ -185,7 +173,7 @@ validate_dpsir_edge_logic <- function(nodes, edges) {
   invisible(TRUE)
 }
 
-validate_dpsir_edges <- function(nodes, edges) {
+validate_dpsir_edges <- function(nodes, edges, schema = get_default_dpsir_schema()) {
   validate_required_fields(
     edges,
     get_required_dpsir_edge_fields(),
@@ -200,18 +188,18 @@ validate_dpsir_edges <- function(nodes, edges) {
   }
 
   validate_edge_node_existence(nodes, edges)
-  validate_dpsir_edge_logic(nodes, edges)
+  validate_dpsir_edge_logic(nodes, edges, schema)
 
   invisible(TRUE)
 }
 
-is_valid_dpsir_network <- function(nodes, edges = NULL) {
+is_valid_dpsir_network <- function(nodes, edges = NULL, schema = get_default_dpsir_schema()) {
   tryCatch(
     {
-      validate_dpsir_nodes(nodes)
+      validate_dpsir_nodes(nodes, schema)
 
       if (!is.null(edges)) {
-        validate_dpsir_edges(nodes, edges)
+        validate_dpsir_edges(nodes, edges, schema)
       }
 
       TRUE
@@ -220,4 +208,46 @@ is_valid_dpsir_network <- function(nodes, edges = NULL) {
       FALSE
     }
   )
+}
+
+# =====================================================
+# VALIDACAO DE ENTRADA DO GRAFO
+# =====================================================
+
+validate_nodes <- function(nodes, schema = get_default_dpsir_schema()) {
+  if (is.null(nodes) || !is.data.frame(nodes)) {
+    stop("Nodes must be a data.frame.", call. = FALSE)
+  }
+
+  validate_dpsir_nodes(nodes, schema)
+  invisible(TRUE)
+}
+
+validate_edges <- function(edges) {
+  if (is.null(edges)) {
+    return(invisible(TRUE))
+  }
+
+  if (!is.data.frame(edges)) {
+    stop("Edges must be a data.frame.", call. = FALSE)
+  }
+
+  validate_required_fields(
+    edges,
+    get_required_dpsir_edge_fields(),
+    "Edges table"
+  )
+
+  invisible(TRUE)
+}
+
+validate_graph_inputs <- function(nodes, edges = NULL, schema = get_default_dpsir_schema()) {
+  validate_nodes(nodes, schema)
+
+  if (!is.null(edges)) {
+    validate_edges(edges)
+    validate_dpsir_edges(nodes, edges, schema)
+  }
+
+  invisible(TRUE)
 }
