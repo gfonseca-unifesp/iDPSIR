@@ -1,0 +1,16 @@
+id,label,dpsir_category,subsystem,uncertainty,controllability,temporal_scale
+D1,Population growth,Driver,Demography,medium,low,long
+D2,Economic expansion,Driver,Economy,medium,medium,long
+D3,Agricultural demand,Driver,Food system,low,medium,medium
+P1,Water extraction,Pressure,Water,medium,medium,short
+P2,Fertilizer runoff,Pressure,Agriculture,medium,high,short
+P3,Land conversion,Pressure,Land use,medium,medium,medium
+S1,River flow decline,State,Water,medium,low,short
+S2,Nutrient concentration,State,Water quality,medium,medium,short
+S3,Habitat fragmentation,State,Biodiversity,high,low,medium
+I1,Reduced ecosystem services,Impact,Ecosystem services,medium,medium,medium
+I2,Public health risk,Impact,Health,medium,medium,short
+I3,Biodiversity loss,Impact,Biodiversity,high,low,long
+R1,Water allocation policy,Response,Governance,low,high,short
+R2,Riparian restoration,Response,Restoration,medium,high,medium
+R3,Sustainable farming incentives,Response,Agriculture,medium,high,medium

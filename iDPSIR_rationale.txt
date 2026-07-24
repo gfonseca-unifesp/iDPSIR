@@ -1,0 +1,94 @@
+iDPSIR/
+│
+├── app.R
+├── global.R
+│
+├── R/
+│
+│   ├── core/
+│   │
+│   │   ├── graph/
+│   │   │
+│   │   ├── core_graph_builder.R
+│   │   ├── core_graph_metrics.R
+│   │   ├── core_graph_validation.R
+│   │   ├── core_graph_sync.R
+│   │   ├── core_graph_state.R
+│   │   ├── core_graph_visualization.R
+│   │   ├── core_graph_topology.R
+│   │   └── core_graph_export.R
+│   │
+│   │
+│   │── dpsir/
+│   │
+│   │   ├── core_dpsir_builder.R
+│   │   ├── core_dpsir_validation.R #
+│   │   ├── core_dpsir_palette.R
+│   │   ├── core_dpsir_mapping.R #
+│   │   ├── core_dpsir_pathways.R #
+│   │   ├── core_dpsir_responses.R #
+│   │   ├── core_dpsir_scenarios.R
+│   │   ├── core_dpsir_simulation.R
+│   │   └── core_dpsir_metrics.R
+│   │
+│   │
+│   ├── compute/
+│   │
+│   │   ├── compute_degree.R #
+│   │   ├── compute_betweenness.R #
+│   │   ├── compute_closeness.R #
+│   │   ├── compute_eigenvector.R #
+│   │   ├── compute_pagerank.R #
+│   │   ├── compute_density.R #
+│   │   ├── compute_diameter.R #
+│   │   ├── compute_modularity.R #
+│   │   ├── compute_transitivity.R #
+│   │   └── compute_all_metrics.R #
+│   │
+│   │
+│   ├── modules/
+│   │
+│   │   ├── network/
+│   │   │
+│   │   ├── mod_network.R 
+│   │   ├── mod_network_ui.R
+│   │   └── mod_network_server.R
+│   │
+│   │
+│   │   ├── dpsir/
+│   │   │
+│   │   ├── mod_dpsir_editor.R
+│   │   ├── mod_dpsir_pathways.R 
+│   │   ├── mod_response_simulator.R
+│   │   ├── mod_scenario_compare.R
+│   │   └── mod_dpsir_dashboard.R
+│   │
+│   │
+│   │   ├── metrics/
+│   │   ├── communities/
+│   │   ├── upload/
+│   │   └── export/
+│   │
+│   │
+│   ├── utils/
+│   │
+│   │   ├── palettes.R
+│   │   ├── dpsir_colors.R
+│   │   ├── helpers.R
+│   │   └── validators.R
+│   │
+│   │
+│   └── data_models/
+│       │
+│       ├── node_schema.R
+│       ├── edge_schema.R
+│       └── dpsir_schema.R #
+│
+│
+├── www/
+│
+├── data/
+│
+├── exports/
+│
+└── docs/
