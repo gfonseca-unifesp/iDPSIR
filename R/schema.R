@@ -200,7 +200,7 @@ get_controllability_levels <- function() c("low", "medium", "high")
 get_temporal_scales <- function() c("short", "medium", "long")
 
 get_interaction_types <- function() {
-  c("increases", "reduces", "triggers", "mitigates", "improves")
+  c("positive", "negative")
 }
 
 get_evidence_types <- function() {

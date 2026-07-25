@@ -59,7 +59,7 @@ State, Impact, Response), `subsystem`, `uncertainty` (low/medium/high),
 `controllability` (low/medium/high), `temporal_scale` (short/medium/long).
 
 **Edges** (`data/sample_edges.csv`): `from`, `to`, `weight`, `confidence` (0-1),
-`interaction_type`, `evidence_type`.
+`interaction_type` (positive/negative), `evidence_type`.
 
 **Default DPSIR connections:** Driver→Pressure, Pressure→State, State→Impact,
 Impact→Response, and Response→{Driver, Pressure, State, Impact}. The schema is

@@ -117,7 +117,9 @@ Ao adicionar/remover um arquivo em `R/`, atualize os `source()` em `global.R`.
 
 **Nós:** `id`, `label`, `dpsir_category`, `subsystem`, `uncertainty` (low/medium/high),
 `controllability` (low/medium/high), `temporal_scale` (short/medium/long).
-**Arestas:** `from`, `to`, `weight`, `confidence` (0–1), `interaction_type`, `evidence_type`.
+**Arestas:** `from`, `to`, `weight`, `confidence` (0–1), `interaction_type`
+(`positive`/`negative` — sinal do efeito causal, usado tanto na cor da aresta quanto,
+futuramente, como sinal direto da matriz de interação da Fase 5), `evidence_type`.
 **Conexões DPSIR (padrão):** D→P, P→S, S→I, I→R, R→{D,P,S,I}.
 
 ## Estado atual
@@ -332,6 +334,23 @@ listener de troca de aba nem do timeout) e permite salvar mais de uma vista.
     vazias); seleção de nó via tabela destacando o grafo e "Clear selection"
     desfazendo a seleção da tabela corretamente — sem erros no console do servidor
     em nenhum passo.
+- **Vocabulário de `interaction_type` simplificado para `positive`/`negative`**,
+  a pedido do usuário, preparando o terreno pra Fase 5. Motivo: o vocabulário
+  antigo (`increases`/`reduces`/`triggers`/`mitigates`/`improves`) já colapsava
+  visualmente em duas cores (vermelho para increases/triggers, verde para
+  reduces/mitigates/improves — ver `get_interaction_type_colors()` em `graph.R`),
+  mas como texto livre exigiria uma tabela de mapeamento texto→sinal só pra
+  alimentar a matriz de interação `A[i,j]` da Fase 5 (seção 8 do PLANO). Reduzido
+  direto ao sinal (`positive` = a aresta aumenta o alvo, `negative` = diminui/
+  mitiga), sem ambiguidade e sem depender de interpretação de sinônimo.
+  `get_interaction_types()` (`schema.R`) e `get_interaction_type_colors()`
+  (`graph.R`) atualizados; `data/sample_edges.csv` remapeado (increases/triggers
+  → positive, reduces/mitigates → negative). `mod_data.R` já lia o vocabulário
+  dinamicamente via `get_interaction_types()`, então o formulário de aresta não
+  precisou de nenhuma mudança. `validate.R` nunca validou os valores de
+  `interaction_type` contra a lista (só o formulário restringia via dropdown),
+  então CSVs importados com valores antigos não geram erro — ficam sem cor
+  reconhecida no grafo (cinza) até serem corrigidos.
 
 ## Próximo
 

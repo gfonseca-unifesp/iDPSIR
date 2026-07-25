@@ -168,11 +168,8 @@ build_edge_tooltip <- function(edges) {
 
 get_interaction_type_colors <- function() {
   c(
-    increases = "#d62728",
-    triggers = "#d62728",
-    reduces = "#2ca02c",
-    mitigates = "#2ca02c",
-    improves = "#2ca02c"
+    positive = "#d62728",
+    negative = "#2ca02c"
   )
 }
 

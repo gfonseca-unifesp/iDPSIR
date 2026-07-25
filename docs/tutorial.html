@@ -613,6 +613,57 @@ cd iDPSIR</pre>
                 <tr><td class="key">Load savepoint</td><td>You're resuming a project you saved earlier as a <code>.idpsir.json</code> file.</td></tr>
               </table>
             </div>
+
+            <div class="callout" style="margin-top:16px">
+              <span class="dot"></span>
+              <div><strong>Importing matrices skips straight to Review.</strong> Build the
+              two CSVs below, upload them here, and the wizard fills in Nodes/Edges for you
+              instead of adding each one by hand. Edges is optional — a nodes-only CSV still
+              works, you'd just add links afterwards in the Edges step.</div>
+            </div>
+
+            <div class="code-cluster two">
+              <div class="code-card">
+                <h4>Nodes CSV</h4>
+                <p class="muted">One row per factor. <code>id</code> and
+                  <code>dpsir_category</code> are the only columns that matter for the graph
+                  to build — the rest can be left blank.</p>
+                <div class="table-wrap" style="margin-top:10px">
+                  <table class="fields">
+                    <tr><th>Column</th><th>Value</th></tr>
+                    <tr><td class="key">id</td><td>Short unique code</td></tr>
+                    <tr><td class="key">label</td><td>Human-readable name</td></tr>
+                    <tr><td class="key">dpsir_category</td><td>Driver / Pressure / State / Impact / Response</td></tr>
+                    <tr><td class="key">subsystem</td><td>Optional grouping</td></tr>
+                    <tr><td class="key">uncertainty</td><td>low / medium / high</td></tr>
+                    <tr><td class="key">controllability</td><td>low / medium / high</td></tr>
+                    <tr><td class="key">temporal_scale</td><td>short / medium / long</td></tr>
+                  </table>
+                </div>
+                <pre>id,label,dpsir_category,subsystem,uncertainty,controllability,temporal_scale
+D1,Urban growth,Driver,Water,medium,low,long
+P1,Wastewater discharge,Pressure,Water,medium,low,long
+S1,Water quality decline,State,Water,medium,low,long</pre>
+              </div>
+              <div class="code-card">
+                <h4>Edges CSV (optional)</h4>
+                <p class="muted"><code>from</code>/<code>to</code> must match ids from the
+                  nodes CSV above; the rest can be left blank.</p>
+                <div class="table-wrap" style="margin-top:10px">
+                  <table class="fields">
+                    <tr><th>Column</th><th>Value</th></tr>
+                    <tr><td class="key">from / to</td><td>Node ids this link connects</td></tr>
+                    <tr><td class="key">weight</td><td>Strength (any positive number)</td></tr>
+                    <tr><td class="key">confidence</td><td>0–1</td></tr>
+                    <tr><td class="key">interaction_type</td><td>positive / negative</td></tr>
+                    <tr><td class="key">evidence_type</td><td>e.g. observational, monitoring</td></tr>
+                  </table>
+                </div>
+                <pre>from,to,weight,confidence,interaction_type,evidence_type
+D1,P1,3,0.8,positive,expert_assessment
+P1,S1,3,0.85,negative,monitoring</pre>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -679,7 +730,7 @@ cd iDPSIR</pre>
                 <tr><th>Field</th><th>What it means</th></tr>
                 <tr><td class="key">weight</td><td>Strength of the link (any positive number). Drawn as line thickness on the graph.</td></tr>
                 <tr><td class="key">confidence</td><td>0–1, how sure you are this link is real. Below the Graph tab's threshold, the line is drawn dashed.</td></tr>
-                <tr><td class="key">interaction_type</td><td>e.g. increases, reduces, mitigates, triggers — colors the edge and appears in its tooltip.</td></tr>
+                <tr><td class="key">interaction_type</td><td><code>positive</code> (the link increases its target) or <code>negative</code> (it decreases/mitigates it) — colors the edge red or green and appears in its tooltip.</td></tr>
                 <tr><td class="key">evidence_type</td><td>e.g. observational, expert_assessment, monitoring — where the link comes from, shown on hover.</td></tr>
               </table>
             </div>
