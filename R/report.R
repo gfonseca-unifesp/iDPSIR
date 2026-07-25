@@ -43,8 +43,8 @@ matrix_to_report_df <- function(mat) {
 build_full_report_html <- function(
     schema,
     graph,
-    include_graph_image = FALSE,
-    graph_image = NULL,
+    graph_snapshots = list(),
+    selected_snapshot_names = character(),
     include_general = TRUE,
     include_centralities = FALSE,
     include_descriptors = FALSE,
@@ -57,11 +57,15 @@ build_full_report_html <- function(
     tags$p(class = "meta", paste("Generated on", format(Sys.time(), "%Y-%m-%d %H:%M")))
   )
 
-  if (isTRUE(include_graph_image) && !is.null(graph_image)) {
-    sections <- c(sections, list(
-      tags$h2("Network graph"),
-      tags$img(class = "report-graph-image", src = graph_image)
-    ))
+  if (length(selected_snapshot_names) > 0 && length(graph_snapshots) > 0) {
+    snapshot_sections <- lapply(selected_snapshot_names, function(snapshot_name) {
+      tagList(
+        tags$h3(snapshot_name),
+        tags$img(class = "report-graph-image", src = graph_snapshots[[snapshot_name]])
+      )
+    })
+
+    sections <- c(sections, list(tags$h2("Network graph")), snapshot_sections)
   }
 
   if (isTRUE(include_general)) {

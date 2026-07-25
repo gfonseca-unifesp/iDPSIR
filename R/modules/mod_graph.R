@@ -19,6 +19,11 @@
 # display setting already set here (subsystem/temporal filters, spacing,
 # node/edge emphasis), which is what keeps the two views from ever
 # disagreeing with each other the way the old separate tab could.
+#
+# "Save current view for report" below the graph captures a named snapshot
+# of whatever is on screen (any palette/coloring/filter/highlight combo) for
+# later inclusion in the Report tab - see the comment above graph_snapshots
+# below for why this replaced the old auto-capture-on-tab-switch mechanism.
 
 mod_graph_ui <- function(id) {
   ns <- NS(id)
@@ -85,6 +90,7 @@ mod_graph_ui <- function(id) {
         width = 12, title = "Nodes", status = "primary", solidHeader = TRUE,
         collapsible = TRUE, collapsed = TRUE,
         p("Click a node in the graph to select it here, or select a row to focus it in the graph."),
+        actionButton(ns("clear_selection"), "Clear selection", icon = icon("eraser"), class = "btn-outline-secondary btn-sm"),
         DTOutput(ns("nodes_table"))
       )
     ),
@@ -93,7 +99,13 @@ mod_graph_ui <- function(id) {
       width = 8,
       box(
         width = 12, title = "Graph", status = "primary", solidHeader = TRUE,
-        visNetworkOutput(ns("network"), height = "800px")
+        visNetworkOutput(ns("network"), height = "800px"),
+        tags$hr(),
+        fluidRow(
+          column(width = 6, textInput(ns("snapshot_name"), NULL, value = "Snapshot 1", placeholder = "Snapshot name")),
+          column(width = 6, actionButton(ns("save_snapshot"), "Save current view for report", icon = icon("camera"), class = "btn-outline-primary", width = "100%"))
+        ),
+        uiOutput(ns("snapshot_status"))
       )
     )
   )
@@ -325,5 +337,74 @@ mod_graph_server <- function(id, schema, nodes, edges, graph) {
       node_id <- filtered_nodes()$id[sel]
       visNetworkProxy(session$ns("network")) %>% visSelectNodes(id = node_id)
     })
+
+    observeEvent(input$clear_selection, {
+      selectRows(dataTableProxy("nodes_table"), NULL)
+      visNetworkProxy(session$ns("network")) %>% visUnselectAll()
+    })
+
+    # =================================================
+    # SAVE CURRENT VIEW FOR THE REPORT
+    # =================================================
+    #
+    # A named snapshot of exactly what's on screen right now (whatever
+    # palette/coloring/filters/highlight are active), captured client-side
+    # with html2canvas via the shared message handler registered in
+    # mod_report.R. Captured on demand by this button - not automatically
+    # whenever the tab is opened - so the user decides what's worth keeping,
+    # and can build up several named views (e.g. "By category", "By
+    # community", "Fisheries pathway") to pick from later in the Report tab.
+
+    graph_snapshots <- reactiveValues(list = list())
+    snapshot_counter <- reactiveVal(1)
+    pending_snapshot_name <- reactiveVal(NULL)
+
+    observeEvent(input$save_snapshot, {
+      name <- trimws(input$snapshot_name)
+
+      if (!nzchar(name)) {
+        showNotification("Enter a name for this snapshot before saving.", type = "warning")
+        return()
+      }
+
+      pending_snapshot_name(name)
+      session$sendCustomMessage(
+        "idpsir_capture_element",
+        list(elementId = session$ns("network"), inputId = session$ns("snapshot_capture_result"))
+      )
+    })
+
+    observeEvent(input$snapshot_capture_result, {
+      name <- pending_snapshot_name()
+      req(name)
+
+      saved <- graph_snapshots$list
+      saved[[name]] <- input$snapshot_capture_result
+      graph_snapshots$list <- saved
+
+      snapshot_counter(snapshot_counter() + 1)
+      updateTextInput(session, "snapshot_name", value = paste("Snapshot", snapshot_counter()))
+      showNotification(paste0("Snapshot '", name, "' saved for the report."), type = "message")
+    })
+
+    output$snapshot_status <- renderUI({
+      saved <- graph_snapshots$list
+
+      if (length(saved) == 0) {
+        return(tags$p(class = "text-muted", "No snapshots saved yet."))
+      }
+
+      tags$p(
+        class = "text-muted",
+        paste0(
+          length(saved), " snapshot(s) saved: ", paste(names(saved), collapse = ", "),
+          ". Choose which to include on the Report tab."
+        )
+      )
+    })
+
+    list(
+      graph_snapshots = reactive(graph_snapshots$list)
+    )
   })
 }

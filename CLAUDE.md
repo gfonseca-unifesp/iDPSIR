@@ -63,9 +63,11 @@ Checagem rápida de sintaxe sem subir o app:
   `summarize_response_impact`, `compare_states`, `compare_multiple_states`).
 - `R/report.R` → montagem do relatório HTML autocontido (`build_full_report_html`,
   `report_html_table`, `format_report_cell`, `matrix_to_report_df`), usado só por
-  `mod_report.R`. Seções (grafo/métricas gerais/centralidades/descritores/cenários)
-  são todas opcionais via flags — nenhuma é recomputada aqui, só reaproveita as
-  funções de `R/metrics.R`/`R/responses.R` já usadas nas outras abas.
+  `mod_report.R`. Seções (imagens de grafo salvas/métricas gerais/centralidades/
+  descritores/cenários) são todas opcionais via flags — nenhuma é recomputada aqui,
+  só reaproveita as funções de `R/metrics.R`/`R/responses.R` já usadas nas outras
+  abas. `graph_snapshots`/`selected_snapshot_names` viram uma seção "Network graph"
+  com um `<h3>` + `<img>` por snapshot selecionado, não uma imagem única.
 - `R/modules/mod_data.R` → editor por formulário (passos Início/Modelo/Nós/Arestas/Revisar
   do wizard); estado em `reactiveValues`, não-reativo até "Construir/Reconstruir grafo".
 - `R/modules/mod_graph.R` → painel de exploração do grafo. Controles em caixas
@@ -79,21 +81,30 @@ Checagem rápida de sintaxe sem subir o app:
   Comunidades (Louvain/Walktrap/Infomap/Label Propagation, `build_community_visual`)
   também não é mais aba separada — é uma opção "Color nodes by: DPSIR category |
   Community" do mesmo grafo, reaproveitando os mesmos filtros/espaçamento já
-  configurados (ver Fase 4.2).
+  configurados (ver Fase 4.2). Abaixo do grafo, "Save current view for report"
+  captura um snapshot nomeado da tela atual (qualquer combinação de paleta/cor/
+  filtro/destaque) para a aba Report — ver seção de captura de imagem abaixo. A
+  caixa "Nodes" tem um botão "Clear selection" que desfaz tanto a seleção da
+  tabela quanto o destaque no grafo (`visUnselectAll()`), já que nenhuma das duas
+  direções da sincronização cruzada tabela↔grafo limpava a seleção sozinha.
 - `R/modules/mod_metrics.R` → painel único de métricas (Gerais / Centralidades / Descritores DPSIR).
 - `R/modules/mod_responses.R` → aba "Scenarios": ativar respostas (nós de categoria
   feedback) com força 0-100%, aplicar cenário combinado, salvar e comparar múltiplos
   cenários lado a lado (comparação rápida em tela — a exportação em si vive em
   `mod_report.R`, ver abaixo).
 - `R/modules/mod_report.R` → aba "Report" (última do Explorar): checkboxes para
-  escolher o que entra no HTML final — grafo (imagem), métricas gerais,
-  centralidades, descritores DPSIR, e seleção múltipla de cenários salvos
-  (baseline sempre incluído). Um único botão "Download report (HTML)" gera tudo
-  via `build_full_report_html`.
+  métricas gerais/centralidades/descritores DPSIR, seleção múltipla de imagens de
+  grafo salvas (`mod_graph.R`'s "Save current view for report") e seleção múltipla
+  de cenários salvos (baseline sempre incluído) — mesmo padrão de tabela com
+  `selection = "multiple"` para as duas. Um único botão "Download report (HTML)"
+  gera tudo via `build_full_report_html`. Registra o handler JS compartilhado de
+  captura (`idpsir_capture_element`/`html2canvas`), mas quem dispara a captura é
+  `mod_graph.R`, não este módulo — ver seção de captura de imagem abaixo.
 - `R/modules/mod_wizard.R` → casca do wizard (passo atual, Voltar/Avançar com validação,
   download do savepoint disponível em qualquer passo, Next oculto no último passo — ver
-  Fase 4.3); o passo Explorar é um `tabsetPanel` (Graph/Scenarios/Metrics/Report) e
-  também dispara a captura da imagem do grafo (ver seção de Fase 3 abaixo).
+  Fase 4.3); o passo Explorar é um `tabsetPanel` (Graph/Scenarios/Metrics/Report). Não
+  participa mais da captura de imagem do grafo (ver seção abaixo) — só encaminha o
+  `graph_snapshots` retornado por `mod_graph_server` para `mod_report_server`.
 - `R/modules/mod_communities.R` → versão anterior da aba de comunidades (widget
   `visNetwork` separado, sem os filtros/espaçamento do Graph), mantida no disco mas
   **não sourceada** desde a Fase 4.2 — superada por `mod_graph.R`.
@@ -242,6 +253,12 @@ grep de `visNetwork.js`: `document.getElementById("legend"+el.id).network`), ent
 imagem capturada inclui a legenda porque `html2canvas` rasteriza a div inteira do
 widget (não só o canvas principal) — mantido assim de propósito.
 
+Este mecanismo de auto-captura ao trocar de aba foi **substituído** na Fase 4
+(seção "Múltiplos snapshots do grafo para o relatório" abaixo) por uma captura
+manual e nomeada, disparada por um botão dentro da própria aba Graph — mais
+simples (o elemento já está visível quando o botão é clicado, sem precisar do
+listener de troca de aba nem do timeout) e permite salvar mais de uma vista.
+
 **Fase 4 concluída, na branch `fase-4`** (ver PLANO seção 8, itens 4.1-4.3):
 
 - **4.1 — Combinar savepoints.** `schemas_equivalent()` novo em `R/schema.R` (compara
@@ -284,6 +301,37 @@ widget (não só o canvas principal) — mantido assim de propósito.
   sessões não interativas) e só então carrega tudo. Testado rodando o app localmente
   (todos os pacotes já instalados, então `missing_packages` fica vazio e o app sobe
   normalmente sem nenhum erro no console).
+- **Clear selection nos Nodes e múltiplos snapshots do grafo para o relatório**,
+  ambos apontados pelo usuário ao revisar a `fase-4` antes do merge:
+  - A sincronização cruzada tabela↔grafo (Fase 2) nunca tinha um caminho para
+    *desfazer* uma seleção feita pela tabela: `visSelectNodes()` destaca o nó no
+    grafo, mas nada limpava esse destaque depois, já que o DT não dispara evento
+    algum quando uma linha já selecionada é clicada de novo. Adicionado botão
+    "Clear selection" na caixa "Nodes" (`mod_graph.R`) que chama
+    `selectRows(proxy, NULL)` na tabela e `visUnselectAll()` no grafo.
+  - A captura de imagem do grafo para a aba Report (Fase 3) guardava só a última
+    vista automaticamente, sem nome, sem possibilidade de comparar duas
+    configurações diferentes no mesmo relatório. Substituída por captura manual
+    e nomeada: "Save current view for report", abaixo do próprio grafo em
+    `mod_graph.R`, dispara o mesmo `html2canvas` via `session$sendCustomMessage`
+    (handler compartilhado, registrado em `mod_report.R`) e guarda o resultado
+    numa lista nomeada (`reactiveValues`, mesmo padrão de `saved_scenarios` em
+    `mod_responses.R`) — o usuário pode salvar quantas vistas quiser (ex.: "By
+    category", "By community", "Fisheries pathway") e escolher quais entram no
+    relatório. `mod_graph_server` agora retorna essa lista
+    (`graph_snapshots = reactive(...)`), encaminhada por `mod_wizard_server` para
+    `mod_report_server`; `build_full_report_html` ganhou
+    `graph_snapshots`/`selected_snapshot_names` no lugar de `graph_image` único,
+    gerando um `<h3>` + `<img>` por snapshot selecionado. Como o botão de captura
+    agora vive na própria aba Graph (sempre visível quando clicado), o mecanismo
+    de `mod_wizard_server` que disparava a captura ao trocar de aba (Fase 3) foi
+    removido — não é mais necessário. Testado ponta a ponta rodando o app: savepoint
+    de 4 nós carregado, dois snapshots salvos ("Snapshot 1"/"Snapshot 2"), ambos
+    aparecendo na tabela de seleção múltipla da aba Report, relatório baixado
+    contendo as duas seções com `<img>` válidas (`data:image/png;base64,...`, não
+    vazias); seleção de nó via tabela destacando o grafo e "Clear selection"
+    desfazendo a seleção da tabela corretamente — sem erros no console do servidor
+    em nenhum passo.
 
 ## Próximo
 

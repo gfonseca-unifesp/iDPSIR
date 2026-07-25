@@ -3,26 +3,28 @@
 # =====================================================
 #
 # Lets the user assemble one self-contained HTML report from whatever was
-# explored in the app: the network graph (captured as an image), general
+# explored in the app: any number of saved graph snapshots (images), general
 # metrics, centralities, DPSIR descriptors, and any subset of saved
 # scenarios. Nothing here recomputes anything the other tabs don't already
 # compute - this module just lets the user pick what goes into the file.
 #
-# The graph image is captured client-side with html2canvas (already loaded
+# Graph snapshots are captured client-side with html2canvas (already loaded
 # by visNetwork's visExport() on the Graph widget, so no extra dependency)
 # and sent back to the server as a data URL via a custom message handler -
 # this avoids adding a headless-rendering package (webshot2/phantomjs) just
-# to get one PNG into an HTML file, same reasoning that kept the report off
+# to get PNGs into an HTML file, same reasoning that kept the report off
 # rmarkdown/pandoc in Marco D.
 #
-# The capture request itself is NOT triggered from here: html2canvas (and
+# The capture itself is triggered from the Graph tab's own "Save current
+# view" button (see mod_graph.R), not from here: html2canvas (and
 # vis-network's own <canvas>) both collapse to 0x0 once their tab is
-# display:none, so a checkbox click on THIS tab can never see a visible
-# Graph pane. mod_wizard_server triggers the capture whenever the Graph tab
-# actually becomes visible and sends the result straight to
-# captured_graph_image below - this module only registers the message
-# handler that performs the capture and displays/uses whatever was last
-# received.
+# display:none, so a click on THIS tab could never see a visible Graph pane.
+# Since the button lives on the Graph tab itself, the element is always
+# visible at capture time - no tab-switch listener or artificial delay
+# needed. This module only registers the shared message handler that
+# performs the capture; mod_graph.R sends the request and stores the
+# result under a user-chosen name, and graph_snapshots (passed in below)
+# is that named list.
 
 mod_report_ui <- function(id) {
   ns <- NS(id)
@@ -37,20 +39,15 @@ mod_report_ui <- function(id) {
       "if (!window.idpsirCaptureHandlerRegistered) {
         window.idpsirCaptureHandlerRegistered = true;
         Shiny.addCustomMessageHandler('idpsir_capture_element', function(msg) {
-          // A short delay lets the tab finish becoming visible (layout reflow)
-          // before html2canvas measures it - capturing immediately on
-          // shown.bs.tab can still see zero size.
-          setTimeout(function() {
-            var el = document.getElementById(msg.elementId);
-            if (!el || typeof html2canvas === 'undefined') return;
-            html2canvas(el, {
-              onrendered: function(canvas) {
-                if (canvas.width > 0 && canvas.height > 0) {
-                  Shiny.setInputValue(msg.inputId, canvas.toDataURL('image/png'), {priority: 'event'});
-                }
+          var el = document.getElementById(msg.elementId);
+          if (!el || typeof html2canvas === 'undefined') return;
+          html2canvas(el, {
+            onrendered: function(canvas) {
+              if (canvas.width > 0 && canvas.height > 0) {
+                Shiny.setInputValue(msg.inputId, canvas.toDataURL('image/png'), {priority: 'event'});
               }
-            });
-          }, 400);
+            }
+          });
         });
       }"
     )),
@@ -59,17 +56,20 @@ mod_report_ui <- function(id) {
 
     fluidRow(
       column(
-        width = 6,
+        width = 4,
         h5("Sections"),
-        checkboxInput(ns("include_graph"), "Network graph (image, as currently shown in the Graph tab)", value = FALSE),
-        uiOutput(ns("graph_capture_status")),
-        tags$hr(),
         checkboxInput(ns("include_general"), "General metrics", value = TRUE),
         checkboxInput(ns("include_centralities"), "Centralities", value = FALSE),
         checkboxInput(ns("include_descriptors"), "DPSIR descriptors", value = FALSE)
       ),
       column(
-        width = 6,
+        width = 4,
+        h5("Graph images"),
+        p("Select saved snapshots to include (save one from the Graph tab's \"Save current view\" button)."),
+        DTOutput(ns("graph_snapshots_table"))
+      ),
+      column(
+        width = 4,
         h5("Scenarios"),
         p("Select saved scenarios to include (baseline - no response applied - is added automatically)."),
         DTOutput(ns("scenarios_table"))
@@ -81,32 +81,25 @@ mod_report_ui <- function(id) {
   )
 }
 
-mod_report_server <- function(id, schema, nodes, edges, graph, saved_scenarios) {
+mod_report_server <- function(id, schema, nodes, edges, graph, saved_scenarios, graph_snapshots) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
-    graph_image <- reactiveVal(NULL)
+    output$graph_snapshots_table <- renderDT({
+      snaps <- graph_snapshots()
 
-    observeEvent(input$captured_graph_image, {
-      graph_image(input$captured_graph_image)
-    })
-
-    output$graph_capture_status <- renderUI({
-      req(isTRUE(input$include_graph))
-      img <- graph_image()
-
-      if (is.null(img)) {
-        tags$p(
-          class = "text-muted",
-          icon("triangle-exclamation"),
-          " Not captured yet - open the Graph tab once this session, then come back here."
-        )
-      } else {
-        tagList(
-          tags$p(icon("check"), " Graph image captured."),
-          tags$img(src = img, style = "max-width: 220px; border: 1px solid #ccc;")
-        )
+      if (length(snaps) == 0) {
+        return(datatable(
+          data.frame(Name = character(), stringsAsFactors = FALSE),
+          rownames = FALSE,
+          options = list(dom = "t")
+        ))
       }
+
+      datatable(
+        data.frame(Name = names(snaps), stringsAsFactors = FALSE),
+        selection = "multiple", rownames = FALSE, options = list(dom = "t", pageLength = 10)
+      )
     })
 
     output$scenarios_table <- renderDT({
@@ -135,20 +128,24 @@ mod_report_server <- function(id, schema, nodes, edges, graph, saved_scenarios) 
     output$download_report <- downloadHandler(
       filename = function() paste0("idpsir_report_", Sys.Date(), ".html"),
       content = function(file) {
+        snaps <- graph_snapshots()
+        snap_sel <- input$graph_snapshots_table_rows_selected
+        selected_snapshot_names <- if (length(snap_sel) > 0) names(snaps)[snap_sel] else character()
+
         saved <- saved_scenarios()
         sel <- input$scenarios_table_rows_selected
-        selected_names <- if (length(sel) > 0) names(saved)[sel] else character()
+        selected_scenario_names <- if (length(sel) > 0) names(saved)[sel] else character()
 
         page <- build_full_report_html(
           schema = schema(),
           graph = graph(),
-          include_graph_image = isTRUE(input$include_graph),
-          graph_image = graph_image(),
+          graph_snapshots = snaps,
+          selected_snapshot_names = selected_snapshot_names,
           include_general = isTRUE(input$include_general),
           include_centralities = isTRUE(input$include_centralities),
           include_descriptors = isTRUE(input$include_descriptors),
           saved_scenarios = saved,
-          selected_scenario_names = selected_names
+          selected_scenario_names = selected_scenario_names
         )
 
         htmltools::save_html(page, file)
