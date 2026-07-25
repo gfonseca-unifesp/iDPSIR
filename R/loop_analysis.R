@@ -230,3 +230,68 @@ compare_scenario_effects <- function(g, scenario_results) {
 
   df
 }
+
+# +1/0/-1 por entrada, com uma faixa "efetivamente zero" em torno de 0 -
+# mesma logica de classificacao usada em summarize_scenario_effect(), so
+# que aqui devolve o sinal em vez do rotulo Improves/Worsens/Stable.
+classify_effect_sign <- function(x, threshold = 1e-9) {
+  ifelse(is.na(x), NA_integer_, ifelse(abs(x) < threshold, 0L, ifelse(x < 0, -1L, 1L)))
+}
+
+# Marco D: robustez do sinal do efeito a variacoes no peso das arestas,
+# proporcionais a incerteza que o usuario ja registrou em cada uma
+# (`confidence`) - alta confianca = pouca variacao, baixa = muita, faixa
+# de +-`spread` no peso quando confidence=0 e nenhuma quando confidence=1.
+# Roda `n_simulations` reamostragens e mede em quantas delas o sinal do
+# efeito em cada no bateu com o resultado original (equilibrio, ou
+# imediato quando a matriz e singular) - da um uso real ao `confidence`,
+# que ate aqui so controlava o tracejado no grafo. `press` fica fixo (a
+# mesma resposta/forca do cenario) - so os pesos das arestas variam.
+robustness_check <- function(g, press, n_simulations = 100, spread = 0.5, threshold = 1e-9) {
+  stopifnot(inherits(g, "igraph"))
+  stopifnot(n_simulations >= 1)
+
+  node_names <- V(g)$name
+
+  baseline_result <- suppressWarnings(press_perturbation(build_interaction_matrix(g), press))
+  baseline_effect <- baseline_result$equilibrium
+  used_immediate <- all(is.na(baseline_effect))
+  if (used_immediate) baseline_effect <- baseline_result$immediate
+  baseline_sign <- classify_effect_sign(baseline_effect, threshold)
+
+  confidence <- E(g)$confidence
+  confidence[is.na(confidence)] <- 0.5
+  base_weight <- E(g)$weight
+  variation <- (1 - confidence) * spread
+
+  matches <- matrix(0L, nrow = n_simulations, ncol = length(node_names), dimnames = list(NULL, node_names))
+  g_sim <- g
+  any_singular <- used_immediate
+
+  for (sim in seq_len(n_simulations)) {
+    multiplier <- runif(length(base_weight), 1 - variation, 1 + variation)
+    E(g_sim)$weight <- base_weight * multiplier
+
+    result_sim <- suppressWarnings(press_perturbation(build_interaction_matrix(g_sim), press))
+    effect_sim <- result_sim$equilibrium
+
+    if (all(is.na(effect_sim))) {
+      any_singular <- TRUE
+      effect_sim <- result_sim$immediate
+    }
+
+    matches[sim, ] <- as.integer(classify_effect_sign(effect_sim, threshold) == baseline_sign)
+  }
+
+  if (any_singular) {
+    warning("Some simulations used the immediate effect instead of equilibrium (singular interaction matrix).", call. = FALSE)
+  }
+
+  data.frame(
+    id = node_names,
+    node = if (!is.null(V(g)$label)) V(g)$label else node_names,
+    category = if (!is.null(V(g)$dpsir_category)) V(g)$dpsir_category else rep("", length(node_names)),
+    agreement_pct = unname(colMeans(matches)[node_names]) * 100,
+    stringsAsFactors = FALSE
+  )
+}

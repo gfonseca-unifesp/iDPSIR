@@ -25,6 +25,13 @@
 # ggplot2) - useful even when the network is unstable (the equilibrium
 # table above is only a directional estimate then), since the trajectory
 # still runs for any finite number of steps and visibly diverges instead.
+#
+# Fase 5 Marco D: an optional, off-by-default "Show robustness to
+# uncertainty" disclosure runs robustness_check() - the `confidence` the
+# user already fills in on each edge becomes a plausible variation range
+# for its weight, resampled N times, checking how often each factor's
+# direction held. Finally gives `confidence` a real use beyond dashing an
+# edge on the graph.
 
 mod_responses_ui <- function(id) {
   ns <- NS(id)
@@ -154,6 +161,19 @@ mod_responses_server <- function(id, schema, nodes, edges, graph) {
           plotOutput(ns("trajectory_plot"), height = "320px")
         ),
         tags$hr(),
+        checkboxInput(ns("show_robustness"), "Show robustness to uncertainty (optional)", value = FALSE),
+        conditionalPanel(
+          condition = sprintf("input['%s']", ns("show_robustness")),
+          sliderInput(ns("robustness_simulations"), "Number of simulations", min = 20, max = 500, value = 100, step = 20),
+          p(
+            class = "text-muted",
+            "Each edge's weight is randomly varied within a range based on its confidence",
+            "(high confidence = little variation, low = a lot), simulated many times, and",
+            "checked how often each factor's effect kept the same direction."
+          ),
+          DTOutput(ns("robustness_table"))
+        ),
+        tags$hr(),
         actionButton(ns("save_scenario"), "Save this scenario", icon = icon("save"), class = "btn-outline-primary")
       )
     })
@@ -200,6 +220,22 @@ mod_responses_server <- function(id, schema, nodes, edges, graph) {
       )
       abline(h = 0, col = "grey70", lty = 2)
       legend("topright", legend = labels, col = colors, lty = 1, lwd = 2, cex = 0.8, bty = "n")
+    })
+
+    output$robustness_table <- renderDT({
+      sc <- current_scenario()
+      req(sc, isTRUE(input$show_robustness))
+
+      robustness_df <- robustness_check(graph(), sc$press, n_simulations = input$robustness_simulations)
+      effect_df <- summarize_scenario_effect(graph(), sc$result)
+
+      robustness_df$direction <- effect_df$direction[match(robustness_df$id, effect_df$id)]
+      robustness_df <- robustness_df[order(robustness_df$agreement_pct), ]
+      robustness_df <- robustness_df[, c("node", "category", "direction", "agreement_pct")]
+      names(robustness_df) <- c("Factor", "Category", "Effect", "Agreement (%)")
+
+      datatable(robustness_df, rownames = FALSE, options = list(dom = "t", pageLength = 10)) %>%
+        formatRound(columns = "Agreement (%)", digits = 0)
     })
 
     output$network_effect_table <- renderDT({

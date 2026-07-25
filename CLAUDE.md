@@ -84,7 +84,13 @@ Checagem rápida de sintaxe sem subir o app:
   Re(autovalor) < 0, então converge pro mesmo equilíbrio de `press_perturbation`
   quando a rede é estável, e diverge quando não é; matriz `I - step_size·A`
   degenerada retorna matriz de `NA` com aviso, mesmo padrão de `press_perturbation`).
-  Sem dependência nova (`eigen()`/`solve()` do R base).
+  Marco D: `robustness_check(g, press, n_simulations, spread = 0.5)` — o `confidence`
+  de cada aresta vira uma faixa de variação de peso (alta confiança = pouca
+  variação, baixa = muita), roda N simulações reamostrando os pesos e mede em
+  quantas o sinal do efeito em cada nó bateu com o resultado original (equilíbrio,
+  ou imediato quando a matriz é singular) — dá um uso real ao `confidence`, que até
+  aqui só controlava o tracejado no grafo. Sem dependência nova
+  (`eigen()`/`solve()`/`runif()` do R base).
 - `R/report.R` → montagem do relatório HTML autocontido (`build_full_report_html`,
   `report_html_table`, `format_report_cell`, `matrix_to_report_df`), usado só por
   `mod_report.R`. Seções (imagens de grafo salvas/métricas gerais/centralidades/
@@ -131,7 +137,12 @@ Checagem rápida de sintaxe sem subir o app:
   (pacote já usado no app). Útil principalmente quando a rede é instável: a
   tabela de equilíbrio vira só uma estimativa direcional nesse caso, mas a
   trajetória continua rodando pra qualquer número de passos e mostra a
-  divergência visualmente.
+  divergência visualmente. Marco D: disclosure opcional "Show robustness to
+  uncertainty" (desligada por padrão), com slider "Number of simulations" e uma
+  tabela (Factor/Category/Effect/Agreement %) de `robustness_check()`, ordenada
+  do menos confiável pro mais confiável — deixa explícito quando o resultado
+  mostrado é robusto a quão incerto o usuário disse que cada aresta é, vs. um
+  empate delicado que qualquer variação de peso derruba.
 - `R/modules/mod_report.R` → aba "Report" (última do Explorar): checkboxes para
   métricas gerais/centralidades/descritores DPSIR, seleção múltipla de imagens de
   grafo salvas (`mod_graph.R`'s "Save current view for report") e seleção múltipla
@@ -476,19 +487,43 @@ deixar como default.
 Testado standalone (`R` fora do app) contra os dois exemplos já usados nos Marcos
 A/B, e ponta a ponta no app: rede cíclica de 5 nós, checkbox "Show how the effect
 evolves over time" ligado, gráfico via `matplot()` renderizado sem erro mostrando
-as curvas divergindo (consistente com o aviso de instabilidade already mostrado),
+as curvas divergindo (consistente com o aviso de instabilidade já mostrado),
 slider "Number of steps" reagindo corretamente a mudanças. Sem erros no console do
+servidor em nenhum passo.
+
+**Fase 5 Marco D concluído — Fase 5 completa (Marcos A-D).**
+`robustness_check()` adicionada a `R/loop_analysis.R`, integrada em
+`mod_responses.R` como disclosure opcional — descritos nos bullets acima.
+
+Achado durante os testes: a rede de exemplo da cadeia trófica (Marcos A/B) se
+mostrou **sign-determinada** — variar o peso das arestas em até ±90%
+(`spread = 0.9`) nunca muda o sinal do efeito de equilíbrio em nenhum nó, mesmo com
+confiança mínima em todas as arestas. Não é um bug: é uma propriedade matemática
+conhecida de certas estruturas de loop simples (cadeias/loops únicos), a base
+teórica de boa parte da própria análise de Levins — o sinal do resultado às vezes
+é determinado só pela topologia (quais arestas são positivas/negativas), não pela
+magnitude. Pra testar de verdade o caso onde o sinal genuinamente depende da
+magnitude, foi preciso um segundo exemplo construído à mão: dois caminhos de sinal
+oposto convergindo no mesmo nó (uma aresta direta negativa competindo com um
+caminho indireto positivo de dois saltos) com auto-regulação em cada nó pra manter
+a matriz invertível. Nos pesos originais (todos 1) os dois caminhos se cancelam
+exatamente (efeito de equilíbrio = 0, "Stable") — um empate no fio da navalha onde
+*qualquer* perturbação deveria derrubar a classificação. Confirmado: 0% de
+concordância nesse nó em 300 simulações, contra 100% nos outros dois nós
+(não-ambíguos). Verificado também que o percentual fica na mesma faixa entre
+N=50 e N=1000 (sem oscilação selvagem, como o PLANO pede — "vendo o percentual
+estabilizar conforme aumenta N").
+
+Testado ponta a ponta no app: rede cíclica de 5 nós, resposta ativada, checkbox
+"Show robustness to uncertainty" ligado, tabela renderizada sem erro (100% de
+concordância pros 5 fatores nessa rede específica — plausível, não um caso de
+empate delicado como o exemplo construído a mão), slider "Number of simulations"
+reagindo corretamente a mudanças (testado de 100 pra 20). Sem erros no console do
 servidor em nenhum passo.
 
 ## Próximo
 
-Fase 5 Marco D é o próximo passo: robustez via confidence (o `confidence` que o
-usuário já preenche em cada aresta vira uma faixa de variação plausível no peso;
-rodar N simulações com pesos perturbados dentro dessa faixa mostra o percentual de
-vezes em que o sinal do resultado se manteve, com um controle "Number of
-simulations" ajustável pelo usuário).
-
-Retomar matriz de conexões livre e aninhamento
+Fase 5 está completa (Marcos A-D). Retomar matriz de conexões livre e aninhamento
 hierárquico de níveis (Fase 2, itens restantes) quando desenhados. Considerar incluir
 cenários salvos no savepoint (hoje só duram a sessão) se isso vier a ser pedido.
 Relatório: adicionar seção de Comunidades (imagem + tabela) como fast-follow,
