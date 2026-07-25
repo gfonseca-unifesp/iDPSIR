@@ -562,14 +562,7 @@
             <h4>Quick look, no setup</h4>
             <p class="muted">Runs the current <code>main</code> branch straight from
               GitHub. Nothing is kept on disk after you close R.</p>
-            <pre>install.packages(c(
-  "shiny", "bs4Dash", "visNetwork", "igraph",
-  "DT", "dplyr", "data.table", "htmlwidgets",
-  "shinyWidgets", "glue", "purrr", "scales",
-  "jsonlite"
-))
-
-shiny::runGitHub("iDPSIR", "gfonseca-unifesp", "main")</pre>
+            <pre>shiny::runGitHub("iDPSIR", "gfonseca-unifesp", "main")</pre>
           </div>
           <div class="code-card">
             <h4>Keep a working copy</h4>
@@ -577,16 +570,16 @@ shiny::runGitHub("iDPSIR", "gfonseca-unifesp", "main")</pre>
               opens cleanly as an RStudio project.</p>
             <pre>git clone https://github.com/gfonseca-unifesp/iDPSIR.git
 cd iDPSIR</pre>
-            <p class="muted" style="margin-top:10px">Then in RStudio: <strong>File → Open Project…</strong>,
-              install the same packages as the panel on the left, and run:</p>
+            <p class="muted" style="margin-top:10px">Then in RStudio: <strong>File → Open Project…</strong>, and run:</p>
             <pre>shiny::runApp()</pre>
           </div>
         </div>
 
         <div class="callout">
           <span class="dot"></span>
-          <div><strong>Requires R ≥ 4.1.</strong> Both routes open a browser tab with the app
-          running locally — nothing is sent anywhere else.</div>
+          <div><strong>Requires R ≥ 4.1.</strong> Missing packages are installed automatically on
+          first run — no manual <code>install.packages()</code> step needed. Both routes open a
+          browser tab with the app running locally — nothing is sent anywhere else.</div>
         </div>
       </section>
 

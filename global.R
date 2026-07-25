@@ -3,6 +3,28 @@
 # =========================
 
 # =========================
+# AUTO-INSTALL DEPENDENCIES
+# =========================
+# Garante que quem roda via shiny::runGitHub() (sem ter rodado install.packages
+# manualmente antes) tenha os pacotes necessarios instalados automaticamente na
+# primeira execucao, em vez de falhar com "there is no package called ...".
+
+required_packages <- c(
+  "shiny", "bs4Dash", "visNetwork", "igraph", "DT", "dplyr",
+  "data.table", "htmlwidgets", "shinyWidgets", "glue", "purrr", "scales", "jsonlite"
+)
+
+missing_packages <- required_packages[!vapply(required_packages, requireNamespace, logical(1), quietly = TRUE)]
+
+if (length(missing_packages) > 0) {
+  if (is.null(getOption("repos")) || identical(getOption("repos")[["CRAN"]], "@CRAN@")) {
+    options(repos = c(CRAN = "https://cloud.r-project.org"))
+  }
+  message("iDPSIR: installing missing packages: ", paste(missing_packages, collapse = ", "))
+  install.packages(missing_packages)
+}
+
+# =========================
 # LIBRARIES
 # =========================
 
@@ -51,7 +73,6 @@ source("R/core/core_ui_components.R")
 
 source("R/modules/mod_data.R")
 source("R/modules/mod_graph.R")
-source("R/modules/mod_communities.R")
 source("R/modules/mod_metrics.R")
 source("R/modules/mod_responses.R")
 source("R/modules/mod_report.R")

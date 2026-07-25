@@ -32,7 +32,6 @@ mod_wizard_ui <- function(id) {
       tabsetPanel(
         id = ns("explore_tabs"),
         tabPanel("Graph", mod_graph_ui(ns("graph"))),
-        tabPanel("Communities", mod_communities_ui(ns("communities"))),
         tabPanel("Scenarios", mod_responses_ui(ns("responses"))),
         tabPanel("Metrics", mod_metrics_ui(ns("metrics"))),
         tabPanel("Report", mod_report_ui(ns("report")))
@@ -43,7 +42,15 @@ mod_wizard_ui <- function(id) {
     fluidRow(
       column(width = 3, actionButton(ns("prev_step"), "Back", icon = icon("arrow-left"), width = "100%")),
       column(width = 6, downloadButton(ns("download_savepoint"), "Save savepoint (.idpsir.json)", width = "100%")),
-      column(width = 3, actionButton(ns("next_step"), "Next", icon = icon("arrow-right"), width = "100%", class = "btn-primary"))
+      column(
+        width = 3,
+        # Next has nowhere left to go once Explore (the last step) is reached,
+        # so it stops being rendered there instead of sitting around inert.
+        conditionalPanel(
+          condition = paste0("input['", ns("current_step"), "'] < ", length(WIZARD_STEP_LABELS)),
+          actionButton(ns("next_step"), "Next", icon = icon("arrow-right"), width = "100%", class = "btn-primary")
+        )
+      )
     )
   )
 }
@@ -54,7 +61,6 @@ mod_wizard_server <- function(id) {
 
     data <- mod_data_server("data")
     mod_graph_server("graph", data$schema, data$nodes, data$edges, data$graph)
-    mod_communities_server("communities", data$schema, data$nodes, data$edges, data$graph)
     responses <- mod_responses_server("responses", data$schema, data$nodes, data$edges, data$graph)
     mod_metrics_server("metrics", data$schema, data$graph)
     mod_report_server("report", data$schema, data$nodes, data$edges, data$graph, responses$saved_scenarios)

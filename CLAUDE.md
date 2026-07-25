@@ -14,13 +14,15 @@ leia-o antes de implementar. Este arquivo é o resumo operacional.
 ## Como rodar e testar
 
 ```r
-# instalar pacotes (uma vez)
-install.packages(c(
-  "shiny","bs4Dash","visNetwork","igraph","DT","dplyr",
-  "data.table","htmlwidgets","shinyWidgets","glue","purrr","scales","jsonlite"
-))
 shiny::runApp()          # sobe o app
 ```
+
+`global.R` verifica no início (`required_packages`/`missing_packages`) se os pacotes
+necessários já estão instalados e instala automaticamente os que faltarem (ajustando
+`options(repos=...)` para CRAN se nenhum mirror estiver configurado) antes de dar
+`library()` neles — não é mais preciso rodar `install.packages()` manualmente antes,
+inclusive para quem sobe o app via `shiny::runGitHub("iDPSIR", "gfonseca-unifesp", "main")`
+sem ter instalado nada antes.
 
 `jsonlite` é usado só via `jsonlite::` (nunca `library(jsonlite)`) porque ele
 mascara `shiny::validate()` quando anexado — cuidado se for usar em outro lugar.
@@ -33,7 +35,8 @@ Checagem rápida de sintaxe sem subir o app:
 ## Estrutura
 
 - `app.R` → chama `ina_ui()` / `ina_server()`.
-- `global.R` → pacotes, opções e `source()` de todos os fontes (ordem importa).
+- `global.R` → auto-instala pacotes faltantes, pacotes, opções e `source()` de todos
+  os fontes (ordem importa).
 - `R/schema.R` → esquema DPSIR configurável (níveis, conexões derivadas da ordem, paletas,
   vocabulários controlados de nós/arestas, legenda).
 - `R/validate.R` → validação de nós/arestas contra o schema.
@@ -46,7 +49,8 @@ Checagem rápida de sintaxe sem subir o app:
   descritores DPSIR (`compute_dpsir_descriptors`: contagem por categoria, matriz de
   transições, Impactos sem Resposta, Pressões não cobertas, médias de incerteza/controlabilidade).
 - `R/io.R` → importar matrizes CSV (`import_matrices`) e savepoint `.idpsir.json`
-  (`build_savepoint`/`write_savepoint`/`read_savepoint`, com checagem de `format_version`).
+  (`build_savepoint`/`write_savepoint`/`read_savepoint`, com checagem de `format_version`;
+  `merge_savepoints`, ver Fase 4 abaixo).
 - `R/pathways.R` → análise de caminhos causais schema-aware (`find_dpsir_paths`,
   `compute_critical_pathways`, `score_pathway`), adaptado de `R/dpsir/core_dpsir_pathways.R`.
 - `R/core/core_ui_components.R` → toggles/inputs compartilhados (usados no painel de métricas).
@@ -64,15 +68,18 @@ Checagem rápida de sintaxe sem subir o app:
   funções de `R/metrics.R`/`R/responses.R` já usadas nas outras abas.
 - `R/modules/mod_data.R` → editor por formulário (passos Início/Modelo/Nós/Arestas/Revisar
   do wizard); estado em `reactiveValues`, não-reativo até "Construir/Reconstruir grafo".
-- `R/modules/mod_graph.R` → painel de exploração do grafo (filtros de subsistema/escala
-  temporal, paleta de exibição, layout em camadas, tabela de nós com seleção cruzada
-  grafo↔tabela). Destaque de caminhos causais vive aqui também, como dropdown "Highlight
-  pathway" (From/To categoria + seleção do caminho, mesmo padrão de "Select by group" /
-  "Node size based on") — não é uma aba separada, para não forçar o usuário a trocar de
-  aba e voltar toda vez que quiser ver o destaque no grafo.
-- `R/modules/mod_communities.R` → aba de comunidades (Louvain/Walktrap/Infomap/Label
-  Propagation) desenhada com `build_community_visual` (com arestas, ao contrário da
-  versão pré-Fase-1).
+- `R/modules/mod_graph.R` → painel de exploração do grafo. Controles em caixas
+  colapsáveis (`bs4Dash::box(collapsible = TRUE)`) empilhadas numa coluna à esquerda,
+  agrupadas por tema (Display, Node & edge emphasis, Layout & spacing, Pathway
+  highlight, Communities, Nodes), com o grafo + legenda ocupando a coluna maior à
+  direita (Fase 4.2 — ver abaixo). Destaque de caminhos causais vive aqui também, como
+  dropdown "Highlight pathway" (From/To categoria + seleção do caminho, mesmo padrão de
+  "Select by group" / "Node size based on") — não é uma aba separada, para não forçar o
+  usuário a trocar de aba e voltar toda vez que quiser ver o destaque no grafo.
+  Comunidades (Louvain/Walktrap/Infomap/Label Propagation, `build_community_visual`)
+  também não é mais aba separada — é uma opção "Color nodes by: DPSIR category |
+  Community" do mesmo grafo, reaproveitando os mesmos filtros/espaçamento já
+  configurados (ver Fase 4.2).
 - `R/modules/mod_metrics.R` → painel único de métricas (Gerais / Centralidades / Descritores DPSIR).
 - `R/modules/mod_responses.R` → aba "Scenarios": ativar respostas (nós de categoria
   feedback) com força 0-100%, aplicar cenário combinado, salvar e comparar múltiplos
@@ -84,9 +91,12 @@ Checagem rápida de sintaxe sem subir o app:
   (baseline sempre incluído). Um único botão "Download report (HTML)" gera tudo
   via `build_full_report_html`.
 - `R/modules/mod_wizard.R` → casca do wizard (passo atual, Voltar/Avançar com validação,
-  download do savepoint disponível em qualquer passo); o passo Explorar é um
-  `tabsetPanel` (Graph/Communities/Scenarios/Metrics/Report) e também dispara a
-  captura da imagem do grafo (ver seção de Fase 3 abaixo).
+  download do savepoint disponível em qualquer passo, Next oculto no último passo — ver
+  Fase 4.3); o passo Explorar é um `tabsetPanel` (Graph/Scenarios/Metrics/Report) e
+  também dispara a captura da imagem do grafo (ver seção de Fase 3 abaixo).
+- `R/modules/mod_communities.R` → versão anterior da aba de comunidades (widget
+  `visNetwork` separado, sem os filtros/espaçamento do Graph), mantida no disco mas
+  **não sourceada** desde a Fase 4.2 — superada por `mod_graph.R`.
 - `R/ui_main.R`, `R/server_main.R` → UI e server principais (chamam só `mod_wizard_*`).
 - `data/` → CSVs de exemplo.
 
@@ -232,13 +242,57 @@ grep de `visNetwork.js`: `document.getElementById("legend"+el.id).network`), ent
 imagem capturada inclui a legenda porque `html2canvas` rasteriza a div inteira do
 widget (não só o canvas principal) — mantido assim de propósito.
 
+**Fase 4 concluída, na branch `fase-4`** (ver PLANO seção 8, itens 4.1-4.3):
+
+- **4.1 — Combinar savepoints.** `schemas_equivalent()` novo em `R/schema.R` (compara
+  nome/ordem/papel de feedback dos níveis, ignorando cor/forma que são cosméticas) e
+  `merge_savepoints()` novo em `R/io.R`: só combina savepoints com schema equivalente
+  (mensagem clara se não forem); ids de nó duplicados entre savepoints ganham prefixo
+  automático do nome do arquivo de origem (ex.: `water__D1`) — só quando há colisão de
+  fato, ids únicos ficam como estavam; arestas são concatenadas e passam por `unique()`.
+  Nova opção "Combine savepoints" no passo Início (`mod_data.R`), aceita 2+ arquivos
+  `.idpsir.json` via `fileInput(multiple = TRUE)`. Testado standalone (schemas
+  incompatíveis são rejeitados; colisão de id resolvida; grafo resultante válida e
+  constrói normalmente) e ponta a ponta no app (duas redes de 3-4 nós cada, combinadas
+  em 7 nós/5 arestas, wizard completo até Explorar sem erros).
+- **4.2 — Aba Graph reorganizada.** Motivo: os controles de exibição ficavam empilhados
+  acima do grafo (cinco `fluidRow`s antes do widget aparecer), empurrando pra baixo o
+  que importa na aba. Agora os controles vivem em caixas colapsáveis
+  (`bs4Dash::box(collapsible = TRUE)`) numa coluna estreita à esquerda, agrupadas por
+  tema; o grafo + legenda ocupam a coluna maior à direita. `mod_communities.R` foi
+  absorvido: Communities deixou de ser aba/widget separado e virou uma opção
+  "Color nodes by: DPSIR category | Community" do mesmo grafo, chamando
+  `build_community_visual` com os mesmos `filtered_nodes()`/`filtered_edges()`/
+  `filtered_graph()` e os mesmos controles de espaçamento/tamanho/espessura já usados
+  pela cor por categoria — elimina a divergência que existia entre os dois widgets
+  antes (cada um podia estar configurado de um jeito diferente). O `tabsetPanel` do
+  Explorar caiu de 5 para 4 abas (Graph/Scenarios/Metrics/Report). Testado no app: as
+  duas subredes da Fase 4.1 aparecem corretamente coloridas por categoria e por
+  comunidade (Louvain detectou as duas subredes desconectadas como duas comunidades),
+  filtro de subsistema funciona nos dois modos, sem erros no console do servidor.
+- **4.3 — Botão Next oculto no último passo.** No passo Explorar (o último), Next não
+  levava a lugar nenhum mas continuava visível e clicável. Agora só aparece enquanto
+  `current_step < 6` (`conditionalPanel` em `mod_wizard.R`); Back e "Save savepoint"
+  continuam disponíveis em qualquer passo.
+- **Auto-instalação de pacotes em `global.R`.** Motivo: `shiny::runGitHub()` é o
+  caminho mais simples para um gestor sem experiência em R abrir o app, mas até aqui
+  exigia rodar `install.packages(...)` manualmente antes — um passo a mais fácil de
+  esquecer ou errar. Agora `global.R` checa `required_packages` via
+  `requireNamespace()` antes de qualquer `library()`, instala só os que faltarem
+  (ajustando `options(repos=...)` para o CRAN público se nenhum mirror estiver
+  configurado, evitando o erro "trying to use CRAN without setting a mirror" em
+  sessões não interativas) e só então carrega tudo. Testado rodando o app localmente
+  (todos os pacotes já instalados, então `missing_packages` fica vazio e o app sobe
+  normalmente sem nenhum erro no console).
+
 ## Próximo
 
-Retomar matriz de conexões livre e aninhamento hierárquico de níveis (Fase 2,
-itens restantes) quando desenhados. Considerar incluir cenários salvos no savepoint
-(hoje só duram a sessão) se isso vier a ser pedido. Relatório: adicionar seção de
-Comunidades (imagem + tabela) como fast-follow, reaproveitando a mecânica de captura
-já existente.
+Fase 5 (loop de feedback via análise de loop/matriz comunitária, ver PLANO seções 8 e
+11) é o próximo passo planejado. Retomar matriz de conexões livre e aninhamento
+hierárquico de níveis (Fase 2, itens restantes) quando desenhados. Considerar incluir
+cenários salvos no savepoint (hoje só duram a sessão) se isso vier a ser pedido.
+Relatório: adicionar seção de Comunidades (imagem + tabela) como fast-follow,
+reaproveitando a mecânica de captura já existente.
 
 ## Princípios
 

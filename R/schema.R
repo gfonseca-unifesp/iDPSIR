@@ -123,6 +123,31 @@ schema_categories <- function(schema) {
 }
 
 # =====================================================
+# COMPATIBILIDADE ENTRE SCHEMAS (usado ao combinar savepoints)
+# =====================================================
+#
+# Dois schemas sao compativeis se tem os mesmos niveis, na mesma ordem,
+# com os mesmos papeis de feedback - cor e forma sao cosmeticos e nao
+# entram na comparacao.
+
+schemas_equivalent <- function(schema_a, schema_b) {
+  validate_schema(schema_a)
+  validate_schema(schema_b)
+
+  categories_a <- schema_categories(schema_a)
+  categories_b <- schema_categories(schema_b)
+
+  if (!identical(categories_a, categories_b)) {
+    return(FALSE)
+  }
+
+  roles_a <- schema_a$role[match(categories_a, schema_a$name)]
+  roles_b <- schema_b$role[match(categories_b, schema_b$name)]
+
+  identical(roles_a, roles_b)
+}
+
+# =====================================================
 # CONEXOES PERMITIDAS (DERIVADAS DA ORDEM)
 # =====================================================
 

@@ -88,19 +88,24 @@ mod_data_server <- function(id, seed = NULL) {
 
         fluidRow(
           column(
-            width = 4,
+            width = 3,
             actionButton(ns("start_new"), "New project", icon = icon("file"), class = "btn-primary", width = "100%")
           ),
           column(
-            width = 4,
+            width = 3,
             fileInput(ns("import_nodes_file"), "Import nodes (CSV)", accept = ".csv"),
             fileInput(ns("import_edges_file"), "Import edges (CSV, optional)", accept = ".csv"),
             actionButton(ns("start_import"), "Import matrices", icon = icon("upload"), width = "100%")
           ),
           column(
-            width = 4,
+            width = 3,
             fileInput(ns("savepoint_file"), "Load savepoint (.idpsir.json)", accept = ".json"),
             actionButton(ns("start_savepoint"), "Load savepoint", icon = icon("folder-open"), width = "100%")
+          ),
+          column(
+            width = 3,
+            fileInput(ns("merge_files"), "Combine savepoints (2+ .idpsir.json)", accept = ".json", multiple = TRUE),
+            actionButton(ns("start_merge"), "Combine savepoints", icon = icon("object-group"), width = "100%")
           )
         ),
 
@@ -167,6 +172,44 @@ mod_data_server <- function(id, seed = NULL) {
         },
         error = function(e) {
           rv$start_message <- paste("Error loading savepoint:", conditionMessage(e))
+        }
+      )
+    })
+
+    observeEvent(input$start_merge, {
+      files <- input$merge_files
+
+      if (is.null(files) || nrow(files) < 2) {
+        rv$start_message <- "Select at least two savepoint files to combine."
+        return()
+      }
+
+      tryCatch(
+        {
+          savepoints <- lapply(files$datapath, read_savepoint)
+          source_names <- sub("(\\.idpsir)?\\.json$", "", files$name, ignore.case = TRUE)
+          merged <- merge_savepoints(savepoints, source_names)
+
+          rv$schema <- merged$schema
+          rv$nodes <- merged$nodes
+          rv$edges <- merged$edges
+          rv$positions <- NULL
+          rv$graph <- NULL
+          rv$loaded <- TRUE
+
+          rename_note <- if (length(merged$renamed_ids) > 0) {
+            paste0(" IDs renamed to avoid collisions: ", paste(merged$renamed_ids, collapse = ", "), ".")
+          } else {
+            ""
+          }
+
+          rv$start_message <- paste0(
+            "Combined ", length(savepoints), " savepoints: ", nrow(merged$nodes), " nodes, ",
+            nrow(merged$edges), " edges.", rename_note
+          )
+        },
+        error = function(e) {
+          rv$start_message <- paste("Error combining savepoints:", conditionMessage(e))
         }
       )
     })

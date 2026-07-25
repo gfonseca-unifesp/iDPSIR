@@ -66,6 +66,64 @@ write_savepoint <- function(savepoint, path) {
   invisible(path)
 }
 
+merge_savepoints <- function(savepoints, source_names) {
+  stopifnot(is.list(savepoints), length(savepoints) >= 2)
+  stopifnot(length(source_names) == length(savepoints))
+
+  base_schema <- savepoints[[1]]$schema
+
+  for (i in seq_along(savepoints)[-1]) {
+    if (!schemas_equivalent(base_schema, savepoints[[i]]$schema)) {
+      stop(
+        "Savepoints use different DPSIR schemas (levels, order or feedback role) and cannot be combined.",
+        call. = FALSE
+      )
+    }
+  }
+
+  all_nodes <- vector("list", length(savepoints))
+  all_edges <- vector("list", length(savepoints))
+  seen_ids <- character()
+  renamed <- character()
+
+  for (i in seq_along(savepoints)) {
+    nodes <- savepoints[[i]]$nodes
+    edges <- savepoints[[i]]$edges
+    prefix <- paste0(source_names[i], "__")
+
+    needs_prefix <- nodes$id %in% seen_ids
+    id_map <- setNames(nodes$id, nodes$id)
+    id_map[needs_prefix] <- paste0(prefix, nodes$id[needs_prefix])
+
+    if (any(needs_prefix)) {
+      renamed <- c(renamed, paste0(nodes$id[needs_prefix], " -> ", id_map[needs_prefix]))
+    }
+
+    nodes$id <- unname(id_map[nodes$id])
+
+    if (nrow(edges) > 0) {
+      edges$from <- unname(id_map[edges$from])
+      edges$to <- unname(id_map[edges$to])
+    }
+
+    all_nodes[[i]] <- nodes
+    all_edges[[i]] <- edges
+    seen_ids <- c(seen_ids, nodes$id)
+  }
+
+  combined_nodes <- do.call(rbind, all_nodes)
+  combined_edges <- unique(do.call(rbind, all_edges))
+  rownames(combined_nodes) <- NULL
+  rownames(combined_edges) <- NULL
+
+  list(
+    schema = base_schema,
+    nodes = combined_nodes,
+    edges = combined_edges,
+    renamed_ids = renamed
+  )
+}
+
 read_savepoint <- function(path) {
   if (!file.exists(path)) {
     stop("Savepoint file not found: ", path, call. = FALSE)
