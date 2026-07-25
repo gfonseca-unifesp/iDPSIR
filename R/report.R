@@ -107,16 +107,17 @@ build_full_report_html <- function(
   }
 
   if (length(selected_scenario_names) > 0 && length(saved_scenarios) > 0) {
-    scenario_graphs <- lapply(selected_scenario_names, function(scenario_name) saved_scenarios[[scenario_name]]$graph)
-    names(scenario_graphs) <- selected_scenario_names
+    scenario_results <- lapply(selected_scenario_names, function(scenario_name) saved_scenarios[[scenario_name]]$result)
+    names(scenario_results) <- selected_scenario_names
 
-    comparison_df <- compare_multiple_states(graph, scenario_graphs)
-    names(comparison_df)[1] <- "Metric"
+    baseline_result <- list(equilibrium = setNames(rep(0, vcount(graph)), V(graph)$name))
+    comparison_df <- compare_scenario_effects(graph, c(list(Baseline = baseline_result), scenario_results))
+    comparison_df$id <- NULL
 
     summary_df <- do.call(rbind, lapply(selected_scenario_names, function(scenario_name) {
       sc <- saved_scenarios[[scenario_name]]
-      impact <- summarize_response_impact(graph, sc$graph)
-      counts <- table(factor(impact$direction, levels = c("Improves", "Worsens", "Stable")))
+      effect_df <- summarize_scenario_effect(graph, sc$result)
+      counts <- table(factor(effect_df$direction, levels = c("Improves", "Worsens", "Stable")))
       data.frame(
         Scenario = scenario_name,
         Improves = as.integer(counts[["Improves"]]),
@@ -139,7 +140,7 @@ build_full_report_html <- function(
       tags$h2("Scenarios compared"),
       tags$p("Baseline: no response applied."),
       tags$ul(scenario_items),
-      tags$h3("Effect on the network"),
+      tags$h3("Equilibrium effect per factor"),
       report_html_table(comparison_df),
       tags$h3("Summary per scenario"),
       report_html_table(summary_df)

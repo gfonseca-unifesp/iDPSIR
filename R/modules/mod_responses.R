@@ -8,6 +8,17 @@
 # jargon on screen: "Effect on each factor" shows Improves/Worsens/Stable,
 # not raw scores (those stay available, just hidden by default and still
 # in the CSV/Excel export).
+#
+# Fase 5 Marco B: the engine underneath is loop analysis (R/loop_analysis.R),
+# not apply_response() (R/responses.R, preserved but no longer called).
+# Activating a response at a given strength is a sustained "press"
+# perturbation on that response node; press_perturbation() propagates it
+# through the whole signed, weighted graph - including the feedback loop -
+# and returns both the one-step (immediate) and full-loop (equilibrium)
+# effect on every node. Combining responses is just summing more than one
+# node into the same press vector. The interface below is unchanged from
+# before Marco B (same tables, same Improves/Worsens/Stable language) -
+# only the numbers behind it are now correct.
 
 mod_responses_ui <- function(id) {
   ns <- NS(id)
@@ -72,6 +83,24 @@ mod_responses_server <- function(id, schema, nodes, edges, graph) {
       tagList(rows)
     })
 
+    # =================================================
+    # LOOP ANALYSIS ENGINE
+    # =================================================
+    #
+    # The interaction matrix and its stability only depend on the built
+    # graph (weights/signs), not on which response is being tested - built
+    # once per graph and reused across every "Apply scenario" click.
+
+    interaction_matrix <- reactive({
+      req(graph())
+      build_interaction_matrix(graph())
+    })
+
+    network_stability <- reactive({
+      req(interaction_matrix())
+      check_stability(interaction_matrix())
+    })
+
     current_scenario <- reactiveVal(NULL)
 
     observeEvent(input$apply_scenario, {
@@ -85,20 +114,20 @@ mod_responses_server <- function(id, schema, nodes, edges, graph) {
         return()
       }
 
-      scenario_graph <- graph()
       strengths <- setNames(numeric(length(active_ids)), active_ids)
-
       for (node_id in active_ids) {
-        strength_pct <- input[[paste0("strength_", node_id)]]
-        strengths[[node_id]] <- strength_pct
-        scenario_graph <- apply_response(scenario_graph, schema(), response_id = node_id, strength = strength_pct / 100)
+        strengths[[node_id]] <- input[[paste0("strength_", node_id)]]
       }
+
+      press <- build_press_vector(graph(), active_ids, strengths / 100)
+      result <- press_perturbation(interaction_matrix(), press)
 
       current_scenario(list(
         name = input$scenario_name,
         active = active_ids,
         strengths = strengths,
-        graph = scenario_graph
+        press = press,
+        result = result
       ))
     })
 
@@ -106,6 +135,7 @@ mod_responses_server <- function(id, schema, nodes, edges, graph) {
       req(current_scenario())
 
       tagList(
+        uiOutput(ns("stability_note")),
         h5("Effect on the network"),
         DTOutput(ns("network_effect_table")),
         h5("Effect on each factor"),
@@ -115,38 +145,57 @@ mod_responses_server <- function(id, schema, nodes, edges, graph) {
       )
     })
 
+    output$stability_note <- renderUI({
+      req(network_stability())
+      stab <- network_stability()
+
+      if (isTRUE(stab$stable)) {
+        tags$div(
+          class = "alert alert-success",
+          icon("check"),
+          " This network's feedback loops are stable: the equilibrium effect below is where the system settles over time."
+        )
+      } else {
+        tags$div(
+          class = "alert alert-warning",
+          icon("triangle-exclamation"),
+          " This network's feedback loops are not stable: treat the equilibrium effect below as a directional estimate, not a guaranteed outcome. The immediate (one-step) effect is still reliable."
+        )
+      }
+    })
+
     output$network_effect_table <- renderDT({
       sc <- current_scenario()
       req(sc)
 
-      df <- compare_states(graph(), sc$graph)
-      names(df) <- c("Metric", "Before", "After")
+      df <- summarize_scenario_network_effect(sc$result)
+      names(df) <- c("Metric", "Immediate", "Equilibrium")
 
       datatable(df, rownames = FALSE, options = list(dom = "t")) %>%
-        formatRound(columns = c("Before", "After"), digits = 2)
+        formatRound(columns = c("Immediate", "Equilibrium"), digits = 2)
     })
 
     output$factor_effect_table <- renderDT({
       sc <- current_scenario()
       req(sc)
 
-      df <- summarize_response_impact(graph(), sc$graph)
-      df <- df[, c("node", "category", "direction", "id", "before_score", "after_score", "delta")]
+      df <- summarize_scenario_effect(graph(), sc$result)
+      df <- df[, c("node", "category", "direction", "id", "immediate", "equilibrium")]
+      names(df) <- c("Factor", "Category", "Effect", "ID", "Immediate", "Equilibrium")
 
       datatable(
         df,
         rownames = FALSE,
         extensions = "Buttons",
-        colnames = c("Factor", "Category", "Effect", "ID", "Before score", "After score", "Delta"),
         options = list(
           dom = "Bfrtip",
           buttons = c("csv", "excel"),
-          columnDefs = list(list(visible = FALSE, targets = c(3, 4, 5, 6))),
+          columnDefs = list(list(visible = FALSE, targets = c(3, 4, 5))),
           pageLength = 10,
           scrollX = TRUE
         )
       ) %>%
-        formatRound(columns = c("before_score", "after_score", "delta"), digits = 2)
+        formatRound(columns = c("Immediate", "Equilibrium"), digits = 3)
     })
 
     # =================================================
@@ -157,8 +206,8 @@ mod_responses_server <- function(id, schema, nodes, edges, graph) {
     scenario_counter <- reactiveVal(1)
 
     scenario_direction_counts <- function(sc) {
-      impact <- summarize_response_impact(graph(), sc$graph)
-      table(factor(impact$direction, levels = c("Improves", "Worsens", "Stable")))
+      effect_df <- summarize_scenario_effect(graph(), sc$result)
+      table(factor(effect_df$direction, levels = c("Improves", "Worsens", "Stable")))
     }
 
     observeEvent(input$save_scenario, {
@@ -234,14 +283,20 @@ mod_responses_server <- function(id, schema, nodes, edges, graph) {
       names_sel <- selected_scenario_names()
       saved <- saved_scenarios$list
 
-      scenario_graphs <- lapply(names_sel, function(scenario_name) saved[[scenario_name]]$graph)
-      names(scenario_graphs) <- names_sel
+      scenario_results <- lapply(names_sel, function(scenario_name) saved[[scenario_name]]$result)
+      names(scenario_results) <- names_sel
 
-      df <- compare_multiple_states(graph(), scenario_graphs)
-      numeric_cols <- setdiff(names(df), "metric")
+      baseline_result <- list(equilibrium = setNames(rep(0, vcount(graph())), V(graph())$name))
+      scenario_results <- c(list(Baseline = baseline_result), scenario_results)
 
-      datatable(df, rownames = FALSE, colnames = c("Metric" = "metric"), options = list(dom = "t")) %>%
-        formatRound(columns = numeric_cols, digits = 2)
+      df <- compare_scenario_effects(graph(), scenario_results)
+      df$id <- NULL
+      numeric_cols <- setdiff(names(df), c("node", "category"))
+      names(df)[names(df) == "node"] <- "Factor"
+      names(df)[names(df) == "category"] <- "Category"
+
+      datatable(df, rownames = FALSE, options = list(dom = "t")) %>%
+        formatRound(columns = numeric_cols, digits = 3)
     })
 
     output$comparison_summary_table <- renderDT({

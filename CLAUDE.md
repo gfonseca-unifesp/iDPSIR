@@ -58,18 +58,28 @@ Checagem rápida de sintaxe sem subir o app:
   mas **não sourceada**; superada por `R/pathways.R`.
 - `R/dpsir/core_dpsir_responses.R` → versão original de onde `R/responses.R` foi
   adaptada, mantida no disco mas **não sourceada**.
-- `R/responses.R` → simulação de respostas schema-aware (`get_feedback_categories`,
-  `find_response_targets`, `apply_response`, `compute_node_impact_score`,
-  `summarize_response_impact`, `compare_states`, `compare_multiple_states`).
-  Motor da aba Scenarios até a Fase 5 Marco B — ver `R/loop_analysis.R` abaixo.
-- `R/loop_analysis.R` → análise de loop / matriz comunitária (Levins 1974), Fase 5
+- `R/responses.R` → `get_feedback_categories`/`find_response_targets` continuam em
+  uso (identificam nós de Resposta). `apply_response`, `compute_node_impact_score`,
+  `summarize_response_impact`, `compare_states`, `compare_multiple_states` foram o
+  motor da aba Scenarios até a Fase 5 Marco B — mantidas no arquivo mas não mais
+  chamadas por nenhum módulo, substituídas por `R/loop_analysis.R` abaixo.
+- `R/loop_analysis.R` → análise de loop / matriz comunitária (Levins 1974).
   Marco A: `build_interaction_matrix(g)` (matriz `A[i,j]` = efeito de `j` sobre `i`,
   sinal de `interaction_type`/magnitude de `weight`), `check_stability(A)`
   (autovalores, `stable`/`eigenvalues`/`max_real_part`), `press_perturbation(A, press)`
   (efeito de um passo `A %*% press` e de equilíbrio `-A^-1 %*% press`; matriz
-  singular retorna `NA` com aviso em vez de erro). Sem dependência nova
-  (`eigen()`/`solve()` do R base). Ainda não usada por nenhum módulo — `mod_responses.R`
-  passa a chamar isso no Marco B, substituindo `apply_response` como motor principal.
+  singular retorna `NA` com aviso em vez de erro). Marco B, motor da aba Scenarios:
+  `build_press_vector(g, active_ids, strengths)` (ativar uma resposta a uma dada
+  força vira uma entrada não-zero no vetor de press — combinar respostas é só somar
+  mais entradas, sem o encadeamento manual do `apply_response` antigo),
+  `summarize_scenario_effect(g, result)` (Improves/Worsens/Stable por nó a partir do
+  efeito de equilíbrio, com fallback pro efeito imediato quando a matriz é singular),
+  `summarize_scenario_network_effect(result)` (nós afetados + magnitude total,
+  imediato vs equilíbrio — substitui as métricas de topologia do `compare_states`
+  antigo, que não fazem mais sentido já que o grafo não muda mais, só o estado),
+  `compare_scenario_effects(g, scenario_results)` (efeito de equilíbrio de N cenários
+  lado a lado, substitui `compare_multiple_states`). Sem dependência nova
+  (`eigen()`/`solve()` do R base).
 - `R/report.R` → montagem do relatório HTML autocontido (`build_full_report_html`,
   `report_html_table`, `format_report_cell`, `matrix_to_report_df`), usado só por
   `mod_report.R`. Seções (imagens de grafo salvas/métricas gerais/centralidades/
@@ -100,7 +110,16 @@ Checagem rápida de sintaxe sem subir o app:
 - `R/modules/mod_responses.R` → aba "Scenarios": ativar respostas (nós de categoria
   feedback) com força 0-100%, aplicar cenário combinado, salvar e comparar múltiplos
   cenários lado a lado (comparação rápida em tela — a exportação em si vive em
-  `mod_report.R`, ver abaixo).
+  `mod_report.R`, ver abaixo). Motor desde a Fase 5 Marco B é `R/loop_analysis.R`:
+  ativar uma resposta vira uma entrada no vetor de press, `interaction_matrix`/
+  `network_stability` são `reactive`s computados uma vez por grafo (não mudam entre
+  cenários) e reaproveitados a cada "Apply scenario". Aviso de estabilidade em
+  linguagem simples acima das tabelas de resultado (nada de autovalor cru na tela).
+  "Effect on the network" mostra nós afetados/magnitude total (imediato vs
+  equilíbrio) em vez de nodes/edges/density do motor antigo, já que o grafo em si
+  não muda mais, só o estado. "Effect on each factor" mantém a mesma UI de sempre
+  (Improves/Worsens/Stable visível; `id`/imediato/equilíbrio ocultos mas presentes
+  no export CSV/Excel).
 - `R/modules/mod_report.R` → aba "Report" (última do Explorar): checkboxes para
   métricas gerais/centralidades/descritores DPSIR, seleção múltipla de imagens de
   grafo salvas (`mod_graph.R`'s "Save current view for report") e seleção múltipla
@@ -361,7 +380,7 @@ listener de troca de aba nem do timeout) e permite salvar mais de uma vista.
   então CSVs importados com valores antigos não geram erro — ficam sem cor
   reconhecida no grafo (cinza) até serem corrigidos.
 
-**Fase 5 iniciada (Marco A concluído, ver PLANO seção 8).** `R/loop_analysis.R`
+**Fase 5 em andamento (Marcos A e B concluídos, ver PLANO seção 8).** `R/loop_analysis.R`
 novo, sourceado em `global.R`: `build_interaction_matrix()`, `check_stability()`,
 `press_perturbation()` — descritos no bullet de `R/loop_analysis.R` acima. Testado
 standalone (`scratchpad/test_loop_analysis.R`) contra o exemplo clássico de Levins/
@@ -378,14 +397,54 @@ exemplo (desenhada só pra demonstrar funcionalidades, não pra ser realista) é
 corretamente identificada como **instável** — mostra que `check_stability` não
 assume estabilidade por padrão, como o PLANO pede.
 
+**Fase 5 Marco B concluído:** `mod_responses.R` revisado pra computar a partir de
+`R/loop_analysis.R` em vez de `apply_response()` — descrito no bullet de
+`mod_responses.R` acima. `R/report.R`/`mod_report.R` também precisaram mudar em
+cadeia, já que cenários salvos deixaram de guardar um grafo modificado (`sc$graph`)
+e passaram a guardar o resultado de `press_perturbation` (`sc$result`); a seção
+"Scenarios compared" do relatório trocou `compare_multiple_states`/
+`summarize_response_impact` por `compare_scenario_effects`/`summarize_scenario_effect`
+e o título da tabela de "Effect on the network" (métricas de topologia que não
+existem mais) para "Equilibrium effect per factor" (efeito por nó, o que o método
+de loop realmente calcula).
+
+**Bug real de `DT::formatRound`, encontrado só ao testar em runtime** (não aparecia
+em teste estático nem nos testes standalone de `R/loop_analysis.R`): passar
+`colnames = c("Immediate" = "immediate", ...)` pro `datatable()` e depois chamar
+`formatRound(columns = c("immediate", "equilibrium"), ...)` (nomes originais do
+data.frame) quebrava com "You specified the columns: immediate, equilibrium, but the
+column names of the data are Metric, Immediate, Equilibrium" — nesta versão do
+pacote DT, `formatRound()` casa contra o nome de exibição pós-`colnames`, não contra
+o nome original da coluna. Corrigido renomeando o data.frame diretamente
+(`names(df) <- c("Metric", "Immediate", "Equilibrium")`) antes de `datatable()`, sem
+usar o parâmetro `colnames=` — o mesmo padrão que o código anterior (Fase 3) já usava
+e nunca tinha esse problema porque nunca combinava `colnames=` com `formatRound()` no
+mesmo output.
+
+Testado ponta a ponta rodando o app: rede cíclica de 5 nós (D1→P1→S1→I1→R1→D1, um
+único loop com 2 arestas negativas — portanto um loop de feedback líquido positivo,
+matematicamente instável) carregada via savepoint. `check_stability` corretamente
+identifica a rede como instável e o aviso em linguagem simples aparece antes das
+tabelas. Ativar R1 a 50% produz um efeito imediato só em D1 (o único alvo direto de
+R1) mas um efeito de **equilíbrio** só em I1 (Public health risk) — resultado
+verificado independentemente calculando `A`, `A %*% press` e `-solve(A) %*% press`
+à mão em R fora do app: bate exatamente, incluindo os autovalores complexos que
+confirmam a instabilidade. Dois cenários salvos (R1 a 50%/80%) comparados lado a
+lado mostram o efeito de equilíbrio escalando proporcionalmente (-0.5 → -0.8) e a
+contagem Improves/Worsens/Stable batendo entre a view individual e a comparação.
+Relatório HTML gerado com as duas seções (métricas gerais + cenários comparados),
+os valores -0.5/-0.8 confirmados presentes no HTML baixado. Sem erros no console do
+servidor em nenhum passo, após corrigir o bug do `formatRound` acima.
+
 ## Próximo
 
-Fase 5 Marco B é o próximo passo: revisar `mod_responses.R` pra computar a partir de
-`R/loop_analysis.R` em vez de `apply_response()` — tabela de efeito (imediato +
-equilíbrio) e aviso de estabilidade, mesma interface (tabelas "Effect on the
-network"/"Effect on each factor", linguagem Improves/Worsens/Stable) que a aba
-Scenarios já usa hoje. Depois, Marco C (trajetória com número de passos ajustável) e
-Marco D (robustez via confidence). Retomar matriz de conexões livre e aninhamento
+Fase 5 Marco C é o próximo passo: trajetória com número de passos ajustável (a
+mesma matriz `A` aplicada repetidamente, mostrando o sistema convergindo ou
+divergindo — também a saída que continua funcionando quando a rede é instável, já
+que a potência finita de matriz sempre existe mesmo sem equilíbrio infinito). Depois,
+Marco D (robustez via confidence, com número de simulações ajustável).
+
+Retomar matriz de conexões livre e aninhamento
 hierárquico de níveis (Fase 2, itens restantes) quando desenhados. Considerar incluir
 cenários salvos no savepoint (hoje só duram a sessão) se isso vier a ser pedido.
 Relatório: adicionar seção de Comunidades (imagem + tabela) como fast-follow,

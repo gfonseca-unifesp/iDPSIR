@@ -112,8 +112,18 @@ disable_edge <- function(g, from, to) {
 }
 
 # =====================================================
-# APPLY RESPONSE
+# APPLY RESPONSE (motor superado pela Fase 5 Marco B)
 # =====================================================
+#
+# `apply_response`, `compute_node_impact_score`, `summarize_response_impact`,
+# `compare_states` e `compare_multiple_states` abaixo foram o motor da aba
+# Scenarios ate a Fase 5. Substituidas por `press_perturbation` e as
+# funcoes de cenario em `R/loop_analysis.R` (mod_responses.R ja nao chama
+# nenhuma destas) porque o metodo antigo so alterava um passo de peso de
+# aresta e ignorava o peso da propria aresta da Resposta; o de loop usa o
+# grafo inteiro (incluindo o loop de feedback) e o peso real da Resposta.
+# Mantidas no arquivo (nao removidas) porque `get_feedback_categories` e
+# `find_response_targets` acima continuam em uso.
 
 apply_response <- function(
     g,
