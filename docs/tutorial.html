@@ -1,0 +1,887 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>iDPSIR — Getting Started</title>
+<style>
+  :root {
+    --bg: #F5F6F1;
+    --surface: #FFFFFF;
+    --surface-alt: #EDF0E7;
+    --ink: #1C2321;
+    --ink-muted: #5B655F;
+    --ink-faint: #8B958E;
+    --accent: #2F6B63;
+    --accent-ink: #1D453F;
+    --accent-soft: #DCEAE6;
+    --line: #DBDFD4;
+    --line-strong: #C3C9BB;
+    --shadow: 0 1px 2px rgba(28, 35, 33, 0.04), 0 8px 24px rgba(28, 35, 33, 0.05);
+
+    --driver: #1f77b4;
+    --pressure: #d62728;
+    --state: #2ca02c;
+    --impact: #ff7f0e;
+    --response: #9467bd;
+
+    --good: #2f7a4f;
+    --warn: #a5680c;
+    --font-display: Georgia, "Iowan Old Style", "Palatino Linotype", "Book Antiqua", serif;
+    --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    --font-mono: ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #12160F;
+      --surface: #191F19;
+      --surface-alt: #202721;
+      --ink: #E8EBE3;
+      --ink-muted: #9CA79E;
+      --ink-faint: #6C766E;
+      --accent: #74C4B6;
+      --accent-ink: #BFE9DE;
+      --accent-soft: #21332E;
+      --line: #2A322A;
+      --line-strong: #3A423A;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.35);
+      --good: #6FCB93;
+      --warn: #E0AC4F;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #12160F;
+    --surface: #191F19;
+    --surface-alt: #202721;
+    --ink: #E8EBE3;
+    --ink-muted: #9CA79E;
+    --ink-faint: #6C766E;
+    --accent: #74C4B6;
+    --accent-ink: #BFE9DE;
+    --accent-soft: #21332E;
+    --line: #2A322A;
+    --line-strong: #3A423A;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.35);
+    --good: #6FCB93;
+    --warn: #E0AC4F;
+  }
+  :root[data-theme="light"] {
+    --bg: #F5F6F1;
+    --surface: #FFFFFF;
+    --surface-alt: #EDF0E7;
+    --ink: #1C2321;
+    --ink-muted: #5B655F;
+    --ink-faint: #8B958E;
+    --accent: #2F6B63;
+    --accent-ink: #1D453F;
+    --accent-soft: #DCEAE6;
+    --line: #DBDFD4;
+    --line-strong: #C3C9BB;
+    --shadow: 0 1px 2px rgba(28, 35, 33, 0.04), 0 8px 24px rgba(28, 35, 33, 0.05);
+    --good: #2f7a4f;
+    --warn: #a5680c;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 16px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--accent-ink); }
+  a:focus-visible, button:focus-visible, summary:focus-visible, input:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  h1, h2, h3, h4 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    text-wrap: balance;
+    color: var(--ink);
+    margin: 0;
+  }
+  code, .mono { font-family: var(--font-mono); }
+
+  .page {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 0 24px 96px;
+  }
+
+  /* ---------- Header ---------- */
+  .masthead {
+    padding: 56px 0 40px;
+    border-bottom: 1px solid var(--line);
+  }
+  .eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--accent-ink);
+    background: var(--accent-soft);
+    border-radius: 999px;
+    padding: 5px 12px 5px 10px;
+    margin-bottom: 18px;
+  }
+  .eyebrow svg { width: 13px; height: 13px; }
+  .masthead h1 {
+    font-size: clamp(32px, 4.4vw, 46px);
+    line-height: 1.12;
+    max-width: 16ch;
+  }
+  .masthead .lede {
+    margin-top: 16px;
+    font-size: 18px;
+    line-height: 1.6;
+    color: var(--ink-muted);
+    max-width: 62ch;
+  }
+  .legend-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 28px;
+  }
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 6px 14px 6px 10px;
+    font-size: 13.5px;
+    color: var(--ink);
+    box-shadow: var(--shadow);
+  }
+  .shape { display: inline-block; width: 12px; height: 12px; flex: none; }
+  .shape.square { background: var(--c); }
+  .shape.triangle {
+    background: var(--c);
+    clip-path: polygon(50% 2%, 4% 96%, 96% 96%);
+    width: 14px; height: 13px;
+  }
+  .shape.dot { background: var(--c); border-radius: 50%; }
+  .shape.diamond { background: var(--c); clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%); }
+  .shape.star {
+    background: var(--c);
+    width: 15px; height: 15px;
+    clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
+  }
+
+  /* ---------- Layout: sidebar + content ---------- */
+  .layout {
+    display: grid;
+    grid-template-columns: 232px minmax(0, 1fr);
+    gap: 56px;
+    margin-top: 44px;
+    align-items: start;
+  }
+  nav.toc {
+    position: sticky;
+    top: 24px;
+    font-size: 14px;
+  }
+  nav.toc .toc-title {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin-bottom: 10px;
+  }
+  nav.toc ol {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    border-left: 1px solid var(--line);
+  }
+  nav.toc li a {
+    display: block;
+    padding: 6px 0 6px 16px;
+    margin-left: -1px;
+    border-left: 2px solid transparent;
+    color: var(--ink-muted);
+    text-decoration: none;
+  }
+  nav.toc li a:hover { color: var(--ink); border-left-color: var(--line-strong); }
+  nav.toc .sub { padding-left: 30px; font-size: 13px; }
+
+  main { min-width: 0; }
+
+  section.block {
+    padding: 52px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  section.block:last-child { border-bottom: none; }
+  .kicker {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin-bottom: 10px;
+  }
+  h2 { font-size: 28px; margin-bottom: 6px; }
+  h3 { font-size: 19px; margin-top: 34px; margin-bottom: 10px; }
+  p { max-width: 68ch; color: var(--ink); }
+  p.muted { color: var(--ink-muted); }
+  .lead {
+    font-size: 16.5px;
+    color: var(--ink-muted);
+    max-width: 62ch;
+    margin-top: 10px;
+  }
+
+  /* ---------- Step rail ---------- */
+  .rail {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 0;
+    margin-top: 32px;
+    counter-reset: step;
+  }
+  .rail-step {
+    position: relative;
+    padding: 0 14px 0 0;
+  }
+  .rail-step::before {
+    counter-increment: step;
+    content: counter(step);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    background: var(--surface);
+    border: 1.5px solid var(--accent);
+    color: var(--accent-ink);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    margin-bottom: 10px;
+  }
+  .rail-step::after {
+    content: "";
+    position: absolute;
+    top: 14px; left: 28px; right: -6px;
+    height: 1.5px;
+    background: var(--line-strong);
+  }
+  .rail-step:last-child::after { display: none; }
+  .rail-step .rail-label { font-weight: 700; font-size: 14.5px; }
+  .rail-step .rail-desc { font-size: 12.5px; color: var(--ink-muted); margin-top: 3px; line-height: 1.4; }
+
+  /* ---------- Step card ---------- */
+  .step {
+    display: flex;
+    gap: 18px;
+    margin-top: 30px;
+  }
+  .step-num {
+    flex: none;
+    width: 34px; height: 34px;
+    border-radius: 50%;
+    background: var(--accent-soft);
+    color: var(--accent-ink);
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-mono);
+    font-size: 14px;
+    font-weight: 700;
+  }
+  .step-body { flex: 1; min-width: 0; }
+  .step-body h4 { font-size: 16.5px; margin-bottom: 4px; }
+  .step-body p { margin: 6px 0; }
+
+  /* ---------- Field table ---------- */
+  .table-wrap { overflow-x: auto; margin-top: 14px; border: 1px solid var(--line); border-radius: 10px; }
+  table.fields {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+    min-width: 560px;
+    background: var(--surface);
+  }
+  table.fields th, table.fields td {
+    text-align: left;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--line);
+    vertical-align: top;
+  }
+  table.fields th {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    background: var(--surface-alt);
+  }
+  table.fields tr:last-child td { border-bottom: none; }
+  table.fields td.key { font-family: var(--font-mono); font-size: 13px; color: var(--accent-ink); white-space: nowrap; }
+
+  /* ---------- Schema table with real shapes ---------- */
+  table.schema { width: 100%; border-collapse: collapse; font-size: 14px; background: var(--surface); }
+  table.schema th, table.schema td { padding: 10px 14px; border-bottom: 1px solid var(--line); text-align: left; }
+  table.schema th {
+    font-family: var(--font-mono); font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--ink-faint); background: var(--surface-alt);
+  }
+  table.schema tr:last-child td { border-bottom: none; }
+  .cat-name { display: flex; align-items: center; gap: 9px; font-weight: 700; }
+
+  /* ---------- Tab strip mock ---------- */
+  .tabmock {
+    margin-top: 18px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    overflow: hidden;
+    background: var(--surface);
+    box-shadow: var(--shadow);
+  }
+  .tabmock-bar {
+    display: flex;
+    gap: 2px;
+    background: var(--surface-alt);
+    padding: 8px 8px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .tabmock-bar span {
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    padding: 8px 14px;
+    border-radius: 8px 8px 0 0;
+    color: var(--ink-faint);
+  }
+  .tabmock-bar span.active {
+    background: var(--surface);
+    color: var(--ink);
+    font-weight: 700;
+    border: 1px solid var(--line);
+    border-bottom-color: var(--surface);
+    margin-bottom: -1px;
+  }
+  .tabmock-body { padding: 20px 22px; }
+
+  .control {
+    display: grid;
+    grid-template-columns: 200px minmax(0, 1fr);
+    gap: 18px;
+    padding: 13px 0;
+    border-bottom: 1px dashed var(--line);
+    align-items: baseline;
+  }
+  .control:last-child { border-bottom: none; }
+  .control .label {
+    font-weight: 700;
+    font-size: 13.5px;
+  }
+  .control .label .widget {
+    display: block;
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    color: var(--ink-faint);
+    font-weight: 400;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    margin-top: 2px;
+  }
+  .control p { font-size: 14px; margin: 0; color: var(--ink-muted); max-width: 54ch; }
+
+  /* ---------- Callouts ---------- */
+  .callout {
+    margin-top: 20px;
+    padding: 14px 18px;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    background: var(--surface-alt);
+    font-size: 14.5px;
+    display: flex;
+    gap: 12px;
+  }
+  .callout .dot {
+    flex: none; width: 8px; height: 8px; border-radius: 50%;
+    margin-top: 7px;
+    background: var(--accent);
+  }
+  .callout.warn .dot { background: var(--warn); }
+  .callout.good .dot { background: var(--good); }
+  .callout strong { display: block; margin-bottom: 2px; }
+
+  /* ---------- Code blocks ---------- */
+  pre {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 16px 18px;
+    overflow-x: auto;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--ink);
+    margin: 14px 0 0;
+  }
+  .code-cluster { display: grid; gap: 18px; margin-top: 22px; min-width: 0; }
+  @media (min-width: 760px) {
+    .code-cluster.two { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  }
+  .code-card {
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--surface);
+    padding: 18px 20px 20px;
+    box-shadow: var(--shadow);
+  }
+  .code-card h4 { font-size: 14.5px; margin-bottom: 4px; }
+  .code-card p.muted { font-size: 13px; margin: 4px 0 0; }
+  .code-card pre { margin-top: 12px; }
+
+  /* ---------- Glossary ---------- */
+  .glossary { display: grid; gap: 16px; margin-top: 20px; }
+  @media (min-width: 700px) { .glossary { grid-template-columns: 1fr 1fr; } }
+  .gloss-item {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 14px 16px;
+    background: var(--surface);
+  }
+  .gloss-item dt { font-family: var(--font-mono); font-size: 13px; font-weight: 700; color: var(--accent-ink); }
+  .gloss-item dd { margin: 5px 0 0; font-size: 14px; color: var(--ink-muted); }
+
+  /* ---------- Effect chips ---------- */
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-family: var(--font-mono); font-size: 12px;
+    padding: 3px 10px; border-radius: 999px;
+    border: 1px solid var(--line);
+  }
+  .chip.improves { color: var(--good); border-color: color-mix(in srgb, var(--good) 40%, var(--line)); }
+  .chip.worsens { color: var(--pressure); border-color: color-mix(in srgb, var(--pressure) 35%, var(--line)); }
+  .chip.stable { color: var(--ink-faint); }
+
+  footer {
+    margin-top: 60px;
+    padding-top: 24px;
+    border-top: 1px solid var(--line);
+    font-size: 13px;
+    color: var(--ink-faint);
+    display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px;
+  }
+
+  /* ---------- Mobile ---------- */
+  @media (max-width: 880px) {
+    .layout { grid-template-columns: 1fr; gap: 28px; }
+    nav.toc { position: static; }
+    nav.toc ol { display: flex; flex-wrap: wrap; gap: 4px 4px; border-left: none; }
+    nav.toc li a { border-left: none; padding: 6px 10px; border: 1px solid var(--line); border-radius: 999px; font-size: 13px; }
+    nav.toc .sub { display: none; }
+    .rail { grid-template-columns: 1fr 1fr; row-gap: 26px; }
+    .rail-step::after { display: none; }
+    .control { grid-template-columns: 1fr; gap: 4px; }
+  }
+  @media (max-width: 520px) {
+    .rail { grid-template-columns: 1fr; }
+    .masthead { padding: 40px 0 32px; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header class="masthead">
+    <span class="eyebrow">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19V5m0 14 5-4m-5 4-5-4M20 5v14M20 5l-5 4m5-4 5 4"/></svg>
+      Tutorial · iDPSIR
+    </span>
+    <h1>Finding your way around iDPSIR</h1>
+    <p class="lede">
+      iDPSIR is an R/Shiny app for building and reading causal networks under the
+      <strong>DPSIR</strong> model — Driver, Pressure, State, Impact, Response — a
+      framework environmental managers use to trace how a human activity turns into
+      an environmental pressure, changes a system's state, causes an impact, and
+      is met with a response. This walks through opening the app, filling in the
+      wizard, and reading what each tab is telling you. No graph-theory background
+      required.
+    </p>
+    <div class="legend-row">
+      <span class="badge"><span class="shape square" style="--c: var(--driver)"></span>Driver</span>
+      <span class="badge"><span class="shape triangle" style="--c: var(--pressure)"></span>Pressure</span>
+      <span class="badge"><span class="shape dot" style="--c: var(--state)"></span>State</span>
+      <span class="badge"><span class="shape diamond" style="--c: var(--impact)"></span>Impact</span>
+      <span class="badge"><span class="shape star" style="--c: var(--response)"></span>Response</span>
+    </div>
+  </header>
+
+  <div class="layout">
+    <nav class="toc" aria-label="Table of contents">
+      <div class="toc-title">On this page</div>
+      <ol>
+        <li><a href="#running">1 · Running the app</a></li>
+        <li><a href="#wizard">2 · The wizard</a>
+          <ol>
+            <li class="sub"><a href="#s-start">Start</a></li>
+            <li class="sub"><a href="#s-model">Model</a></li>
+            <li class="sub"><a href="#s-nodes">Nodes</a></li>
+            <li class="sub"><a href="#s-edges">Edges</a></li>
+            <li class="sub"><a href="#s-review">Review &amp; build</a></li>
+          </ol>
+        </li>
+        <li><a href="#explore">3 · Explore tabs</a>
+          <ol>
+            <li class="sub"><a href="#t-graph">Graph</a></li>
+            <li class="sub"><a href="#t-communities">Communities</a></li>
+            <li class="sub"><a href="#t-scenarios">Scenarios</a></li>
+            <li class="sub"><a href="#t-metrics">Metrics</a></li>
+            <li class="sub"><a href="#t-report">Report</a></li>
+          </ol>
+        </li>
+        <li><a href="#savepoint">4 · Saving your work</a></li>
+        <li><a href="#glossary">5 · Glossary</a></li>
+      </ol>
+    </nav>
+
+    <main>
+
+      <!-- ============ RUNNING ============ -->
+      <section class="block" id="running">
+        <div class="kicker">Before you start</div>
+        <h2>Running the app</h2>
+        <p class="lead">Pick whichever of these matches what you're doing today — a
+          one-off look, or ongoing work you'll want to keep and update.</p>
+
+        <div class="code-cluster two">
+          <div class="code-card">
+            <h4>Quick look, no setup</h4>
+            <p class="muted">Runs the current <code>main</code> branch straight from
+              GitHub. Nothing is kept on disk after you close R.</p>
+            <pre>install.packages(c(
+  "shiny", "bs4Dash", "visNetwork", "igraph",
+  "DT", "dplyr", "data.table", "htmlwidgets",
+  "shinyWidgets", "glue", "purrr", "scales",
+  "jsonlite"
+))
+
+shiny::runGitHub("iDPSIR", "gfonseca-unifesp", "main")</pre>
+          </div>
+          <div class="code-card">
+            <h4>Keep a working copy</h4>
+            <p class="muted">Clones the repo so you can update it later and it
+              opens cleanly as an RStudio project.</p>
+            <pre>git clone https://github.com/gfonseca-unifesp/iDPSIR.git
+cd iDPSIR</pre>
+            <p class="muted" style="margin-top:10px">Then in RStudio: <strong>File → Open Project…</strong>,
+              install the same packages as the panel on the left, and run:</p>
+            <pre>shiny::runApp()</pre>
+          </div>
+        </div>
+
+        <div class="callout">
+          <span class="dot"></span>
+          <div><strong>Requires R ≥ 4.1.</strong> Both routes open a browser tab with the app
+          running locally — nothing is sent anywhere else.</div>
+        </div>
+      </section>
+
+      <!-- ============ WIZARD ============ -->
+      <section class="block" id="wizard">
+        <div class="kicker">Building a project</div>
+        <h2>The wizard</h2>
+        <p class="lead">Every project moves through six steps in order. Back and Next sit
+          at the bottom of every step — Next is blocked with a short message if
+          something's missing, so you can't accidentally skip ahead.</p>
+
+        <div class="rail">
+          <div class="rail-step"><div class="rail-label">Start</div><div class="rail-desc">New project, import CSVs, or reload a saved file</div></div>
+          <div class="rail-step"><div class="rail-label">Model</div><div class="rail-desc">Confirm the DPSIR schema (defaults are ready to go)</div></div>
+          <div class="rail-step"><div class="rail-label">Nodes</div><div class="rail-desc">Add each Driver, Pressure, State, Impact, Response</div></div>
+          <div class="rail-step"><div class="rail-label">Edges</div><div class="rail-desc">Connect nodes and describe each link</div></div>
+          <div class="rail-step"><div class="rail-label">Review &amp; build</div><div class="rail-desc">Fix validation issues, then build the graph</div></div>
+          <div class="rail-step"><div class="rail-label">Explore</div><div class="rail-desc">Five tabs for reading and reporting on the network</div></div>
+        </div>
+
+        <!-- Start -->
+        <div class="step" id="s-start">
+          <div class="step-num">1</div>
+          <div class="step-body">
+            <h4>Start</h4>
+            <p>Three ways in, pick one:</p>
+            <div class="table-wrap">
+              <table class="fields">
+                <tr><th>Option</th><th>Use it when…</th></tr>
+                <tr><td class="key">New project</td><td>You're starting from a blank network and will add nodes/edges by hand in the next steps.</td></tr>
+                <tr><td class="key">Import matrices</td><td>You already have a nodes CSV (and optionally an edges CSV) matching the format below.</td></tr>
+                <tr><td class="key">Load savepoint</td><td>You're resuming a project you saved earlier as a <code>.idpsir.json</code> file.</td></tr>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Model -->
+        <div class="step" id="s-model">
+          <div class="step-num">2</div>
+          <div class="step-body">
+            <h4>Model</h4>
+            <p>This is the DPSIR schema — the five categories, the order they connect
+              in, and how each is drawn. The default is what almost everyone should
+              use as-is; it's shown here so the colors and shapes below make sense
+              everywhere else in the app.</p>
+            <div class="table-wrap">
+              <table class="schema">
+                <tr><th>Category</th><th>Order</th><th>Connects forward to</th><th>Role</th></tr>
+                <tr><td><span class="cat-name"><span class="shape square" style="--c:var(--driver)"></span>Driver</span></td><td class="mono">1</td><td>Pressure</td><td class="mono">—</td></tr>
+                <tr><td><span class="cat-name"><span class="shape triangle" style="--c:var(--pressure)"></span>Pressure</span></td><td class="mono">2</td><td>State</td><td class="mono">—</td></tr>
+                <tr><td><span class="cat-name"><span class="shape dot" style="--c:var(--state)"></span>State</span></td><td class="mono">3</td><td>Impact</td><td class="mono">—</td></tr>
+                <tr><td><span class="cat-name"><span class="shape diamond" style="--c:var(--impact)"></span>Impact</span></td><td class="mono">4</td><td>Response</td><td class="mono">—</td></tr>
+                <tr><td><span class="cat-name"><span class="shape star" style="--c:var(--response)"></span>Response</span></td><td class="mono">5</td><td>Driver, Pressure, State, Impact</td><td class="mono">feedback</td></tr>
+              </table>
+            </div>
+            <p class="muted" style="margin-top:12px; font-size:14px">Response is marked <em>feedback</em>: it's the only
+              category allowed to connect back to earlier ones — the loop that makes
+              a response actually change the system it responds to. "Advanced"
+              options here let you swap the color palette or add extra levels, but
+              most projects won't need them.</p>
+          </div>
+        </div>
+
+        <!-- Nodes -->
+        <div class="step" id="s-nodes">
+          <div class="step-num">3</div>
+          <div class="step-body">
+            <h4>Nodes</h4>
+            <p><strong>Add</strong> opens a form for one node at a time; <strong>Edit
+              selected</strong> and <strong>Remove selected</strong> work on the row
+              you've picked in the table.</p>
+            <div class="table-wrap">
+              <table class="fields">
+                <tr><th>Field</th><th>What it means</th></tr>
+                <tr><td class="key">id</td><td>A short, unique code (e.g. <code>P1</code>) used everywhere else to refer to this node.</td></tr>
+                <tr><td class="key">label</td><td>The human-readable name shown on the graph and in tables.</td></tr>
+                <tr><td class="key">dpsir_category</td><td>Driver, Pressure, State, Impact or Response — sets the shape, color and position on the graph.</td></tr>
+                <tr><td class="key">subsystem</td><td>Optional grouping (e.g. "Fisheries", "Water") — lets you filter the Graph tab down to one part of the network.</td></tr>
+                <tr><td class="key">uncertainty</td><td>low / medium / high — how confident you are this node is described correctly. Thickens the node's border on the graph.</td></tr>
+                <tr><td class="key">controllability</td><td>low / medium / high — how much a manager can influence this factor directly.</td></tr>
+                <tr><td class="key">temporal_scale</td><td>short / medium / long — how quickly this factor changes. Also filterable on the Graph tab.</td></tr>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Edges -->
+        <div class="step" id="s-edges">
+          <div class="step-num">4</div>
+          <div class="step-body">
+            <h4>Edges</h4>
+            <p>An edge is a directed link, <code>from</code> one node <code>to</code>
+              another — it has to follow the connection order from the Model step
+              (a Pressure→Impact edge, skipping State, will be flagged in Review).</p>
+            <div class="table-wrap">
+              <table class="fields">
+                <tr><th>Field</th><th>What it means</th></tr>
+                <tr><td class="key">weight</td><td>Strength of the link (any positive number). Drawn as line thickness on the graph.</td></tr>
+                <tr><td class="key">confidence</td><td>0–1, how sure you are this link is real. Below the Graph tab's threshold, the line is drawn dashed.</td></tr>
+                <tr><td class="key">interaction_type</td><td>e.g. increases, reduces, mitigates, triggers — colors the edge and appears in its tooltip.</td></tr>
+                <tr><td class="key">evidence_type</td><td>e.g. observational, expert_assessment, monitoring — where the link comes from, shown on hover.</td></tr>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Review -->
+        <div class="step" id="s-review">
+          <div class="step-num">5</div>
+          <div class="step-body">
+            <h4>Review and build</h4>
+            <p>A summary ("6 nodes, 7 edges") plus a plain-language list of anything
+              invalid — usually an edge that skips a category. Fix those, then press
+              <strong>Build/Rebuild graph</strong>. This is also the button to press
+              again any time you go back and edit nodes or edges — the Explore tabs
+              always show the graph as of the last build, not your unsaved edits.</p>
+            <div class="callout warn">
+              <span class="dot"></span>
+              <div><strong>Nothing updates automatically.</strong> Changed a node's
+              category after building? Rebuild before trusting what Explore shows you.</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ EXPLORE ============ -->
+      <section class="block" id="explore">
+        <div class="kicker">Reading the network</div>
+        <h2>The Explore tabs</h2>
+        <p class="lead">Once the graph is built, five tabs cover everything from the
+          visual layout to a downloadable report. They all read the same built graph —
+          nothing here edits your nodes or edges.</p>
+
+        <!-- GRAPH -->
+        <h3 id="t-graph">Graph</h3>
+        <p>The main view: every node placed in a column by DPSIR category, with
+          arrows showing the direction of each effect.</p>
+        <div class="tabmock">
+          <div class="tabmock-bar">
+            <span class="active">Graph</span><span>Communities</span><span>Scenarios</span><span>Metrics</span><span>Report</span>
+          </div>
+          <div class="tabmock-body">
+            <div class="control">
+              <div class="label">Color palette<span class="widget">dropdown</span></div>
+              <p>Switches all category colors at once — includes a colorblind-safe option.</p>
+            </div>
+            <div class="control">
+              <div class="label">Subsystem / Temporal scale<span class="widget">dropdown ×2</span></div>
+              <p>Hide everything outside one subsystem or time horizon, to focus on a slice of a large network.</p>
+            </div>
+            <div class="control">
+              <div class="label">Node size based on<span class="widget">dropdown + checkbox</span></div>
+              <p>Size nodes by how many connections they have (total, incoming, or outgoing), optionally weighted by edge strength — the more central a factor, the bigger it appears.</p>
+            </div>
+            <div class="control">
+              <div class="label">Edge width / confidence<span class="widget">dropdown + slider</span></div>
+              <p>Line thickness by weight or confidence; a slider sets how low confidence has to be before a link is drawn dashed instead of solid.</p>
+            </div>
+            <div class="control">
+              <div class="label">Spacing &amp; font size<span class="widget">sliders</span></div>
+              <p>Horizontal/vertical spacing and overlap avoidance for legibility on dense networks, plus separate font sizes for labels and the legend.</p>
+            </div>
+            <div class="control">
+              <div class="label">Highlight pathway<span class="widget">dropdown ×3</span></div>
+              <p>Pick a start and end category (e.g. Driver → Response) and the app finds the strongest causal chains between them, ranked by score — pick one and everything else on the graph fades to grey.</p>
+            </div>
+            <div class="control">
+              <div class="label">Nodes table<span class="widget">clickable rows</span></div>
+              <p>Click a node on the graph to select its row below, or vice versa — useful for finding a node's full detail without hunting across a busy layout.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- COMMUNITIES -->
+        <h3 id="t-communities">Communities</h3>
+        <p>A <strong>community</strong> is a cluster of nodes more tightly connected to
+          each other than to the rest of the network — often a sub-system acting
+          together (say, everything tied to one fishery) even if it spans several
+          DPSIR categories. Four detection algorithms are available
+          (<span class="mono">Louvain</span>, <span class="mono">Walktrap</span>,
+          <span class="mono">Infomap</span>, <span class="mono">Label Propagation</span>);
+          they can disagree on the exact grouping, so it's worth comparing more than one.
+          The graph redraws with one color per community, edges included, plus a
+          membership table below.</p>
+
+        <!-- SCENARIOS -->
+        <h3 id="t-scenarios">Scenarios</h3>
+        <p>Tests "what if we implemented this response, and how hard?" — without
+          touching your saved network.</p>
+        <div class="tabmock">
+          <div class="tabmock-bar">
+            <span>Graph</span><span>Communities</span><span class="active">Scenarios</span><span>Metrics</span><span>Report</span>
+          </div>
+          <div class="tabmock-body">
+            <div class="control">
+              <div class="label">Response checklist<span class="widget">checkbox + slider each</span></div>
+              <p>One row per Response node in the network. Turn on any combination and set each one's implementation strength from 0–100%.</p>
+            </div>
+            <div class="control">
+              <div class="label">Apply scenario<span class="widget">button</span></div>
+              <p>Runs every active response against the network and shows two tables: overall network effect (edges, total weight, density, before/after), and a plain <span class="chip improves">Improves</span> <span class="chip worsens">Worsens</span> <span class="chip stable">Stable</span> per factor — exact scores stay available in the CSV/Excel export if you need them.</p>
+            </div>
+            <div class="control">
+              <div class="label">Save this scenario<span class="widget">button</span></div>
+              <p>Keeps the result for the rest of the session (not written to disk) so you can build several scenarios and compare them.</p>
+            </div>
+            <div class="control">
+              <div class="label">Compare selected scenarios<span class="widget">multi-select table</span></div>
+              <p>Pick two or more saved scenarios; the baseline (no response applied) is always included as the reference column.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- METRICS -->
+        <h3 id="t-metrics">Metrics</h3>
+        <p>Three sub-tabs, from the whole-network summary down to the DPSIR-specific view.</p>
+        <div class="table-wrap">
+          <table class="fields">
+            <tr><th>Sub-tab</th><th>What's in it</th></tr>
+            <tr><td class="key">General</td><td>Node/edge counts, density (how well-connected the network is overall), diameter, transitivity, modularity, and component count.</td></tr>
+            <tr><td class="key">Centralities</td><td>Degree, betweenness, closeness, PageRank and eigenvector centrality per node — toggles for directed/undirected, normalized/raw and weighted, plus CSV/Excel export.</td></tr>
+            <tr><td class="key">DPSIR descriptors</td><td>Node counts and edge transitions per category, a category × category matrix, flagged <strong>Impacts without a Response</strong> and <strong>Pressures not covered by a Response</strong>, and average uncertainty/controllability per category.</td></tr>
+          </table>
+        </div>
+        <p class="muted" style="font-size:14px; margin-top:10px">Centrality scores answer "which factor matters most,
+          and by what measure" — degree counts direct connections, betweenness flags
+          factors that sit on the most causal paths between others, and PageRank
+          weighs a factor by how important the things pointing at it are.</p>
+
+        <!-- REPORT -->
+        <h3 id="t-report">Report</h3>
+        <p>Builds one self-contained HTML file you can email or archive — pick the
+          sections, download, done.</p>
+        <div class="tabmock">
+          <div class="tabmock-bar">
+            <span>Graph</span><span>Communities</span><span>Scenarios</span><span>Metrics</span><span class="active">Report</span>
+          </div>
+          <div class="tabmock-body">
+            <div class="control">
+              <div class="label">Sections<span class="widget">checkboxes</span></div>
+              <p>Network graph image, general metrics, centralities, DPSIR descriptors — check whichever apply.</p>
+            </div>
+            <div class="control">
+              <div class="label">Scenarios<span class="widget">multi-select table</span></div>
+              <p>Any saved scenarios from the Scenarios tab — the baseline is added automatically once you pick at least one.</p>
+            </div>
+            <div class="control">
+              <div class="label">Download report (HTML)<span class="widget">button</span></div>
+              <p>One file, openable in any browser, no other software needed.</p>
+            </div>
+          </div>
+        </div>
+        <div class="callout">
+          <span class="dot"></span>
+          <div><strong>Graph image needs the Graph tab open first.</strong> The
+          snapshot is taken from what's on screen there — visit it once this session
+          (it's the default tab, so usually you already have) before checking the box.</div>
+        </div>
+      </section>
+
+      <!-- ============ SAVEPOINT ============ -->
+      <section class="block" id="savepoint">
+        <div class="kicker">Don't lose your work</div>
+        <h2>Saving and resuming</h2>
+        <p class="lead"><strong>Save savepoint (.idpsir.json)</strong> sits at the bottom
+          of every step of the wizard — one file holding your schema, nodes, edges and
+          layout. Reload it later from the Start step's <strong>Load savepoint</strong>
+          option to pick up exactly where you left off. Scenarios you've saved during a
+          session are not included yet — they live only until you close the app.</p>
+      </section>
+
+      <!-- ============ GLOSSARY ============ -->
+      <section class="block" id="glossary">
+        <div class="kicker">Reference</div>
+        <h2>Quick glossary</h2>
+        <dl class="glossary">
+          <div class="gloss-item"><dt>Driver</dt><dd>An underlying human activity or need, e.g. urban growth, tourism, agriculture.</dd></div>
+          <div class="gloss-item"><dt>Pressure</dt><dd>What that activity puts on the environment, e.g. wastewater discharge, overfishing.</dd></div>
+          <div class="gloss-item"><dt>State</dt><dd>The resulting condition of the environment, e.g. water quality, fish stock levels.</dd></div>
+          <div class="gloss-item"><dt>Impact</dt><dd>The consequence of that state, e.g. biodiversity loss, public health risk.</dd></div>
+          <div class="gloss-item"><dt>Response</dt><dd>A policy or management action addressing any earlier stage in the chain.</dd></div>
+          <div class="gloss-item"><dt>Density</dt><dd>How many of the possible connections in the network actually exist — higher means a more tightly linked system.</dd></div>
+          <div class="gloss-item"><dt>Centrality</dt><dd>A family of scores for "how important is this node," measured in different ways (see Metrics above).</dd></div>
+          <div class="gloss-item"><dt>Community</dt><dd>A cluster of nodes more connected to each other than to the rest of the network.</dd></div>
+        </dl>
+      </section>
+
+      <footer>
+        <span>iDPSIR — DPSIR causal network builder for environmental management</span>
+        <span>github.com/gfonseca-unifesp/iDPSIR</span>
+      </footer>
+
+    </main>
+  </div>
+</div>
+</body>
+</html>
