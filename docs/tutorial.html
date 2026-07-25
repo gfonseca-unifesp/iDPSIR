@@ -537,7 +537,6 @@
         <li><a href="#explore">3 · Explore tabs</a>
           <ol>
             <li class="sub"><a href="#t-graph">Graph</a></li>
-            <li class="sub"><a href="#t-communities">Communities</a></li>
             <li class="sub"><a href="#t-scenarios">Scenarios</a></li>
             <li class="sub"><a href="#t-metrics">Metrics</a></li>
             <li class="sub"><a href="#t-report">Report</a></li>
@@ -597,7 +596,7 @@ cd iDPSIR</pre>
           <div class="rail-step"><div class="rail-label">Nodes</div><div class="rail-desc">Add each Driver, Pressure, State, Impact, Response</div></div>
           <div class="rail-step"><div class="rail-label">Edges</div><div class="rail-desc">Connect nodes and describe each link</div></div>
           <div class="rail-step"><div class="rail-label">Review &amp; build</div><div class="rail-desc">Fix validation issues, then build the graph</div></div>
-          <div class="rail-step"><div class="rail-label">Explore</div><div class="rail-desc">Five tabs for reading and reporting on the network</div></div>
+          <div class="rail-step"><div class="rail-label">Explore</div><div class="rail-desc">Four tabs for reading and reporting on the network</div></div>
         </div>
 
         <!-- Start -->
@@ -710,17 +709,19 @@ cd iDPSIR</pre>
       <section class="block" id="explore">
         <div class="kicker">Reading the network</div>
         <h2>The Explore tabs</h2>
-        <p class="lead">Once the graph is built, five tabs cover everything from the
+        <p class="lead">Once the graph is built, four tabs cover everything from the
           visual layout to a downloadable report. They all read the same built graph —
           nothing here edits your nodes or edges.</p>
 
         <!-- GRAPH -->
         <h3 id="t-graph">Graph</h3>
         <p>The main view: every node placed in a column by DPSIR category, with
-          arrows showing the direction of each effect.</p>
+          arrows showing the direction of each effect. Controls live in collapsible
+          boxes down the left — click a section's title to expand it — while the
+          graph and its legend take up the wider space on the right.</p>
         <div class="tabmock">
           <div class="tabmock-bar">
-            <span class="active">Graph</span><span>Communities</span><span>Scenarios</span><span>Metrics</span><span>Report</span>
+            <span class="active">Graph</span><span>Scenarios</span><span>Metrics</span><span>Report</span>
           </div>
           <div class="tabmock-body">
             <div class="control">
@@ -748,23 +749,15 @@ cd iDPSIR</pre>
               <p>Pick a start and end category (e.g. Driver → Response) and the app finds the strongest causal chains between them, ranked by score — pick one and everything else on the graph fades to grey.</p>
             </div>
             <div class="control">
+              <div class="label">Communities: color nodes by<span class="widget">dropdown</span></div>
+              <p>Switch from coloring by <strong>DPSIR category</strong> (the default) to <strong>Community</strong> — a cluster of nodes more tightly connected to each other than to the rest of the network, often a sub-system acting together (say, everything tied to one fishery) even if it spans several DPSIR categories. Doing so reveals an algorithm dropdown (<span class="mono">Louvain</span>, <span class="mono">Walktrap</span>, <span class="mono">Infomap</span>, <span class="mono">Label Propagation</span> — they can disagree on the exact grouping, so it's worth comparing more than one) and redraws the graph with one color per community, edges included, plus a membership table below. Every filter and display setting above applies the same way in both coloring modes.</p>
+            </div>
+            <div class="control">
               <div class="label">Nodes table<span class="widget">clickable rows</span></div>
               <p>Click a node on the graph to select its row below, or vice versa — useful for finding a node's full detail without hunting across a busy layout.</p>
             </div>
           </div>
         </div>
-
-        <!-- COMMUNITIES -->
-        <h3 id="t-communities">Communities</h3>
-        <p>A <strong>community</strong> is a cluster of nodes more tightly connected to
-          each other than to the rest of the network — often a sub-system acting
-          together (say, everything tied to one fishery) even if it spans several
-          DPSIR categories. Four detection algorithms are available
-          (<span class="mono">Louvain</span>, <span class="mono">Walktrap</span>,
-          <span class="mono">Infomap</span>, <span class="mono">Label Propagation</span>);
-          they can disagree on the exact grouping, so it's worth comparing more than one.
-          The graph redraws with one color per community, edges included, plus a
-          membership table below.</p>
 
         <!-- SCENARIOS -->
         <h3 id="t-scenarios">Scenarios</h3>
@@ -772,7 +765,7 @@ cd iDPSIR</pre>
           touching your saved network.</p>
         <div class="tabmock">
           <div class="tabmock-bar">
-            <span>Graph</span><span>Communities</span><span class="active">Scenarios</span><span>Metrics</span><span>Report</span>
+            <span>Graph</span><span class="active">Scenarios</span><span>Metrics</span><span>Report</span>
           </div>
           <div class="tabmock-body">
             <div class="control">
@@ -816,7 +809,7 @@ cd iDPSIR</pre>
           sections, download, done.</p>
         <div class="tabmock">
           <div class="tabmock-bar">
-            <span>Graph</span><span>Communities</span><span>Scenarios</span><span>Metrics</span><span class="active">Report</span>
+            <span>Graph</span><span>Scenarios</span><span>Metrics</span><span class="active">Report</span>
           </div>
           <div class="tabmock-body">
             <div class="control">
