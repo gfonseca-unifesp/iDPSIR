@@ -19,6 +19,12 @@
 # node into the same press vector. The interface below is unchanged from
 # before Marco B (same tables, same Improves/Worsens/Stable language) -
 # only the numbers behind it are now correct.
+#
+# Fase 5 Marco C: an optional, off-by-default "Show how the effect evolves
+# over time" disclosure plots simulate_trajectory() (base R matplot(), no
+# ggplot2) - useful even when the network is unstable (the equilibrium
+# table above is only a directional estimate then), since the trajectory
+# still runs for any finite number of steps and visibly diverges instead.
 
 mod_responses_ui <- function(id) {
   ns <- NS(id)
@@ -141,6 +147,13 @@ mod_responses_server <- function(id, schema, nodes, edges, graph) {
         h5("Effect on each factor"),
         DTOutput(ns("factor_effect_table")),
         tags$hr(),
+        checkboxInput(ns("show_trajectory"), "Show how the effect evolves over time (optional)", value = FALSE),
+        conditionalPanel(
+          condition = sprintf("input['%s']", ns("show_trajectory")),
+          sliderInput(ns("trajectory_steps"), "Number of steps", min = 5, max = 60, value = 20, step = 5),
+          plotOutput(ns("trajectory_plot"), height = "320px")
+        ),
+        tags$hr(),
         actionButton(ns("save_scenario"), "Save this scenario", icon = icon("save"), class = "btn-outline-primary")
       )
     })
@@ -162,6 +175,31 @@ mod_responses_server <- function(id, schema, nodes, edges, graph) {
           " This network's feedback loops are not stable: treat the equilibrium effect below as a directional estimate, not a guaranteed outcome. The immediate (one-step) effect is still reliable."
         )
       }
+    })
+
+    output$trajectory_plot <- renderPlot({
+      sc <- current_scenario()
+      req(sc, isTRUE(input$show_trajectory))
+
+      traj <- simulate_trajectory(interaction_matrix(), sc$press, steps = input$trajectory_steps)
+
+      if (all(is.na(traj))) {
+        plot.new()
+        text(0.5, 0.5, "Trajectory could not be computed for this network.")
+        return(invisible())
+      }
+
+      node_ids <- colnames(traj)
+      labels <- V(graph())$label[match(node_ids, V(graph())$name)]
+      colors <- scales::hue_pal()(ncol(traj))
+
+      matplot(
+        seq_len(nrow(traj)), traj, type = "l", lty = 1, lwd = 2, col = colors,
+        xlab = "Steps", ylab = "Effect on each factor",
+        main = "How the effect changes as the response takes hold"
+      )
+      abline(h = 0, col = "grey70", lty = 2)
+      legend("topright", legend = labels, col = colors, lty = 1, lwd = 2, cex = 0.8, bty = "n")
     })
 
     output$network_effect_table <- renderDT({

@@ -82,6 +82,55 @@ press_perturbation <- function(A, press) {
   list(immediate = immediate, equilibrium = equilibrium)
 }
 
+# Trajetoria passo a passo: simula a resposta ao longo do tempo integrando
+# a mesma dinamica continua que da o equilibrio (dx/dt = A*x + press,
+# equilibrio em -A^-1*press), comecando de x=0, via Euler implicito.
+#
+# Euler implicito foi escolhido depois de testar (e descartar) a leitura
+# mais literal de "A aplicada repetidamente" (A, A^2, A^3... direto sobre
+# o press): isso equivale a Euler EXPLICITO com passo=1, que diverge por
+# artefato numerico mesmo em redes que check_stability() corretamente
+# identifica como estaveis, sempre que os autovalores de A tem parte
+# imaginaria grande (a regiao de estabilidade do Euler explicito e muito
+# estreita perto do eixo imaginario - comum justamente em matrizes com
+# ciclos, o caso central da Fase 5). Euler implicito e incondicionalmente
+# estavel para Re(autovalor) < 0: converge para o mesmo equilibrio de
+# press_perturbation() sempre que a rede for estavel, e diverge quando nao
+# for, sem exigir escolher um passo pequeno o suficiente - testado nos
+# mesmos dois exemplos usados no Marco A/B (cadeia trofica estavel converge
+# exatamente pro -A^-1*press already calculado; ciclo instavel diverge). O
+# tamanho do passo fica fixo internamente; "Number of steps" e o unico
+# controle exposto ao usuario.
+simulate_trajectory <- function(A, press, steps = 10, step_size = 0.5) {
+  stopifnot(is.matrix(A), nrow(A) == ncol(A))
+  stopifnot(length(press) == nrow(A))
+  stopifnot(steps >= 1)
+
+  node_names <- rownames(A)
+  press <- as.numeric(press)
+  n <- length(node_names)
+
+  trajectory <- matrix(NA_real_, nrow = steps, ncol = n, dimnames = list(NULL, node_names))
+
+  update_matrix <- tryCatch(
+    solve(diag(n) - step_size * A),
+    error = function(e) NULL
+  )
+
+  if (is.null(update_matrix)) {
+    warning("Trajectory could not be computed for this network (degenerate structure).", call. = FALSE)
+    return(trajectory)
+  }
+
+  state <- rep(0, n)
+  for (step in seq_len(steps)) {
+    state <- as.numeric(update_matrix %*% (state + step_size * press))
+    trajectory[step, ] <- state
+  }
+
+  trajectory
+}
+
 # =====================================================
 # SCENARIOS (Marco B: mod_responses.R computa a partir daqui)
 # =====================================================

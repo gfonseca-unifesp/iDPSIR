@@ -78,8 +78,13 @@ Checagem rápida de sintaxe sem subir o app:
   imediato vs equilíbrio — substitui as métricas de topologia do `compare_states`
   antigo, que não fazem mais sentido já que o grafo não muda mais, só o estado),
   `compare_scenario_effects(g, scenario_results)` (efeito de equilíbrio de N cenários
-  lado a lado, substitui `compare_multiple_states`). Sem dependência nova
-  (`eigen()`/`solve()` do R base).
+  lado a lado, substitui `compare_multiple_states`). Marco C:
+  `simulate_trajectory(A, press, steps, step_size = 0.5)` (integra dx/dt = A·x + press
+  por Euler implícito a partir de x=0 — incondicionalmente estável para
+  Re(autovalor) < 0, então converge pro mesmo equilíbrio de `press_perturbation`
+  quando a rede é estável, e diverge quando não é; matriz `I - step_size·A`
+  degenerada retorna matriz de `NA` com aviso, mesmo padrão de `press_perturbation`).
+  Sem dependência nova (`eigen()`/`solve()` do R base).
 - `R/report.R` → montagem do relatório HTML autocontido (`build_full_report_html`,
   `report_html_table`, `format_report_cell`, `matrix_to_report_df`), usado só por
   `mod_report.R`. Seções (imagens de grafo salvas/métricas gerais/centralidades/
@@ -119,7 +124,14 @@ Checagem rápida de sintaxe sem subir o app:
   equilíbrio) em vez de nodes/edges/density do motor antigo, já que o grafo em si
   não muda mais, só o estado. "Effect on each factor" mantém a mesma UI de sempre
   (Improves/Worsens/Stable visível; `id`/imediato/equilíbrio ocultos mas presentes
-  no export CSV/Excel).
+  no export CSV/Excel). Marco C: disclosure opcional "Show how the effect evolves
+  over time" (desligada por padrão), com slider "Number of steps" e um
+  `plotOutput` via `matplot()` (base R, sem `ggplot2`) plotando
+  `simulate_trajectory()` — uma linha por fator, cores de `scales::hue_pal()`
+  (pacote já usado no app). Útil principalmente quando a rede é instável: a
+  tabela de equilíbrio vira só uma estimativa direcional nesse caso, mas a
+  trajetória continua rodando pra qualquer número de passos e mostra a
+  divergência visualmente.
 - `R/modules/mod_report.R` → aba "Report" (última do Explorar): checkboxes para
   métricas gerais/centralidades/descritores DPSIR, seleção múltipla de imagens de
   grafo salvas (`mod_graph.R`'s "Save current view for report") e seleção múltipla
@@ -436,13 +448,45 @@ Relatório HTML gerado com as duas seções (métricas gerais + cenários compar
 os valores -0.5/-0.8 confirmados presentes no HTML baixado. Sem erros no console do
 servidor em nenhum passo, após corrigir o bug do `formatRound` acima.
 
+**Fase 5 Marco C concluído.** `simulate_trajectory()` adicionada a
+`R/loop_analysis.R`, integrada em `mod_responses.R` como disclosure opcional —
+descritos nos bullets de `R/loop_analysis.R`/`mod_responses.R` acima.
+
+**Decisão de design que mudou de rumo ao testar:** a leitura mais literal do PLANO
+("A mesma matriz A aplicada repetidamente: A, A², A³...") vira Euler **explícito**
+com passo=1 aplicado direto ao vetor de press — implementada primeiro, mas
+descartada ao testar contra o exemplo da cadeia trófica estável (Marco A): a
+trajetória **divergia** (magnitude 1→2→3→4→6→7→11→...→89 em 15 passos) mesmo numa
+rede que `check_stability()` corretamente identifica como estável, porque Euler
+explícito tem uma região de estabilidade numérica minúscula perto do eixo
+imaginário — e autovalores complexos são comuns justamente em matrizes com ciclos,
+o caso central desta fase. Isso teria contradito o próprio aviso de estabilidade
+mostrado acima da tabela, gerando desconfiança no app. Substituída por Euler
+**implícito** (`solve(diag(n) - step_size*A)` a cada passo), que é
+incondicionalmente estável para Re(autovalor) < 0 — testado com `step_size` 0.5 e
+5 no mesmo exemplo estável, convergindo pro `-A^-1*press` exato em ambos os casos, e
+divergindo (crescimento >10× entre o passo 20 e o 60) no exemplo do ciclo instável.
+`step_size` default ajustado de 1 para 0.5 depois de um segundo achado: com
+`step_size=1` exatamente, o ciclo de 5 nós com todos os pesos=1 batia numa
+singularidade algébrica exata (`I - A` com autovalor 0), disparando o aviso de
+"trajetória não pôde ser computada" logo no primeiro teste — um coincidência
+comum o bastante (pesos uniformes, ciclos com autovalor exatamente 1) pra não
+deixar como default.
+
+Testado standalone (`R` fora do app) contra os dois exemplos já usados nos Marcos
+A/B, e ponta a ponta no app: rede cíclica de 5 nós, checkbox "Show how the effect
+evolves over time" ligado, gráfico via `matplot()` renderizado sem erro mostrando
+as curvas divergindo (consistente com o aviso de instabilidade already mostrado),
+slider "Number of steps" reagindo corretamente a mudanças. Sem erros no console do
+servidor em nenhum passo.
+
 ## Próximo
 
-Fase 5 Marco C é o próximo passo: trajetória com número de passos ajustável (a
-mesma matriz `A` aplicada repetidamente, mostrando o sistema convergindo ou
-divergindo — também a saída que continua funcionando quando a rede é instável, já
-que a potência finita de matriz sempre existe mesmo sem equilíbrio infinito). Depois,
-Marco D (robustez via confidence, com número de simulações ajustável).
+Fase 5 Marco D é o próximo passo: robustez via confidence (o `confidence` que o
+usuário já preenche em cada aresta vira uma faixa de variação plausível no peso;
+rodar N simulações com pesos perturbados dentro dessa faixa mostra o percentual de
+vezes em que o sinal do resultado se manteve, com um controle "Number of
+simulations" ajustável pelo usuário).
 
 Retomar matriz de conexões livre e aninhamento
 hierárquico de níveis (Fase 2, itens restantes) quando desenhados. Considerar incluir
