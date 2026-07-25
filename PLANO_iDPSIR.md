@@ -227,7 +227,9 @@ Destaque de caminhos no grafo (`highlight_pathway`, já existente); aba de pathw
 ### Fase 3 — Cenários e respostas
 Simulação de resposta (`apply_response`, reaproveitada), comparação de cenários e relatório exportável.
 
-### Fase 4 — Combinar savepoints (múltiplas redes compatíveis)
+### Fase 4 — Combinar savepoints e reorganizar a aba Graph
+
+#### 4.1 — Combinar savepoints (múltiplas redes compatíveis)
 **Motivação:** redes DPSIR de subsistemas montadas em separado (ex.: pesca e qualidade
 da água), depois combinadas numa visão integrada.
 
@@ -254,6 +256,50 @@ opção do passo Início.
 **Pronto quando:** dois savepoints válidos e compatíveis resultam numa única rede
 editável, com nós/arestas combinados e ids únicos, seguindo o mesmo fluxo de revisão
 já usado no resto do wizard.
+
+#### 4.2 — Reorganizar a aba Graph (controles à esquerda, grafo à direita)
+**Motivação:** hoje os controles de exibição ficam empilhados **acima** do grafo —
+cinco `fluidRow`s (paleta, filtros, tamanho de nó, espessura de aresta, espaçamento,
+fontes, destaque de caminho) antes do widget aparecer, empurrando pra baixo o que
+realmente importa na aba. A aba Communities, por sua vez, é hoje um grafo totalmente
+separado, com sua própria lógica de cor e sem os mesmos filtros/espaçamento do Graph
+— pode mostrar algo inconsistente com o que o usuário configurou lá.
+
+**Novo layout:**
+- **Coluna esquerda** (estreita): controles agrupados por tema, cada tema numa caixa
+  colapsável — não é um componente novo, é o mesmo padrão de "clicar no `−`/`+` pra
+  abrir/fechar" que toda caixa do app já usa (`bs4Dash::box(collapsible = TRUE)`), só
+  reorganizado em várias caixas pequenas empilhadas em vez de uma única caixa larga.
+- **Temas:** Display (paleta, formas, filtros de subsistema/escala temporal) ·
+  Node & edge emphasis (tamanho, espessura, confiança) · Layout & spacing
+  (espaçamento, fontes) · Pathway highlight · **Communities** (algoritmo) ·
+  **Nodes** (tabela de seleção cruzada).
+- **Coluna direita** (a maior parte da tela): só o grafo + legenda.
+
+**Communities deixa de ser aba separada — vira um tema a mais na coluna esquerda.**
+Em vez de um segundo `visNetwork` isolado, a cor por comunidade passa a ser **mais
+uma opção de coloração do mesmo grafo** (ao lado de "colorir por categoria DPSIR"),
+usando os mesmos filtros/espaçamento/tamanho já configurados nos outros temas — é
+isso que resolve a divergência de hoje entre os dois grafos, por construção.
+
+**Arquivos:** `mod_graph.R` reestruturado (duas colunas em vez de `fluidRow`s
+empilhados; absorve o que hoje é `mod_communities.R`); `mod_wizard.R` perde a chamada
+separada a `mod_communities_server`, e a aba "Communities" some do `tabsetPanel` do
+Explore — passa a ser Graph/Scenarios/Metrics/Report (4 abas em vez de 5). As funções
+de lógica em `graph.R` (`build_community_visual`, `compute_communities`) continuam
+existindo, só muda quem as chama.
+
+**Pronto quando:** a aba Graph mostra os controles organizados por tema numa coluna
+à esquerda, colapsáveis, com o grafo ocupando a maior parte da tela à direita; a cor
+por comunidade é uma opção dentro dessa mesma visualização, usando os mesmos filtros
+já configurados — sem aba separada.
+
+#### 4.3 — Remover o botão "Next" depois que o grafo é construído
+**Motivação:** uma vez no passo Explorar (step 6, o último), Next não leva a lugar
+nenhum — hoje continua visível e clicável, sem fazer nada, o que confunde.
+
+**Mudança:** Next só aparece enquanto `current_step < 6`. Back e "Save savepoint"
+continuam disponíveis normalmente em qualquer passo, como já é hoje.
 
 ### Fase 5 — Loop de feedback como motor de Scenarios
 **Motivação:** o diferencial do DPSIR é o loop Response → {Driver, Pressure, State,
