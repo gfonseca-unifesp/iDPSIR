@@ -227,6 +227,113 @@ Destaque de caminhos no grafo (`highlight_pathway`, já existente); aba de pathw
 ### Fase 3 — Cenários e respostas
 Simulação de resposta (`apply_response`, reaproveitada), comparação de cenários e relatório exportável.
 
+### Fase 4 — Combinar savepoints (múltiplas redes compatíveis)
+**Motivação:** redes DPSIR de subsistemas montadas em separado (ex.: pesca e qualidade
+da água), depois combinadas numa visão integrada.
+
+**Decisões de design:**
+- Só savepoints com o **mesmo schema** (mesmos níveis, na mesma ordem, mesmos papéis)
+  podem ser combinados — schemas diferentes são bloqueados com mensagem clara;
+  reconciliar dois schemas distintos fica fora de escopo.
+- IDs de nó duplicados entre savepoints são prefixados automaticamente pelo nome do
+  savepoint de origem (ex.: `pesca__P1`, `agua__P1`) para garantir unicidade — evita
+  misturar silenciosamente dois nós diferentes que por acaso têm o mesmo id.
+- Arestas são apenas concatenadas, sem tentar deduplicar/mediar pesos automaticamente;
+  duplicatas exatas caem no `unique()` que `sanitize_edges` já aplica.
+- Sem tela nova de "resolução de conflitos": o resultado da combinação entra direto no
+  passo **Nós** do wizard, já populado — revisão/renomeação/remoção usa o editor por
+  formulário que já existe, sem interface nova para aprender.
+
+**Onde entra na UI:** nova opção no passo Início, ao lado de Novo projeto / Importar
+matrizes / Carregar savepoint: **"Combinar savepoints"**, aceita 2+ arquivos
+`.idpsir.json`.
+
+**Arquivos:** `merge_savepoints()` novo em `R/io.R`; ajuste em `mod_data.R` para a nova
+opção do passo Início.
+
+**Pronto quando:** dois savepoints válidos e compatíveis resultam numa única rede
+editável, com nós/arestas combinados e ids únicos, seguindo o mesmo fluxo de revisão
+já usado no resto do wizard.
+
+### Fase 5 — Loop de feedback como motor de Scenarios
+**Motivação:** o diferencial do DPSIR é o loop Response → {Driver, Pressure, State,
+Impact}, mas hoje o app só mostra o efeito de uma resposta como uma comparação única
+"antes/depois" (`apply_response`, Fase 3) — o loop nunca é observado "rodando" de
+fato, e o cálculo de hoje ignora o peso da própria aresta da Resposta (só usa pra
+achar os alvos, não pra medir o efeito). Modelagem estatística contra dados reais
+(path analysis defasada, SEM) foi avaliada (seção 11) e **fica fora do escopo deste
+app por ora** — decisão consciente, não pendência: exige um tipo de dado
+(observações ao longo do tempo) que o iDPSIR não tem, e o risco de complexidade para
+o público-alvo é real. Pode voltar a ser considerada depois, inclusive como uma
+ferramenta separada.
+
+**Método escolhido:** **análise de loop / matriz comunitária** (Levins 1974;
+Dambacher, Puccia e outros) — o método clássico de ecologia justamente para grafos
+direcionados com sinal e ciclos, o mesmo tipo de estrutura que o Response cria no
+DPSIR. Cada aresta vira uma entrada da matriz de interação `A[i,j]` (efeito de j
+sobre i), com sinal dado por `interaction_type` e magnitude por `weight` — os mesmos
+dois atributos que o usuário já preenche hoje, agora usados também na Resposta, não
+só pra achar os alvos.
+
+**Decisão de consolidação (não é aditivo — revisa a Fase 3):** em vez de manter o
+`apply_response()` de hoje ao lado de um método novo, a análise de loop **substitui**
+o motor de cálculo da aba Scenarios. Manter os dois geraria dois números diferentes
+pra mesma pergunta ("qual o efeito desta resposta?"), sem um jeito principiado de
+saber qual confiar — e o método de loop é estritamente mais rigoroso (usa o peso da
+aresta da Resposta, que o método antigo descarta). A interface que o usuário já
+conhece **não muda**: mesmas tabelas ("Effect on the network" / "Effect on each
+factor"), mesma linguagem Improves/Worsens/Stable, mesmo fluxo de Salvar/Comparar
+cenários — só os números por trás ficam mais corretos. Combinar respostas também
+fica mais simples nesse método (somar as pressões no mesmo vetor, em vez do
+encadeamento manual de `apply_response()` hoje).
+
+**Camadas opcionais, dentro da mesma aba (nada de aba nova):**
+- **Efeito imediato × efeito de equilíbrio.** Perturbação de pressão sustentada:
+  calcular tanto o efeito de um passo (`A` aplicado uma vez) quanto o de equilíbrio
+  (`-A⁻¹`, contabilizando todos os loops diretos e indiretos) — mostrado como um
+  detalhe expansível na tabela ("Right away: +2%. Once it settles: +8%"), não como
+  uma segunda tabela concorrente.
+- **Trajetória com número de passos ajustável** (disclosure opcional, desligado por
+  padrão). A mesma matriz `A` aplicada repetidamente (`A`, `A²`, `A³`...) mostra o
+  sistema convergindo — com um controle "Number of steps" que o usuário ajusta.
+  Também é a saída que continua funcionando quando o sistema é instável (potência
+  finita de matriz sempre existe, mesmo quando o equilíbrio infinito não).
+- **Robustez via confidence** (disclosure opcional, desligado por padrão). O
+  `confidence` que o usuário já preenche em cada aresta vira uma faixa de variação
+  plausível no peso (alta confiança = pouca variação; baixa = muita); rodando N
+  simulações com pesos perturbados dentro dessa faixa, mostra o percentual de vezes
+  em que o sinal do resultado se manteve — com um controle "Number of simulations"
+  que o próprio usuário ajusta, vendo o percentual estabilizar conforme aumenta N.
+  Dá um uso real ao `confidence`, que hoje só controla o tracejado no grafo.
+- **Checagem de estabilidade.** Nem todo grafo desenhado pelo usuário é "estável" no
+  sentido do método (autovalores de `A` com parte real negativa); a função detecta
+  isso e avisa em linguagem simples, sem mostrar autovalor bruto na tela.
+
+**Por que essa escolha:** zero dependência nova (`solve()`/`eigen()` do R base;
+gráfico de trajetória via `matplot()`, sem precisar de `ggplot2`), é o método já
+estabelecido na literatura para exatamente este tipo de estrutura, e não exige
+nenhum dado observado — só o grafo qualitativo que o usuário já constrói hoje.
+
+**Arquivos:**
+- `R/loop_analysis.R` novo — `build_interaction_matrix()`, `check_stability()`,
+  `press_perturbation()`, `simulate_trajectory()`, `robustness_check()`.
+- `mod_responses.R` revisado para computar a partir desse motor; `apply_response()`
+  deixa de ser o principal (fica preservado no disco, não sourceado — mesmo
+  tratamento já dado a `R/dpsir/`).
+
+**Marcos:**
+- **A** — matemática pura (`R/loop_analysis.R`), testada standalone contra um
+  exemplo conhecido de loop analysis.
+- **B** — Scenarios revisado: tabela de efeito (imediato + equilíbrio) e aviso de
+  estabilidade, substituindo o motor antigo.
+- **C** — trajetória com número de passos ajustável.
+- **D** — robustez via confidence, com número de simulações ajustável.
+
+**Pronto quando:** aplicar uma resposta com força X mostra, para cada nó da rede, o
+efeito de equilíbrio considerando o loop de feedback completo — não só o efeito
+direto de um passo, como hoje — usando as mesmas tabelas e a mesma linguagem que a
+aba Scenarios já usa.
+
 ---
 
 ## 9. Pontos de atenção
@@ -252,3 +359,59 @@ Decisão: **mover o projeto para fora do OneDrive** e versionar com Git, publica
 5. `git remote add origin` + `git push` — eu forneço os comandos exatos; o `push` é feito por você (a credencial é sua).
 
 Enquanto o projeto estiver no OneDrive, evito operações Git na pasta para não gerar conflitos de sincronização.
+
+---
+
+## 11. Fase 5 — avaliação técnica (path analysis / SEM) e decisão de escopo
+
+**O que já existe hoje:** `R/pathways.R` já faz "path analysis" no sentido
+topológico — encontra e pontua caminhos causais no grafo (`find_dpsir_paths`,
+`score_pathway`), mas a pontuação usa só peso/confiança que o usuário digitou
+manualmente. Não há nenhuma estimativa estatística a partir de dados reais.
+
+**O que "path analysis" no sentido clássico (Wright) e SEM significam:** tratar cada
+nó como uma variável com valores observados (numéricos), e as arestas como
+coeficientes de regressão padronizados, estimados a partir dos dados — não mais
+atribuídos por julgamento. SEM generaliza isso permitindo variáveis latentes e testes
+de ajuste do modelo inteiro (χ², CFI, RMSEA).
+
+**Três obstáculos reais, nessa ordem de importância:**
+
+1. **Ciclos de feedback não se encaixam no método padrão.** O DPSIR permite
+   Response → {Driver, Pressure, State, Impact}, ou seja, o grafo tem ciclos por
+   construção — é o próprio ponto do modelo. Path analysis clássica e SEM recursivo
+   assumem grafo acíclico; ciclos exigem equações simultâneas ou dados em
+   painel/série temporal defasada (efeito de R em t sobre D em t+1), um desenho de
+   pesquisa bem mais exigente do que o que o app pede hoje. Não dá para simplesmente
+   jogar o grafo inteiro num `lavaan::sem()` e esperar que funcione.
+2. **Dado observado é um tipo de dado novo, que o app não tem.** Hoje um nó tem só
+   atributos qualitativos (`uncertainty`, `controllability`, `temporal_scale`).
+   Ajustar qualquer modelo estatístico exige uma tabela nó × observação (várias
+   medições/períodos por nó) — um formato de dado, uma tela de importação e uma
+   validação (tamanho de amostra mínimo, nomes de coluna batendo com os ids dos nós)
+   que não existem em nenhuma fase anterior.
+3. **Risco de complexidade para o público-alvo.** O princípio já seguido em todo o
+   app ("gestores não são especialistas em DPSIR nem em teoria de grafos") esbarra
+   direto em SEM: mesmo um ajuste bem-sucedido produz números (χ², CFI, RMSEA,
+   índices de modificação) que exigem treinamento estatístico para interpretar — e
+   um ajuste malsucedido (modelo não identificado, não convergiu) é ainda mais
+   difícil de explicar sem jargão. Amostras pequenas ou irregulares, comuns em
+   monitoramento ambiental real, tornam isso um risco frequente, não uma exceção.
+
+**Decisão de escopo (confirmada com o usuário):** modelagem estatística contra dados
+reais — defasada (cross-lagged/VAR) ou SEM não-recursivo — fica **fora do escopo do
+iDPSIR por ora**. Não é uma sub-fase futura dentro deste app; é um outro tipo de
+ferramenta (exige um tipo de dado que o iDPSIR não coleta, uma tela de importação
+própria, e carrega o risco de complexidade do item 3 acima). Se um dia fizer sentido,
+é mais provável que valha a pena como um **app separado** — que poderia inclusive
+*consumir* um savepoint `.idpsir.json` como ponto de partida (a estrutura do modelo
+já viria pronta) — do que como uma aba a mais dentro deste.
+
+**O que fica dentro do escopo:** a Fase 5 tal como descrita na seção 8 — análise de
+loop / matriz comunitária (Levins 1974) **substituindo** o motor de cálculo da aba
+Scenarios, não coexistindo com ele. Diferente de SEM, esse método foi desenhado
+justamente para grafos com ciclo, não exige nenhum dado observado (só o grafo
+qualitativo que o usuário já constrói), e não introduz nenhuma dependência nova
+(`solve()`/`eigen()` do R base). É o jeito de honrar o loop de feedback do Response —
+o diferencial do DPSIR — sem esbarrar em nenhum dos três obstáculos listados acima, e
+sem deixar dois métodos concorrentes confundindo a mesma pergunta.
