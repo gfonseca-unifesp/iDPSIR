@@ -61,6 +61,15 @@ Checagem rápida de sintaxe sem subir o app:
 - `R/responses.R` → simulação de respostas schema-aware (`get_feedback_categories`,
   `find_response_targets`, `apply_response`, `compute_node_impact_score`,
   `summarize_response_impact`, `compare_states`, `compare_multiple_states`).
+  Motor da aba Scenarios até a Fase 5 Marco B — ver `R/loop_analysis.R` abaixo.
+- `R/loop_analysis.R` → análise de loop / matriz comunitária (Levins 1974), Fase 5
+  Marco A: `build_interaction_matrix(g)` (matriz `A[i,j]` = efeito de `j` sobre `i`,
+  sinal de `interaction_type`/magnitude de `weight`), `check_stability(A)`
+  (autovalores, `stable`/`eigenvalues`/`max_real_part`), `press_perturbation(A, press)`
+  (efeito de um passo `A %*% press` e de equilíbrio `-A^-1 %*% press`; matriz
+  singular retorna `NA` com aviso em vez de erro). Sem dependência nova
+  (`eigen()`/`solve()` do R base). Ainda não usada por nenhum módulo — `mod_responses.R`
+  passa a chamar isso no Marco B, substituindo `apply_response` como motor principal.
 - `R/report.R` → montagem do relatório HTML autocontido (`build_full_report_html`,
   `report_html_table`, `format_report_cell`, `matrix_to_report_df`), usado só por
   `mod_report.R`. Seções (imagens de grafo salvas/métricas gerais/centralidades/
@@ -352,10 +361,31 @@ listener de troca de aba nem do timeout) e permite salvar mais de uma vista.
   então CSVs importados com valores antigos não geram erro — ficam sem cor
   reconhecida no grafo (cinza) até serem corrigidos.
 
+**Fase 5 iniciada (Marco A concluído, ver PLANO seção 8).** `R/loop_analysis.R`
+novo, sourceado em `global.R`: `build_interaction_matrix()`, `check_stability()`,
+`press_perturbation()` — descritos no bullet de `R/loop_analysis.R` acima. Testado
+standalone (`scratchpad/test_loop_analysis.R`) contra o exemplo clássico de Levins/
+Puccia (cadeia trófica Recurso→Consumidor→Predador, só o Recurso com autorregulação):
+a matriz construída bate exatamente com a matriz do livro-texto, `check_stability`
+reconhece a cadeia como estável (autovalores com parte real negativa), e uma
+perturbação sustentada (`press`) no Predador reproduz a cascata trófica clássica em
+sinal — Predador sobe, Consumidor desce, Recurso sobe — tanto no efeito de um passo
+quanto no de equilíbrio. Casos de borda também testados: matriz singular retorna
+`NA` com aviso (não erro), grafo sem arestas retorna matriz zero. Testado também
+contra um grafo DPSIR real construído via `build_igraph()` (`data/sample_*.csv`,
+10 nós/16 arestas): células da matriz batem com peso/sinal esperado, e essa rede de
+exemplo (desenhada só pra demonstrar funcionalidades, não pra ser realista) é
+corretamente identificada como **instável** — mostra que `check_stability` não
+assume estabilidade por padrão, como o PLANO pede.
+
 ## Próximo
 
-Fase 5 (loop de feedback via análise de loop/matriz comunitária, ver PLANO seções 8 e
-11) é o próximo passo planejado. Retomar matriz de conexões livre e aninhamento
+Fase 5 Marco B é o próximo passo: revisar `mod_responses.R` pra computar a partir de
+`R/loop_analysis.R` em vez de `apply_response()` — tabela de efeito (imediato +
+equilíbrio) e aviso de estabilidade, mesma interface (tabelas "Effect on the
+network"/"Effect on each factor", linguagem Improves/Worsens/Stable) que a aba
+Scenarios já usa hoje. Depois, Marco C (trajetória com número de passos ajustável) e
+Marco D (robustez via confidence). Retomar matriz de conexões livre e aninhamento
 hierárquico de níveis (Fase 2, itens restantes) quando desenhados. Considerar incluir
 cenários salvos no savepoint (hoje só duram a sessão) se isso vier a ser pedido.
 Relatório: adicionar seção de Comunidades (imagem + tabela) como fast-follow,

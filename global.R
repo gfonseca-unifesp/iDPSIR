@@ -62,6 +62,7 @@ source("R/graph.R")
 source("R/metrics.R")
 source("R/pathways.R")
 source("R/responses.R")
+source("R/loop_analysis.R")
 source("R/report.R")
 source("R/io.R")
 
