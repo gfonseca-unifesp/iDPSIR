@@ -9,15 +9,17 @@ all without requiring familiarity with graph theory.
 
 ## How to run
 
-Requires R (>= 4.1). Install the packages and run the app from the project root:
+Requires R (>= 4.1). Missing packages are installed automatically on first run — no
+manual `install.packages()` step needed. From the project root:
 
 ```r
-install.packages(c(
-  "shiny", "bs4Dash", "visNetwork", "igraph", "DT", "dplyr",
-  "data.table", "htmlwidgets", "shinyWidgets", "glue", "purrr", "scales", "jsonlite"
-))
-
 shiny::runApp()
+```
+
+Or, without cloning the repo:
+
+```r
+shiny::runGitHub("iDPSIR", "gfonseca-unifesp", "main")
 ```
 
 ## Structure
@@ -25,7 +27,7 @@ shiny::runApp()
 ```
 iDPSIR/
 ├── app.R                     # entry point
-├── global.R                  # packages, options and source() of every file (order matters)
+├── global.R                  # auto-installs missing packages, then loads them; source() of every file (order matters)
 ├── R/
 │   ├── schema.R              # configurable DPSIR schema (levels, order, palettes, vocabularies)
 │   ├── validate.R             # node/edge validation against the schema
@@ -34,15 +36,15 @@ iDPSIR/
 │   ├── pathways.R             # schema-aware causal pathway analysis
 │   ├── responses.R            # response simulation (apply_response, scenario comparison)
 │   ├── report.R               # self-contained HTML report builder
-│   ├── io.R                   # CSV matrix import and .idpsir.json savepoint read/write
+│   ├── io.R                   # CSV matrix import, .idpsir.json savepoint read/write, merge_savepoints()
 │   ├── core/                  # shared UI components
 │   ├── dpsir/                 # earlier, non-schema-aware versions kept for reference (not sourced)
 │   ├── modules/                # Shiny modules
 │   │   ├── mod_data.R          # wizard steps: Start/Model/Nodes/Edges/Review (form-based editor)
-│   │   ├── mod_graph.R         # Graph tab: filters, display options, pathway highlighting
-│   │   ├── mod_communities.R   # Communities tab (Louvain/Walktrap/Infomap/Label Propagation)
+│   │   ├── mod_graph.R         # Graph tab: filters, display options, pathway highlighting, category/community coloring, save snapshots for the report
+│   │   ├── mod_communities.R   # earlier standalone Communities tab, kept for reference (not sourced; superseded by mod_graph.R's "Color nodes by")
 │   │   ├── mod_responses.R     # Scenarios tab: build/apply/save/compare response scenarios
-│   │   ├── mod_report.R        # Report tab: pick sections, download the HTML report
+│   │   ├── mod_report.R        # Report tab: pick metrics sections + saved graph snapshots + saved scenarios, download the HTML report
 │   │   ├── mod_metrics.R       # Metrics tab: general / centralities / DPSIR descriptors
 │   │   └── mod_wizard.R        # wizard shell tying every step/tab together
 │   ├── ui_main.R               # top-level UI (ina_ui)
@@ -67,19 +69,22 @@ configurable, so this order and vocabulary can be adjusted per project.
 
 ## Workflow
 
-The wizard has six steps: **Start** (new project, CSV import, or load a `.idpsir.json`
-savepoint) → **Model** (schema/palette, advanced) → **Nodes** → **Edges** → **Review
-and build** → **Explore**, which itself has five tabs:
+The wizard has six steps: **Start** (new project, CSV import, load a `.idpsir.json`
+savepoint, or combine two or more savepoints into one) → **Model** (schema/palette,
+advanced) → **Nodes** → **Edges** → **Review and build** → **Explore**, which itself
+has four tabs:
 
 - **Graph** — layered DPSIR visualization with filters, node/edge emphasis, spacing
-  controls, and pathway highlighting.
-- **Communities** — community detection redrawn with edges (not bare colored dots).
+  controls, and pathway highlighting. "Color nodes by" switches between DPSIR
+  category and detected community (Louvain/Walktrap/Infomap/Label Propagation,
+  redrawn with edges, not bare colored dots) without leaving the tab. Any view can
+  be saved as a named snapshot to include in the report.
 - **Scenarios** — turn on Response nodes at a given implementation strength, apply a
   combined scenario, save it, and compare multiple saved scenarios side by side.
 - **Metrics** — general network metrics, centralities, and DPSIR descriptors (gaps
   such as Impacts without a Response, or Pressures not covered by one).
-- **Report** — pick which sections (graph image, metrics, centralities, descriptors,
-  saved scenarios) go into one self-contained downloadable HTML report.
+- **Report** — pick which sections (saved graph snapshots, metrics, centralities,
+  descriptors, saved scenarios) go into one self-contained downloadable HTML report.
 
 A savepoint (`.idpsir.json`) can be downloaded from any step and reloaded later to
 resume a project.
