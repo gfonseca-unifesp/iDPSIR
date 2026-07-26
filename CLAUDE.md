@@ -221,6 +221,9 @@ Checagem rápida de sintaxe sem subir o app:
   `visNetwork` separado, sem os filtros/espaçamento do Graph), mantida no disco mas
   **não sourceada** desde a Fase 4.2 — superada por `mod_graph.R`.
 - `R/ui_main.R`, `R/server_main.R` → UI e server principais (chamam só `mod_wizard_*`).
+  `ui_main.R` tem um link "Help" no `dashboardHeader(rightUi=...)`, abrindo
+  `docs/tutorial.html` (servido pelo `addResourcePath("tutorial", "docs")` em
+  `global.R`) numa aba nova — ver Estado atual.
 - `data/` → CSVs de exemplo.
 
 Ao adicionar/remover um arquivo em `R/`, atualize os `source()` em `global.R`.
@@ -840,12 +843,70 @@ aplicado a 70%, gráfico de trajetória habilitado — nota "This network has on
 or more edges with a threshold set..." aparece corretamente acima do gráfico,
 sem erro no console do servidor em nenhum passo.
 
+**Merge pra `main` + push pro GitHub**, e verificação pré-release. `fase-5`
+foi mesclada em `main` via fast-forward (sem conflitos, nenhum commit
+divergente) e enviada pro GitHub. Testado de verdade rodando
+`shiny::runGitHub("iDPSIR", "gfonseca-unifesp", ref="main")` — download real
+do zip do GitHub, não uma cópia local — e repetindo o fluxo do exemplo de
+pescas até a aba Scenarios: todos os números bateram exatamente com os já
+verificados localmente (aviso de instabilidade, tabelas de efeito, "When will
+Impacts be neutralized?", nota de threshold), sem erro no console do
+servidor.
+
+README revisado contra esse estado atual e encontrado desatualizado de um
+jeito real, não só incompleto: ainda descrevia `R/responses.R`/`apply_response`
+como o motor de cenários (superado desde o Marco B por `R/loop_analysis.R`),
+não mencionava `R/loop_analysis.R` na árvore de arquivos nem `docs/`
+(tutorial + savepoint de exemplo), e a seção Scenarios do Workflow não
+mencionava nada da Fase 5 (estabilidade, equilíbrio, trajetória, robustez,
+neutralização). Reescrito (intro, árvore, formato de dados, Workflow) pra
+refletir o estado atual, com link pro tutorial logo no topo.
+
+**Limpeza pré-release + tutorial acessível de dentro do app.** Dois arquivos
+órfãos na raiz do repo, encontrados numa varredura de arquivos não versionados
+em `R/`/`data/`/`docs/`, removidos: `iDPSIR_rationale.txt` (esboço de árvore
+de arquivos de antes da Fase 0, não bate em nada com a estrutura atual —
+`mod_network.R`, `compute/`, `data_models/` etc. nunca existiram na versão
+schema-driven) e `quick_start.R` (`install.packages('shiny')` sozinho,
+contradizendo o próprio README, que já documenta auto-instalação completa).
+
+Tutorial passou a ser acessível de dentro do app rodando, não só no GitHub:
+`global.R` ganhou `shiny::addResourcePath("tutorial", "docs")` (serve
+`docs/tutorial.html` — o mesmo arquivo do GitHub, sem duplicar conteúdo nem
+reconciliar o CSS próprio do tutorial com o tema do bs4Dash) e `R/ui_main.R`
+ganhou um link "Help" em `dashboardHeader(rightUi=...)`, abrindo
+`tutorial/tutorial.html` numa aba nova.
+
+**Bug real de bs4Dash, encontrado só ao testar em runtime** (não em checagem
+de sintaxe): a primeira versão do link usava só `class = "nav-item"` no
+`tags$li` — `bs4Dash::dashboardHeader()` chama `tagAssert(rightUi, type =
+"li", class = "dropdown")` internamente, exigindo literalmente a classe
+`"dropdown"` no elemento (`bs4Dash:::tagAssert` confirmado lendo o código-fonte
+do pacote: `strsplit` na classe + checagem de igualdade exata de token, não
+prefixo/substring), e quebrava a inicialização do app inteiro com "Missing
+required class" antes mesmo de servir a primeira página. Corrigido pra
+`class = "nav-item dropdown"` — como o link não usa `data-toggle="dropdown"`
+no `<a>`, o comportamento continua sendo um link normal, só satisfaz a
+asserção do pacote. Testado rodando o app de verdade: link "Help" aparece no
+canto superior direito, `fetch()` em `/tutorial/tutorial.html` retorna 200
+com o conteúdo real do tutorial (título e seção "Worked example" presentes),
+clique no link navega pra essa URL com o título certo carregado — sem erro no
+console do servidor.
+
+**Gaps de release ainda em aberto, não resolvidos** (levantados numa
+varredura mas fora do pedido explícito do usuário até agora): sem `LICENSE`
+no repo (relevante pra uso público, já que o README convida
+`shiny::runGitHub()`); sem `renv.lock`/`tests/` (já sinalizado no próprio
+README como "ainda planejado").
+
 ## Próximo
 
 Fase 5 está completa (Marcos A-D). Todos os 4 itens da lista pedida pelo
 usuário pós-Fase 5 (1: exemplo didático, 2a: passos até neutralizar, 2b:
 threshold opcional por aresta, 3: qualidade das figuras, 4: legendas/
-parametrização) estão feitos.
+parametrização) estão feitos. `main` sincronizada com o GitHub, README
+atualizado, tutorial acessível de dentro do app, dois arquivos órfãos
+removidos.
 
 Retomar matriz de conexões livre e aninhamento hierárquico de níveis (Fase 2, itens
 restantes) quando desenhados. Considerar incluir cenários salvos no savepoint (hoje

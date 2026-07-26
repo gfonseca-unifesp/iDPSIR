@@ -52,6 +52,11 @@ options(
   shiny.maxRequestSize = 100 * 1024^2
 )
 
+# Serves docs/ (tutorial.html + the example savepoint) under /tutorial/... so
+# the running app can link straight to the same file used on GitHub, instead
+# of duplicating its content into a Shiny tab.
+shiny::addResourcePath("tutorial", "docs")
+
 # =========================
 # NUCLEO (schema, validacao, grafo, metricas, io)
 # =========================
