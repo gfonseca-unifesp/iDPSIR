@@ -31,6 +31,7 @@ create_empty_edges_table <- function() {
     confidence = numeric(),
     interaction_type = character(),
     evidence_type = character(),
+    threshold = numeric(),
     stringsAsFactors = FALSE
   )
 }
@@ -468,7 +469,8 @@ mod_data_server <- function(id, seed = NULL) {
         to = if (length(node_choices) > 0) node_choices[1] else "",
         weight = 1, confidence = 1,
         interaction_type = get_interaction_types()[1],
-        evidence_type = get_evidence_types()[1]
+        evidence_type = get_evidence_types()[1],
+        threshold = NA_real_
       )
 
       modalDialog(
@@ -479,6 +481,13 @@ mod_data_server <- function(id, seed = NULL) {
         numericInput(ns("em_confidence"), "Confidence (0-1)", value = d$confidence, min = 0, max = 1, step = 0.05),
         selectInput(ns("em_interaction"), "Interaction type", choices = get_interaction_types(), selected = d$interaction_type),
         selectInput(ns("em_evidence"), "Evidence type", choices = get_evidence_types(), selected = d$evidence_type),
+        numericInput(ns("em_threshold"), "Threshold (optional)", value = d$threshold, min = 0, step = 0.5),
+        tags$p(
+          class = "text-muted", style = "font-size: 13px;",
+          "Leave blank for most edges. Only used by the Scenarios tab's trajectory",
+          "chart: how much the source factor has to change (in this scenario) before",
+          "this edge switches on, instead of always contributing proportionally."
+        ),
         footer = tagList(
           modalButton("Cancel"),
           actionButton(ns("confirm_edge"), "Save", class = "btn-primary")
@@ -529,6 +538,12 @@ mod_data_server <- function(id, seed = NULL) {
         return()
       }
 
+      threshold <- input$em_threshold
+      if (!is.null(threshold) && !is.na(threshold) && threshold < 0) {
+        showNotification("Threshold, if set, must be zero or greater.", type = "error")
+        return()
+      }
+
       new_row <- data.frame(
         from = input$em_from,
         to = input$em_to,
@@ -536,6 +551,7 @@ mod_data_server <- function(id, seed = NULL) {
         confidence = input$em_confidence,
         interaction_type = input$em_interaction,
         evidence_type = input$em_evidence,
+        threshold = if (is.null(threshold)) NA_real_ else threshold,
         stringsAsFactors = FALSE
       )
 

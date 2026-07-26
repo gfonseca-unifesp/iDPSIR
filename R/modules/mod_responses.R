@@ -43,6 +43,15 @@
 # same directional-estimate caveat as the equilibrium number itself, not a
 # guarantee of settling. Hidden entirely when there's no Impact node in the
 # built graph.
+#
+# Fast-follow (post-Fase 5): optional per-edge `threshold` (set in the Edges
+# form, R/modules/mod_data.R) makes the trajectory chart nonlinear - an edge
+# with a threshold contributes nothing until the source factor's simulated
+# change (in this scenario) crosses that value, then behaves as usual. Only
+# the trajectory chart uses it (`simulate_trajectory_thresholded()`); the
+# equilibrium/robustness/neutralization numbers above stay exactly as before
+# (the linear, small-perturbation regime) - a small `threshold_note` warns
+# when this divergence between the chart and the tables above applies.
 
 mod_responses_ui <- function(id) {
   ns <- NS(id)
@@ -125,6 +134,18 @@ mod_responses_server <- function(id, schema, nodes, edges, graph) {
       check_stability(interaction_matrix())
     })
 
+    # Optional per-edge threshold (see R/loop_analysis.R) - only used by the
+    # trajectory chart below. All-NA (the common case: no edge has one set)
+    # behaves identically to not passing it at all.
+    threshold_matrix <- reactive({
+      req(graph())
+      build_threshold_matrix(graph())
+    })
+
+    has_thresholds <- reactive({
+      any(!is.na(threshold_matrix()))
+    })
+
     current_scenario <- reactiveVal(NULL)
 
     observeEvent(input$apply_scenario, {
@@ -170,6 +191,7 @@ mod_responses_server <- function(id, schema, nodes, edges, graph) {
         conditionalPanel(
           condition = sprintf("input['%s']", ns("show_trajectory")),
           sliderInput(ns("trajectory_steps"), "Number of steps", min = 5, max = 60, value = 20, step = 5),
+          uiOutput(ns("threshold_note")),
           plotOutput(ns("trajectory_plot"), height = "320px")
         ),
         tags$hr(),
@@ -209,11 +231,26 @@ mod_responses_server <- function(id, schema, nodes, edges, graph) {
       }
     })
 
+    output$threshold_note <- renderUI({
+      req(isTRUE(has_thresholds()))
+
+      tags$p(
+        class = "text-muted",
+        icon("bolt"),
+        " This network has one or more edges with a threshold set: their effect only",
+        "switches on once the source factor's simulated change crosses that value -",
+        "the equilibrium/robustness figures above don't account for this, only the",
+        "chart below does."
+      )
+    })
+
     output$trajectory_plot <- renderPlot({
       sc <- current_scenario()
       req(sc, isTRUE(input$show_trajectory))
 
-      traj <- simulate_trajectory(interaction_matrix(), sc$press, steps = input$trajectory_steps)
+      traj <- simulate_trajectory_thresholded(
+        interaction_matrix(), sc$press, Th = threshold_matrix(), steps = input$trajectory_steps
+      )
 
       if (all(is.na(traj))) {
         plot.new()

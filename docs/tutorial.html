@@ -658,6 +658,7 @@ S1,Water quality decline,State,Water,medium,low,long</pre>
                     <tr><td class="key">confidence</td><td>0–1</td></tr>
                     <tr><td class="key">interaction_type</td><td>positive / negative</td></tr>
                     <tr><td class="key">evidence_type</td><td>e.g. observational, monitoring</td></tr>
+                    <tr><td class="key">threshold</td><td>Optional, leave blank for most edges (see Scenarios below)</td></tr>
                   </table>
                 </div>
                 <pre>from,to,weight,confidence,interaction_type,evidence_type
@@ -733,6 +734,7 @@ P1,S1,3,0.85,negative,monitoring</pre>
                 <tr><td class="key">confidence</td><td>0–1, how sure you are this link is real. Below the Graph tab's threshold, the line is drawn dashed.</td></tr>
                 <tr><td class="key">interaction_type</td><td><code>positive</code> (the link increases its target) or <code>negative</code> (it decreases/mitigates it) — colors the edge red or green and appears in its tooltip.</td></tr>
                 <tr><td class="key">evidence_type</td><td>e.g. observational, expert_assessment, monitoring — where the link comes from, shown on hover.</td></tr>
+                <tr><td class="key">threshold</td><td>Optional — leave blank for most edges. Only affects the Scenarios tab's trajectory chart: this edge contributes nothing until the simulated change at its source factor crosses this value, instead of always scaling proportionally. Everything else (the equilibrium/robustness numbers, the graph itself) ignores it.</td></tr>
               </table>
             </div>
           </div>
@@ -829,8 +831,12 @@ P1,S1,3,0.85,negative,monitoring</pre>
               <p>Runs the active response(s) through the network's feedback loops (see the worked example below) and shows "Effect on the network" — how many factors are affected and by how much, immediately vs. once the effect has fully propagated — plus "Effect on each factor": a plain <span class="chip improves">Improves</span> <span class="chip worsens">Worsens</span> <span class="chip stable">Stable</span> per node (exact scores stay available in the CSV/Excel export). If the network's feedback loops aren't stable, a plain-language warning appears above these tables — see the worked example for what that means and why it's common, not a sign of a broken model.</p>
             </div>
             <div class="control">
+              <div class="label">When will Impacts be neutralized?<span class="widget">table</span></div>
+              <p>For each Impact node, how many steps it takes for the response's effect to first reach 90% of the equilibrium value shown above — the same directional-estimate caveat applies (see the worked example).</p>
+            </div>
+            <div class="control">
               <div class="label">Show how the effect evolves over time<span class="widget">optional, chart</span></div>
-              <p>A line per factor tracing the effect step by step instead of just the final immediate/equilibrium numbers — most useful exactly when the stability warning above is showing, since it lets you see whether the effect is settling down or still growing.</p>
+              <p>A line per factor tracing the effect step by step instead of just the final immediate/equilibrium numbers — most useful exactly when the stability warning above is showing, since it lets you see whether the effect is settling down or still growing. If any edge has an optional <code>threshold</code> set (Edges step), this is also the only place it applies: that edge contributes nothing until the simulated change at its source factor crosses the threshold, instead of scaling proportionally from the start.</p>
             </div>
             <div class="control">
               <div class="label">Show robustness to uncertainty<span class="widget">optional, table</span></div>

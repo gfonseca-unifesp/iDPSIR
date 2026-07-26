@@ -36,6 +36,18 @@ normalize_dpsir_edges <- function(edges) {
     edges$confidence <- as.numeric(edges$confidence)
   }
 
+  # Optional: the State value (or, more precisely, the simulated deviation of
+  # the source node) that switches an edge on during trajectory simulation -
+  # see R/loop_analysis.R. Most edges won't have one, so it defaults to NA
+  # (meaning "always on", today's behavior) rather than being required -
+  # missing entirely from older savepoints/CSVs is the normal case, not an
+  # error.
+  if (!"threshold" %in% names(edges)) {
+    edges$threshold <- NA_real_
+  } else {
+    edges$threshold <- suppressWarnings(as.numeric(edges$threshold))
+  }
+
   edges
 }
 

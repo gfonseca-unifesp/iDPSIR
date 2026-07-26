@@ -104,6 +104,21 @@ Checagem rápida de sintaxe sem subir o app:
   prática. "Neutralizado" aqui é *rise time* (primeiro cruzamento de 90% do
   projetado), não *settling time* (ficar lá depois) — mesma ressalva de
   "estimativa direcional, não garantia" já usada pro número de equilíbrio.
+  Fast-follow "threshold não-linear" (versão mínima do item 2b pós-Fase 5, ver
+  Estado atual): `build_threshold_matrix(g)` extrai o `threshold` opcional de
+  cada aresta (`R/validate.R`) numa matriz `Th[to,from]` no mesmo formato de
+  `A`. `simulate_trajectory_thresholded(A, press, Th, steps, step_size)`
+  reaproveita o loop de `simulate_trajectory()`, mas a cada passo zera
+  temporariamente `A_eff[to,from]` para toda aresta com threshold definido
+  cujo nó de origem ainda não ultrapassou (em módulo) esse valor no estado
+  simulado — a aresta "liga" no primeiro passo em que ultrapassa, e continua
+  ligada dali em diante (não desliga se o estado recuar). `simulate_trajectory()`
+  virou um atalho de uma linha pra essa função com `Th = NULL` (testado
+  batendo número por número contra o comportamento anterior — nenhuma
+  mudança pra quem não usa threshold). `check_stability`/`press_perturbation`/
+  `robustness_check`/`find_neutralization_step` continuam ignorando threshold
+  de propósito — descrevem só o regime linear; só a trajetória ganha o
+  gatilho.
 - `R/report.R` → montagem do relatório HTML autocontido (`build_full_report_html`,
   `report_html_table`, `format_report_cell`, `matrix_to_report_df`), usado só por
   `mod_report.R`. Seções (imagens de grafo salvas/métricas gerais/centralidades/
@@ -120,6 +135,8 @@ Checagem rápida de sintaxe sem subir o app:
   hardcoded, ignorando o que o usuário tivesse configurado na aba Metrics.
 - `R/modules/mod_data.R` → editor por formulário (passos Início/Modelo/Nós/Arestas/Revisar
   do wizard); estado em `reactiveValues`, não-reativo até "Construir/Reconstruir grafo".
+  Formulário de aresta tem um campo opcional "Threshold" (em branco na maioria das
+  arestas) — ver Fase 5 fast-follow "threshold não-linear" no Estado atual.
 - `R/modules/mod_graph.R` → painel de exploração do grafo. Controles em caixas
   colapsáveis (`bs4Dash::box(collapsible = TRUE)`) empilhadas numa coluna à esquerda,
   agrupadas por tema (Display, Node & edge emphasis, Layout & spacing, Pathway
@@ -176,7 +193,13 @@ Checagem rápida de sintaxe sem subir o app:
   logo abaixo de "Effect on each factor" — quantos passos até o efeito da
   Resposta em cada nó de categoria Impacto atingir 90% do seu efeito de
   equilíbrio projetado; oculta por completo quando a rede não tem nenhum nó
-  Impacto.
+  Impacto. Fast-follow "threshold não-linear": o gráfico de trajetória passa a
+  chamar `simulate_trajectory_thresholded()` com a `threshold_matrix()`
+  (reactive, `build_threshold_matrix(graph())`) da rede — se nenhuma aresta
+  tiver threshold definido (`Th` todo `NA`), o resultado é idêntico a antes;
+  um `threshold_note` aparece acima do gráfico só quando pelo menos uma aresta
+  tem threshold, avisando que as tabelas de equilíbrio/robustez acima não
+  refletem esse gatilho.
 - `R/modules/mod_report.R` → aba "Report" (última do Explorar): checkboxes para
   métricas gerais/centralidades/descritores DPSIR, seleção múltipla de imagens de
   grafo salvas (`mod_graph.R`'s "Save current view for report") e seleção múltipla
@@ -208,7 +231,9 @@ Ao adicionar/remover um arquivo em `R/`, atualize os `source()` em `global.R`.
 `controllability` (low/medium/high), `temporal_scale` (short/medium/long).
 **Arestas:** `from`, `to`, `weight`, `confidence` (0–1), `interaction_type`
 (`positive`/`negative` — sinal do efeito causal, usado tanto na cor da aresta quanto,
-futuramente, como sinal direto da matriz de interação da Fase 5), `evidence_type`.
+futuramente, como sinal direto da matriz de interação da Fase 5), `evidence_type`,
+`threshold` (opcional, `NA` por padrão — ver Fase 5 fast-follow "threshold
+não-linear" abaixo; só usado pelo gráfico de trajetória em `mod_responses.R`).
 **Conexões DPSIR (padrão):** D→P, P→S, S→I, I→R, R→{D,P,S,I}.
 
 ## Estado atual
@@ -772,17 +797,55 @@ construído, R1 a 70% aplicado — tabela "When will Impacts be neutralized?"
 aparece logo abaixo de "Effect on each factor", sem erro no console do
 servidor em nenhum passo.
 
+**Item 2b concluído — versão mínima, escopo deliberadamente reduzido.** O
+pedido original (modelagem não-linear de threshold na relação Estado→Impacto)
+tinha sido classificado como mudança arquitetural maior, a ser discutida à
+parte antes de planejar — o que foi feito: em conversa com o usuário, o escopo
+foi reduzido a "o usuário escolhe indicar ou não um threshold por aresta"
+(campo opcional, a maioria das arestas fica sem), evitando reconstruir o motor
+inteiro em torno de não-linearidade. `threshold` (`R/validate.R`,
+`R/modules/mod_data.R`'s formulário de aresta, `R/loop_analysis.R`'s
+`build_threshold_matrix`/`simulate_trajectory_thresholded`) — descritos nos
+bullets acima.
+
+Decisão de design chave, definida antes de implementar (não descoberta ao
+testar, diferente das anteriores): o "valor de State que aciona o Impacto" não
+podia ser um nível absoluto, porque o motor inteiro só modela **desvio**
+causado por uma Resposta (não existe um "baseline" de Driver/Pressão sendo
+simulado, só a Resposta entra como `press`). Então o threshold é sobre o quanto
+o **cenário simulado** precisa deslocar o nó de origem (em módulo) antes da
+aresta ligar — uma simplificação deliberada, documentada como tal no tutorial
+e no formulário de aresta, não vendida como um nível ambiental absoluto.
+Consequência direta dessa decisão: `check_stability`/`press_perturbation`/
+`robustness_check`/`find_neutralization_step` continuam ignorando threshold de
+propósito (descrevem só o regime linear/de pequena perturbação); só a
+trajetória passo-a-passo, que já simula o cenário se desenrolando no tempo,
+ganha o gatilho não-linear — um aviso (`threshold_note`) aparece acima do
+gráfico quando isso se aplica, deixando explícito que as tabelas de
+equilíbrio/robustez acima não refletem o threshold.
+
+Testado: (1) regressão — `simulate_trajectory()` chamado sem threshold produz
+resultado idêntico (`all.equal` `TRUE`) ao comportamento de antes desta
+mudança, confirmando que virar um atalho pra
+`simulate_trajectory_thresholded(..., Th = NULL)` não alterou nada pra quem já
+usava a função; (2) com um threshold de teste na aresta S1→I1 do exemplo de
+pescas, I1 fica em zero enquanto `|S1| < threshold`, e passa a reagir
+normalmente assim que `|S1|` cruza esse valor — confirmado também o caso
+degenerado (threshold gigante, nunca cruzado: I1 fica em zero por toda a
+trajetória, nenhum erro). Ponta a ponta na app rodando de verdade: savepoint
+de pescas carregado, aresta S1→I1 editada pelo formulário (`Threshold
+(optional)` = 0.05, campo em branco funcionando para as outras 4 arestas sem
+gerar erro de validação — "Everything is valid"), grafo reconstruído, cenário
+aplicado a 70%, gráfico de trajetória habilitado — nota "This network has one
+or more edges with a threshold set..." aparece corretamente acima do gráfico,
+sem erro no console do servidor em nenhum passo.
+
 ## Próximo
 
-Fase 5 está completa (Marcos A-D). Da lista de 4 itens pedidos pelo usuário
-pós-Fase 5, os itens 1 (exemplo didático), 2a (passos até neutralizar), 3
-(qualidade das figuras) e 4 (legendas/parametrização) estão feitos. Resta:
-- **Item 2b**: modelagem não-linear de threshold na relação Estado→Impacto
-  (valor de corte no State que "aciona" o Impacto) — mudança arquitetural maior
-  (o modelo linear `dx/dt = Ax + press` deixa de valer assim que uma aresta
-  ganha um gatilho não-linear), tratar como decisão à parte antes de planejar
-  (mesmo padrão da decisão de escopo do SEM/path analysis no PLANO seção 11),
-  não como incremento incremental da Fase 5.
+Fase 5 está completa (Marcos A-D). Todos os 4 itens da lista pedida pelo
+usuário pós-Fase 5 (1: exemplo didático, 2a: passos até neutralizar, 2b:
+threshold opcional por aresta, 3: qualidade das figuras, 4: legendas/
+parametrização) estão feitos.
 
 Retomar matriz de conexões livre e aninhamento hierárquico de níveis (Fase 2, itens
 restantes) quando desenhados. Considerar incluir cenários salvos no savepoint (hoje

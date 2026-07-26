@@ -102,6 +102,61 @@ press_perturbation <- function(A, press) {
 # tamanho do passo fica fixo internamente; "Number of steps" e o unico
 # controle exposto ao usuario.
 simulate_trajectory <- function(A, press, steps = 10, step_size = 0.5) {
+  simulate_trajectory_thresholded(A, press, Th = NULL, steps = steps, step_size = step_size)
+}
+
+# Extrai o threshold de cada aresta (opcional, ver R/validate.R) numa matriz
+# no mesmo formato de A (Th[to, from]) - NA onde a aresta nao tem threshold
+# definido, valor numerico onde tem. Passada pra simulate_trajectory_thresholded()
+# como o "gatilho" que liga/desliga cada aresta durante a simulacao.
+build_threshold_matrix <- function(g) {
+  stopifnot(inherits(g, "igraph"))
+
+  node_names <- V(g)$name
+  n <- length(node_names)
+  Th <- matrix(NA_real_, nrow = n, ncol = n, dimnames = list(node_names, node_names))
+
+  if (ecount(g) == 0 || is.null(E(g)$threshold)) {
+    return(Th)
+  }
+
+  edge_ends <- ends(g, E(g), names = TRUE)
+  threshold <- suppressWarnings(as.numeric(E(g)$threshold))
+
+  for (k in seq_len(nrow(edge_ends))) {
+    if (is.na(threshold[k])) next
+    from_node <- edge_ends[k, 1]
+    to_node <- edge_ends[k, 2]
+    Th[to_node, from_node] <- threshold[k]
+  }
+
+  Th
+}
+
+# Mesma trajetoria de simulate_trajectory(), com um "gatilho" opcional por
+# aresta: se `Th[to, from]` nao for NA, essa aresta so contribui pro no de
+# destino a partir do passo em que |estado do no de origem| ultrapassa esse
+# valor - antes disso, contribui zero, como se a aresta nao existisse ainda.
+# Arestas sem threshold (`Th` = NA, o padrao) continuam ligadas o tempo
+# todo, exatamente como antes - por isso simulate_trajectory() acima e so um
+# atalho pra esta funcao com `Th = NULL` (testado batendo numero por numero
+# contra a versao anterior a essa mudanca, sem thresholds nenhuma rede muda).
+#
+# O "State value that triggers the Impact" que motivou o pedido do usuario
+# nao e um nivel absoluto (o motor inteiro so modela DESVIO causado por uma
+# Resposta, nunca o nivel absoluto de nada - nao ha um "baseline" de
+# Driver/Pressure sendo simulado, so a Resposta entra como `press`). Entao o
+# threshold aqui e sobre o quanto o CENARIO SIMULADO precisa deslocar o no de
+# origem (em modulo) antes da aresta ligar - uma simplificacao deliberada,
+# nao um nivel ambiental absoluto independente do cenario. Documentado assim
+# no tutorial/CLAUDE.md pra nao vender a funcionalidade como mais do que e.
+#
+# check_stability()/press_perturbation()/robustness_check() continuam
+# ignorando threshold de proposito - eles descrevem o regime linear/de
+# pequena perturbacao (a mesma matriz A de sempre); so a trajetoria
+# passo-a-passo, que ja simula o cenario se desenrolando no tempo, ganha o
+# gatilho no-linear.
+simulate_trajectory_thresholded <- function(A, press, Th = NULL, steps = 10, step_size = 0.5) {
   stopifnot(is.matrix(A), nrow(A) == ncol(A))
   stopifnot(length(press) == nrow(A))
   stopifnot(steps >= 1)
@@ -110,20 +165,36 @@ simulate_trajectory <- function(A, press, steps = 10, step_size = 0.5) {
   press <- as.numeric(press)
   n <- length(node_names)
 
-  trajectory <- matrix(NA_real_, nrow = steps, ncol = n, dimnames = list(NULL, node_names))
-
-  update_matrix <- tryCatch(
-    solve(diag(n) - step_size * A),
-    error = function(e) NULL
-  )
-
-  if (is.null(update_matrix)) {
-    warning("Trajectory could not be computed for this network (degenerate structure).", call. = FALSE)
-    return(trajectory)
+  has_threshold <- !is.null(Th) && any(!is.na(Th))
+  if (has_threshold) {
+    stopifnot(is.matrix(Th), all(dim(Th) == dim(A)))
   }
 
+  trajectory <- matrix(NA_real_, nrow = steps, ncol = n, dimnames = list(NULL, node_names))
   state <- rep(0, n)
+
   for (step in seq_len(steps)) {
+    A_eff <- A
+
+    if (has_threshold) {
+      # coluna j = estado (em modulo) do no "from" dessa coluna, replicado
+      # em todas as linhas - compara cada A[to,from] contra Th[to,from].
+      state_by_column <- matrix(abs(state), nrow = n, ncol = n, byrow = TRUE)
+      below_threshold <- !is.na(Th) & state_by_column < Th
+      A_eff[below_threshold] <- 0
+    }
+
+    update_matrix <- tryCatch(
+      solve(diag(n) - step_size * A_eff),
+      error = function(e) NULL
+    )
+
+    if (is.null(update_matrix)) {
+      warning("Trajectory could not be computed for this network (degenerate structure).", call. = FALSE)
+      trajectory[step:steps, ] <- NA_real_
+      break
+    }
+
     state <- as.numeric(update_matrix %*% (state + step_size * press))
     trajectory[step, ] <- state
   }
