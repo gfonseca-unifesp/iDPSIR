@@ -90,7 +90,20 @@ Checagem rápida de sintaxe sem subir o app:
   quantas o sinal do efeito em cada nó bateu com o resultado original (equilíbrio,
   ou imediato quando a matriz é singular) — dá um uso real ao `confidence`, que até
   aqui só controlava o tracejado no grafo. Sem dependência nova
-  (`eigen()`/`solve()`/`runif()` do R base).
+  (`eigen()`/`solve()`/`runif()` do R base). Fast-follow pós-Fase 5:
+  `find_neutralization_step(A, press, node, target_fraction=0.9, max_steps=500,
+  step_size=0.5)` reaproveita `simulate_trajectory()` pra achar o primeiro passo em
+  que o efeito num nó atinge 90% do seu efeito de equilíbrio projetado — e
+  `summarize_neutralization(g, press)`, o mesmo resumido por nó de categoria
+  "Impact" (motor da tabela "When will Impacts be neutralized?" em
+  `mod_responses.R`). Deliberadamente **não** exige `check_stability(A)$stable`
+  — ver a nota dentro do próprio arquivo: como o schema proíbe aresta de um nó
+  pra ele mesmo, a diagonal de `A` é sempre zero, `trace(A)` (= soma dos
+  autovalores) é sempre zero, e `check_stability` por isso nunca retorna `TRUE`
+  pra nenhuma rede construída pelo app — gatear nisso deixaria a função morta na
+  prática. "Neutralizado" aqui é *rise time* (primeiro cruzamento de 90% do
+  projetado), não *settling time* (ficar lá depois) — mesma ressalva de
+  "estimativa direcional, não garantia" já usada pro número de equilíbrio.
 - `R/report.R` → montagem do relatório HTML autocontido (`build_full_report_html`,
   `report_html_table`, `format_report_cell`, `matrix_to_report_df`), usado só por
   `mod_report.R`. Seções (imagens de grafo salvas/métricas gerais/centralidades/
@@ -158,7 +171,12 @@ Checagem rápida de sintaxe sem subir o app:
   tabela (Factor/Category/Effect/Agreement %) de `robustness_check()`, ordenada
   do menos confiável pro mais confiável — deixa explícito quando o resultado
   mostrado é robusto a quão incerto o usuário disse que cada aresta é, vs. um
-  empate delicado que qualquer variação de peso derruba.
+  empate delicado que qualquer variação de peso derruba. Fast-follow pós-Fase 5:
+  tabela "When will Impacts be neutralized?" (`summarize_neutralization()`),
+  logo abaixo de "Effect on each factor" — quantos passos até o efeito da
+  Resposta em cada nó de categoria Impacto atingir 90% do seu efeito de
+  equilíbrio projetado; oculta por completo quando a rede não tem nenhum nó
+  Impacto.
 - `R/modules/mod_report.R` → aba "Report" (última do Explorar): checkboxes para
   métricas gerais/centralidades/descritores DPSIR, seleção múltipla de imagens de
   grafo salvas (`mod_graph.R`'s "Save current view for report") e seleção múltipla
@@ -712,17 +730,59 @@ network" (nós afetados + magnitude, imediato vs equilíbrio, aviso de
 estabilidade) e os dois disclosures opcionais dos Marcos C/D (trajetória,
 robustez), que não apareciam no tutorial antes.
 
+**Item 2a concluído: "quantos passos até neutralizar um Impacto".**
+`find_neutralization_step()`/`summarize_neutralization()` (`R/loop_analysis.R`) e
+a tabela "When will Impacts be neutralized?" (`mod_responses.R`) — descritos nos
+bullets acima.
+
+**Decisão de design que mudou de rumo ao testar** (mesmo padrão de rigor das
+descobertas anteriores da Fase 5): a primeira versão gateava o resultado em
+`check_stability(A)$stable` — só reportar um número de passos quando a rede
+fosse "estável", devolvendo `NA`/"Network not stable" caso contrário, por
+analogia direta com o aviso já usado em `press_perturbation()`. Testado contra
+três redes diferentes (`docs/example_fisheries.idpsir.json`, uma cadeia trófica
+acíclica, e uma reconstrução dela com Resposta fechando o loop) — **nenhuma**
+das três chegou a `Stable: TRUE`. Isso não foi falta de sorte: é a mesma prova
+já registrada na avaliação da Fase 5 (schema proíbe aresta de nó pra ele mesmo
+→ diagonal de `A` sempre zero → `trace(A)` = soma dos autovalores sempre zero
+→ `check_stability` matematicamente incapaz de retornar `TRUE` pra qualquer
+grafo que este app possa construir, com ou sem ciclo). Gatear nisso teria
+deixado a função **morta na prática** — nunca mostraria um número de passos
+pra ninguém, só o aviso, tornando o item inteiro inútil. Corrigido soltando a
+exigência de estabilidade global: "neutralizado" passou a significar apenas o
+primeiro cruzamento de 90% do efeito de equilíbrio já projetado (rise time),
+não que o efeito **permanece** lá depois (settling time) — a mesma ressalva de
+"estimativa direcional, não garantia" que já vale pro próprio número de
+equilíbrio, só que aplicada ao passo. Na prática isso é o que torna o recurso
+útil mesmo em redes com ciclo: o exemplo de pescas atinge 90% do efeito
+projetado em I1 (Fisher income loss) já no passo 2 — bem antes da trajetória
+de fato divergir (visível só a partir do passo ~10 no gráfico de trajetória) —
+então o número tem valor prático mesmo sabendo que a rede nunca "assenta" de
+verdade no sentido estrito.
+
+Testado com `docs/example_fisheries.idpsir.json` (script standalone e
+depois na app rodando): `summarize_neutralization()` reporta corretamente
+"Fisher income loss, equilíbrio -0.467, 2 passos, Reaches 90%..." — batendo
+exatamente entre o script e a tela (mesmo `press` a 70%, mesmo resultado).
+Testado também o caminho negativo (rede construída à mão em que a trajetória
+diverge sem nunca cruzar 90% do projetado, por oscilar em vez de convergir
+suavemente): retorna corretamente "Not reached within 500 steps" em vez de um
+falso positivo. Ponta a ponta na app: savepoint de pescas carregado, grafo
+construído, R1 a 70% aplicado — tabela "When will Impacts be neutralized?"
+aparece logo abaixo de "Effect on each factor", sem erro no console do
+servidor em nenhum passo.
+
 ## Próximo
 
 Fase 5 está completa (Marcos A-D). Da lista de 4 itens pedidos pelo usuário
-pós-Fase 5, os itens 3 (qualidade das figuras), 4 (legendas/parametrização) e 1
-(exemplo didático no tutorial) estão feitos. Resta:
-- **Item 2**: (a) um `find_neutralization_step()`-style helper sobre `simulate_trajectory()`
-  pra estimar em quantos passos um Impacto seria neutralizado — risco baixo, incremento
-  direto; (b) modelagem não-linear de threshold na relação Estado→Impacto (valor de
-  corte no State que "aciona" o Impacto) — mudança arquitetural maior, tratar como
-  decisão à parte antes de planejar (mesmo padrão da decisão de escopo do SEM/path
-  analysis no PLANO seção 11), não como incremento incremental da Fase 5.
+pós-Fase 5, os itens 1 (exemplo didático), 2a (passos até neutralizar), 3
+(qualidade das figuras) e 4 (legendas/parametrização) estão feitos. Resta:
+- **Item 2b**: modelagem não-linear de threshold na relação Estado→Impacto
+  (valor de corte no State que "aciona" o Impacto) — mudança arquitetural maior
+  (o modelo linear `dx/dt = Ax + press` deixa de valer assim que uma aresta
+  ganha um gatilho não-linear), tratar como decisão à parte antes de planejar
+  (mesmo padrão da decisão de escopo do SEM/path analysis no PLANO seção 11),
+  não como incremento incremental da Fase 5.
 
 Retomar matriz de conexões livre e aninhamento hierárquico de níveis (Fase 2, itens
 restantes) quando desenhados. Considerar incluir cenários salvos no savepoint (hoje

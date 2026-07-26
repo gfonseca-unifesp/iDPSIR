@@ -295,3 +295,110 @@ robustness_check <- function(g, press, n_simulations = 100, spread = 0.5, thresh
     stringsAsFactors = FALSE
   )
 }
+
+# =====================================================
+# NEUTRALIZATION STEP (fast-follow pos-Fase 5)
+# =====================================================
+#
+# Fase 5 diz QUANTO uma Resposta desloca cada fator (immediate/equilibrium),
+# mas nao diz QUANDO - o gestor quer saber em quantos passos um Impacto sera
+# de fato neutralizado, nao so que ele "vai melhorar" eventualmente.
+# Reaproveita simulate_trajectory() ja existente: "neutralizado" = a
+# trajetoria do no atinge pela primeira vez `target_fraction` (default 90%)
+# do seu efeito de equilibrio projetado - "rise time" de controle classico,
+# nao "settling time" (nao exige que a trajetoria PERMANECA la depois).
+#
+# Essa distincao nao e cosmetica: gatear isso em check_stability()$stable
+# (como uma primeira versao fazia) deixaria a funcao morta na pratica. O
+# schema proibe aresta de um no pra ele mesmo, entao a diagonal de A e
+# sempre zero, logo trace(A) = soma dos autovalores = 0 sempre, pra
+# QUALQUER rede construida pelo app - o que torna check_stability()
+# matematicamente incapaz de retornar TRUE nunca (mesmo achado ja
+# documentado na avaliacao da Fase 5: uma rede sem nenhum ciclo tem todos os
+# autovalores exatamente zero, "nao estavel" por ser marginal, nao por
+# divergir; uma rede com ciclo tem autovalores positivos e negativos se
+# cancelando). Testado: nem uma cadeia trofica acíclica (sem ciclo) nem uma
+# reconstruida com Resposta fechando o loop chegam a "Stable: TRUE". Por
+# isso "quantos passos ate neutralizar" usa o mesmo
+# equilibrio projetado que a tabela "Effect on each factor" ja mostra (uma
+# estimativa direcional, nao garantida) em vez de exigir uma condicao que
+# nunca ocorre - a mesma ressalva de "trate como direcao, nao promessa" so
+# que aplicada ao numero de passos.
+find_neutralization_step <- function(A, press, node, target_fraction = 0.9, max_steps = 500, step_size = 0.5) {
+  stopifnot(is.matrix(A), nrow(A) == ncol(A))
+  stopifnot(length(press) == nrow(A))
+  stopifnot(node %in% rownames(A))
+  stopifnot(target_fraction > 0, target_fraction <= 1)
+
+  equilibrium <- suppressWarnings(press_perturbation(A, press)$equilibrium[[node]])
+  if (is.na(equilibrium) || abs(equilibrium) < 1e-9) {
+    return(NA_integer_)
+  }
+
+  trajectory <- simulate_trajectory(A, press, steps = max_steps, step_size = step_size)[, node]
+  target_value <- equilibrium * target_fraction
+
+  reached <- if (equilibrium > 0) which(trajectory >= target_value) else which(trajectory <= target_value)
+  if (length(reached) == 0) NA_integer_ else min(reached)
+}
+
+# Mesma pergunta, resumida por no de categoria Impacto - "estamos de fato
+# livrando o sistema de impactos" e nao so "reduzindo a pressao", a
+# distincao que motivou o pedido. Uma linha por no de categoria "Impact" na
+# rede (categoria hardcoded, mesmo padrao ja usado em
+# compute_dpsir_descriptors() pra impacts_without_response); `note` explica
+# em texto por que o passo ficou indefinido quando for o caso, em vez de um
+# NA cru na tela.
+summarize_neutralization <- function(g, press, target_fraction = 0.9, max_steps = 500, step_size = 0.5) {
+  stopifnot(inherits(g, "igraph"))
+
+  impact_idx <- which(V(g)$dpsir_category == "Impact")
+  if (length(impact_idx) == 0) {
+    return(data.frame(
+      id = character(), node = character(),
+      equilibrium_effect = numeric(), steps_to_neutralize = integer(),
+      note = character(), stringsAsFactors = FALSE
+    ))
+  }
+
+  impact_ids <- V(g)$name[impact_idx]
+  impact_labels <- if (!is.null(V(g)$label)) V(g)$label[impact_idx] else impact_ids
+
+  A <- build_interaction_matrix(g)
+  equilibrium <- suppressWarnings(press_perturbation(A, press)$equilibrium)
+  pct_label <- sprintf("%d%%", round(target_fraction * 100))
+
+  rows <- lapply(seq_along(impact_ids), function(i) {
+    id <- impact_ids[i]
+    label <- impact_labels[i]
+    eq <- equilibrium[[id]]
+
+    if (is.na(eq)) {
+      return(data.frame(
+        id = id, node = label, equilibrium_effect = NA_real_, steps_to_neutralize = NA_integer_,
+        note = "This factor's long-run effect is undefined for this network.", stringsAsFactors = FALSE
+      ))
+    }
+
+    if (abs(eq) < 1e-9) {
+      return(data.frame(
+        id = id, node = label, equilibrium_effect = eq, steps_to_neutralize = NA_integer_,
+        note = "This response has no long-run effect on this factor.", stringsAsFactors = FALSE
+      ))
+    }
+
+    step <- find_neutralization_step(A, press, id, target_fraction, max_steps, step_size)
+    note <- if (is.na(step)) {
+      sprintf("Not reached within %d steps.", max_steps)
+    } else {
+      sprintf("Reaches %s of its projected effect.", pct_label)
+    }
+
+    data.frame(
+      id = id, node = label, equilibrium_effect = eq, steps_to_neutralize = step,
+      note = note, stringsAsFactors = FALSE
+    )
+  })
+
+  do.call(rbind, rows)
+}

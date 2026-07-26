@@ -32,6 +32,17 @@
 # for its weight, resampled N times, checking how often each factor's
 # direction held. Finally gives `confidence` a real use beyond dashing an
 # edge on the graph.
+#
+# Fast-follow (post-Fase 5): "Effect on each factor" says an Impact will
+# improve, but not when - a "When will Impacts be neutralized?" table
+# (summarize_neutralization(), R/loop_analysis.R) reuses simulate_trajectory()
+# to report how many steps until the response's effect on each Impact node
+# first reaches 90% of its equilibrium value. Deliberately does NOT require
+# the network to be stable (see R/loop_analysis.R for why that would make
+# this dead code in practice for any network built by the app) - it's the
+# same directional-estimate caveat as the equilibrium number itself, not a
+# guarantee of settling. Hidden entirely when there's no Impact node in the
+# built graph.
 
 mod_responses_ui <- function(id) {
   ns <- NS(id)
@@ -153,6 +164,7 @@ mod_responses_server <- function(id, schema, nodes, edges, graph) {
         DTOutput(ns("network_effect_table")),
         h5("Effect on each factor"),
         DTOutput(ns("factor_effect_table")),
+        uiOutput(ns("neutralization_section")),
         tags$hr(),
         checkboxInput(ns("show_trajectory"), "Show how the effect evolves over time (optional)", value = FALSE),
         conditionalPanel(
@@ -247,6 +259,41 @@ mod_responses_server <- function(id, schema, nodes, edges, graph) {
 
       datatable(df, rownames = FALSE, options = list(dom = "t")) %>%
         formatRound(columns = c("Immediate", "Equilibrium"), digits = 2)
+    })
+
+    # Fase 5 fast-follow: not just "does this response help", but "how long
+    # until it actually neutralizes the Impact" - the question that
+    # motivated the request. Hidden entirely when the network has no Impact
+    # nodes, instead of showing an empty table.
+    neutralization_df <- reactive({
+      sc <- current_scenario()
+      req(sc)
+      summarize_neutralization(graph(), sc$press)
+    })
+
+    output$neutralization_section <- renderUI({
+      req(nrow(neutralization_df()) > 0)
+
+      tagList(
+        h5("When will Impacts be neutralized?"),
+        p(
+          class = "text-muted",
+          "How many steps of \"Show how the effect evolves over time\" (below) it takes",
+          "for this response's effect on each Impact to first reach 90% of the equilibrium",
+          "effect shown above - treat this the same way as that equilibrium number: a",
+          "projection of where things are headed, not a guarantee the effect stays there",
+          "(check the trajectory chart if the stability warning above is showing)."
+        ),
+        DTOutput(ns("neutralization_table"))
+      )
+    })
+
+    output$neutralization_table <- renderDT({
+      df <- neutralization_df()[, c("node", "equilibrium_effect", "steps_to_neutralize", "note")]
+      names(df) <- c("Impact", "Equilibrium effect", "Steps to 90%", "Note")
+
+      datatable(df, rownames = FALSE, options = list(dom = "t")) %>%
+        formatRound(columns = "Equilibrium effect", digits = 3)
     })
 
     output$factor_effect_table <- renderDT({
