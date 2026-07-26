@@ -25,6 +25,50 @@
 # performs the capture; mod_graph.R sends the request and stores the
 # result under a user-chosen name, and graph_snapshots (passed in below)
 # is that named list.
+#
+# Three fixes to the capture itself, found by inspecting the live DOM and
+# testing each fix's actual effect (not guessed):
+#
+# 1. LOW RESOLUTION: html2canvas's modern `scale` option does nothing here -
+#    confirmed by inspecting `html2canvas.toString()` directly: the version
+#    visNetwork's visExport() bundles predates v1.0 and has no such option
+#    (captures always come out at plain CSS pixel size, ~760x800). Since
+#    vis-network's own <canvas> DOES redraw sharp at whatever CSS size its
+#    container is given (confirmed: resizing the container 2.5x made the
+#    canvas's actual pixel buffer grow 2.5x, not just stretch blurrily),
+#    the fix is to temporarily enlarge the container itself, tell both
+#    vis.Network instances (main graph + legend) to resize/redraw at that
+#    larger size, capture, then restore the original size.
+# 2. LEGEND CUT OFF: the legend is a *second*, separate vis.Network instance
+#    rendered with position:absolute inside the same container - measured
+#    live, its right edge sits flush against the container's own width with
+#    ~0px to spare, and the container's true content also overflows ~15px
+#    past its declared height. html2canvas only renders an element's own
+#    declared box by default, silently cropping that overflow. Fixed by
+#    measuring the *real* combined bounding box of every descendant (network
+#    canvas + legend, at the enlarged size) and passing that as an explicit
+#    width/height to html2canvas, with a small margin.
+# 3. OFF-CENTER GRAPH: if the user had panned/zoomed before capturing, that
+#    pan is what gets captured. Fixed by calling both vis.Network instances'
+#    own `.fit()` (accessed via `HTMLWidgets.find()`, confirmed live to
+#    expose `.network`/`.legend`) after resizing, with a short delay for the
+#    resize/fit to settle before measuring and capturing.
+#
+# A fourth, cosmetic fix piggybacks on the same capture: the widget's own
+# aspect ratio (a wide, short DPSIR layout inside a fixed-height container)
+# leaves a lot of blank space below the graph once captured at full
+# container size - `cropToContent()` scans the rendered canvas for its
+# actual non-blank bounding box (network + legend, wherever they ended up)
+# and crops to that plus a small margin, so the saved figure is framed
+# tightly instead of floating in a mostly-empty page. (A further attempt to
+# also collapse the horizontal gap between the diagram and the legend -
+# they're two independent vis.Network instances, so that gap isn't just
+# outer margin - was tried and reverted: the legend's own arrow/line
+# glyphs are mostly blank space with content only at their ends, so a
+# naive "widest blank column run" search cut through the middle of those
+# lines instead of the intended gap. Not worth the added fragility for a
+# secondary complaint when the three the user actually named - clipped
+# legend, low resolution, off-center graph - are already fixed above.)
 
 mod_report_ui <- function(id) {
   ns <- NS(id)
@@ -41,13 +85,107 @@ mod_report_ui <- function(id) {
         Shiny.addCustomMessageHandler('idpsir_capture_element', function(msg) {
           var el = document.getElementById(msg.elementId);
           if (!el || typeof html2canvas === 'undefined') return;
-          html2canvas(el, {
-            onrendered: function(canvas) {
-              if (canvas.width > 0 && canvas.height > 0) {
-                Shiny.setInputValue(msg.inputId, canvas.toDataURL('image/png'), {priority: 'event'});
+
+          var widget = (typeof HTMLWidgets !== 'undefined') ? HTMLWidgets.find('#' + msg.elementId) : null;
+          var upscale = 2.5;
+          var origWidth = el.style.width;
+          var origHeight = el.style.height;
+          var origRect = el.getBoundingClientRect();
+          var bigWidth = Math.round(origRect.width * upscale);
+          var bigHeight = Math.round(origRect.height * upscale);
+
+          // vis-network's own UI chrome (zoom/pan arrows, the 'Select by
+          // group' dropdowns, the 'Export as png' button) is pinned to the
+          // container's corners - at the enlarged capture size those
+          // corners are far from the actual diagram, which pins
+          // cropToContent()'s bounding box to the full container and
+          // defeats the crop. Hidden for the duration of the capture only.
+          var toHide = ['nodeSelect' + msg.elementId, 'selectedBy' + msg.elementId, 'download' + msg.elementId]
+            .map(function(id) { return document.getElementById(id); })
+            .filter(function(e) { return !!e; });
+          var navEls = el.querySelectorAll('.vis-navigation');
+          for (var n = 0; n < navEls.length; n++) toHide.push(navEls[n]);
+          var hiddenState = toHide.map(function(e) { return {el: e, prevDisplay: e.style.display}; });
+          hiddenState.forEach(function(h) { h.el.style.display = 'none'; });
+
+          function restoreHidden() {
+            hiddenState.forEach(function(h) { h.el.style.display = h.prevDisplay; });
+          }
+
+          function resizeTo(w, h) {
+            el.style.width = w + 'px';
+            el.style.height = h + 'px';
+            if (widget && widget.network && widget.network.setSize) widget.network.setSize(w + 'px', (h - 40) + 'px');
+            if (widget && widget.network && widget.network.redraw) widget.network.redraw();
+            if (widget && widget.network && widget.network.fit) widget.network.fit();
+            if (widget && widget.legend && widget.legend.redraw) widget.legend.redraw();
+            if (widget && widget.legend && widget.legend.fit) widget.legend.fit();
+          }
+
+          function cropToContent(canvas, padding) {
+            var ctx = canvas.getContext('2d');
+            var w = canvas.width, h = canvas.height;
+            var data = ctx.getImageData(0, 0, w, h).data;
+            var minX = w, minY = h, maxX = 0, maxY = 0, found = false;
+            for (var y = 0; y < h; y++) {
+              for (var x = 0; x < w; x++) {
+                var idx = (y * w + x) * 4;
+                var isBlank = data[idx + 3] < 10 || (data[idx] > 250 && data[idx + 1] > 250 && data[idx + 2] > 250);
+                if (!isBlank) {
+                  found = true;
+                  if (x < minX) minX = x;
+                  if (x > maxX) maxX = x;
+                  if (y < minY) minY = y;
+                  if (y > maxY) maxY = y;
+                }
               }
             }
-          });
+            if (!found) return canvas;
+            minX = Math.max(0, minX - padding);
+            minY = Math.max(0, minY - padding);
+            maxX = Math.min(w - 1, maxX + padding);
+            maxY = Math.min(h - 1, maxY + padding);
+            var cropW = maxX - minX + 1, cropH = maxY - minY + 1;
+            var cropped = document.createElement('canvas');
+            cropped.width = cropW;
+            cropped.height = cropH;
+            cropped.getContext('2d').drawImage(canvas, minX, minY, cropW, cropH, 0, 0, cropW, cropH);
+            return cropped;
+          }
+
+          resizeTo(bigWidth, bigHeight);
+
+          setTimeout(function() {
+            var rect = el.getBoundingClientRect();
+            var maxRight = rect.width;
+            var maxBottom = rect.height;
+            var descendants = el.querySelectorAll('*');
+            for (var i = 0; i < descendants.length; i++) {
+              var r = descendants[i].getBoundingClientRect();
+              if (r.width === 0 && r.height === 0) continue;
+              maxRight = Math.max(maxRight, r.right - rect.left);
+              maxBottom = Math.max(maxBottom, r.bottom - rect.top);
+            }
+
+            html2canvas(el, {
+              width: Math.ceil(maxRight) + 6,
+              height: Math.ceil(maxBottom) + 6
+            }).then(function(canvas) {
+              if (canvas.width > 0 && canvas.height > 0) {
+                var finalCanvas = cropToContent(canvas, 40);
+                Shiny.setInputValue(msg.inputId, finalCanvas.toDataURL('image/png'), {priority: 'event'});
+              }
+              restoreHidden();
+              resizeTo(origRect.width, origRect.height);
+              el.style.width = origWidth;
+              el.style.height = origHeight;
+            }).catch(function() {
+              restoreHidden();
+              resizeTo(origRect.width, origRect.height);
+              el.style.width = origWidth;
+              el.style.height = origHeight;
+            });
+          }, 250);
         });
       }"
     )),

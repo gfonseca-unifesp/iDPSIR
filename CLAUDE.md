@@ -150,7 +150,11 @@ Checagem rápida de sintaxe sem subir o app:
   `selection = "multiple"` para as duas. Um único botão "Download report (HTML)"
   gera tudo via `build_full_report_html`. Registra o handler JS compartilhado de
   captura (`idpsir_capture_element`/`html2canvas`), mas quem dispara a captura é
-  `mod_graph.R`, não este módulo — ver seção de captura de imagem abaixo.
+  `mod_graph.R`, não este módulo — ver seção de captura de imagem abaixo. A captura
+  redimensiona o container temporariamente (~2.5x), esconde os controles do próprio
+  vis-network (navegação, "Select by group", "Export as png") e corta para o
+  conteúdo real antes de restaurar o tamanho original — ver "Qualidade das figuras
+  do relatório" no Estado atual.
 - `R/modules/mod_wizard.R` → casca do wizard (passo atual, Voltar/Avançar com validação,
   download do savepoint disponível em qualquer passo, Next oculto no último passo — ver
   Fase 4.3); o passo Explorar é um `tabsetPanel` (Graph/Scenarios/Metrics/Report). Não
@@ -521,13 +525,70 @@ empate delicado como o exemplo construído a mão), slider "Number of simulation
 reagindo corretamente a mudanças (testado de 100 pra 20). Sem erros no console do
 servidor em nenhum passo.
 
+**Qualidade das figuras do relatório melhorada**, a pedido do usuário ao revisar o
+report gerado (legenda cortada, grafo descentralizado, baixa resolução — objetivo:
+"figuras de alta qualidade para publicação"). Investigado diretamente no DOM/JS ao
+vivo, não por suposição — três causas reais, três fixes:
+
+- **Baixa resolução:** `html2canvas.toString()` inspecionado diretamente confirma que
+  a versão empacotada pelo `visExport()` do visNetwork é anterior à 1.0 e não tem a
+  opção `scale` (testado: passar `scale: 3` não mudava nada no canvas resultante).
+  Como o próprio `<canvas>` do vis-network redesenha nítido em qualquer tamanho CSS
+  que o container receber (testado: aumentar o container em 2.5x fez o canvas
+  interno crescer 2.5x de verdade, não só esticar borrado), a captura agora
+  redimensiona o container temporariamente (~2.5x), pede pro `vis.Network` (acessado
+  via `HTMLWidgets.find(...)`, expõe `.network`/`.legend`) refazer `setSize()` +
+  `redraw()` + `fit()` nesse tamanho maior, captura, e só então restaura o tamanho
+  original.
+- **Legenda cortada:** a legenda é um segundo `vis.Network` independente, posicionado
+  `position="right"` dentro do mesmo container — medido ao vivo, sua borda direita
+  fica exatamente rente à largura do container (~0px de folga), e o conteúdo real
+  também vaza ~15px abaixo da altura declarada. `html2canvas` só renderiza a caixa
+  que o elemento declara, cortando esse vazamento silenciosamente. Corrigido medindo
+  o bounding box real de todos os descendentes (grafo + legenda, no tamanho já
+  aumentado) e passando isso como `width`/`height` explícitos pro `html2canvas`.
+- **Grafo descentralizado:** se o usuário tivesse arrastado/dado zoom antes de
+  salvar, essa posição é o que ficava gravado. Corrigido chamando `.fit()` nos dois
+  `vis.Network` (grafo e legenda) depois do redimensionamento, antes de capturar.
+
+Mais dois ajustes, descobertos só ao olhar a imagem capturada de verdade (não visíveis
+por inspeção de DOM): os próprios controles do vis-network (setas de navegação,
+dropdown "Select by group", botão "Export as png") ficam presos aos cantos do
+container — ao aumentar o container em 2.5x, isso empurra esses controles pra bem
+longe do diagrama, inflando a "caixa combinada" medida acima e enchendo a imagem de
+espaço morto. Escondidos (`display:none`) só durante a captura, restaurados depois.
+E `cropToContent()`, que escaneia o canvas capturado pelo bounding box real de pixels
+não-brancos e corta a margem morta ao redor.
+
+**Uma tentativa revertida:** também tentei colapsar o espaço horizontal *entre* o
+diagrama e a legenda (as duas ainda ficam bem afastadas mesmo depois do corte, já
+que `position="right"` da legenda é relativo à largura do container, independente de
+quão largo o diagrama em si seja) — procurando a maior faixa de colunas totalmente
+em branco e encurtando-a. Descartado ao testar: as próprias setas/linhas da legenda
+("positive"/"negative") são majoritariamente em branco no meio, só com conteúdo nas
+pontas, então a busca por "maior faixa em branco" cortava no meio dessas linhas em
+vez do espaço entre diagrama e legenda, corrompendo visualmente a legenda. Não valia
+a pena a fragilidade extra por uma reclamação secundária, já que as três nomeadas
+pelo usuário (legenda cortada, resolução, centralização) já estavam resolvidas sem
+esse passo.
+
+Testado ponta a ponta rodando o app de verdade (não só lendo código): savepoint de
+10 nós/16 arestas, "Save current view for report" clicado, captura interceptada e
+baixada como arquivo real (não só inspecionada via `canvas.toDataURL()` em memória)
+— confirmado visualmente: resolução saltou de ~760x800 para ~1890x2000 (2.5x),
+legenda completa e visível (categorias DPSIR + tipos de aresta + "Low confidence"),
+grafo centralizado, controles de navegação/seleção do vis-network ausentes da
+imagem final. Sem erros no console do servidor em nenhum passo.
+
 ## Próximo
 
-Fase 5 está completa (Marcos A-D). Retomar matriz de conexões livre e aninhamento
-hierárquico de níveis (Fase 2, itens restantes) quando desenhados. Considerar incluir
-cenários salvos no savepoint (hoje só duram a sessão) se isso vier a ser pedido.
-Relatório: adicionar seção de Comunidades (imagem + tabela) como fast-follow,
-reaproveitando a mecânica de captura já existente.
+Fase 5 está completa (Marcos A-D). Relatório: adicionar legendas de figura/tabela e
+descrição da parametrização usada para gerar cada uma (próximo pedido do usuário).
+Retomar matriz de conexões livre e aninhamento hierárquico de níveis (Fase 2, itens
+restantes) quando desenhados. Considerar incluir cenários salvos no savepoint (hoje
+só duram a sessão) se isso vier a ser pedido. Relatório: adicionar seção de
+Comunidades (imagem + tabela) como fast-follow, reaproveitando a mecânica de
+captura já existente.
 
 ## Princípios
 
