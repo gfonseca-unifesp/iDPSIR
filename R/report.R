@@ -16,6 +16,7 @@ REPORT_CSS <- "
   table.report-table th { background: #f0f0f0; }
   .meta { color: #666; font-size: 0.9em; }
   .report-graph-image { max-width: 100%; border: 1px solid #ccc; margin: 12px 0; }
+  .report-caption { color: #555; font-size: 0.9em; margin: 4px 0 20px 0; max-width: 700px; }
 "
 
 format_report_cell <- function(cell) {
@@ -47,10 +48,22 @@ build_full_report_html <- function(
     selected_snapshot_names = character(),
     include_general = TRUE,
     include_centralities = FALSE,
+    centrality_params = list(directed = TRUE, normalized = TRUE, weighted = FALSE),
     include_descriptors = FALSE,
     saved_scenarios = list(),
     selected_scenario_names = character()
 ) {
+  # Sequential "Figure N"/"Table N" numbering across the whole report, plus
+  # a caption paragraph under each - both requested so the report reads like
+  # a document meant for publication, not just a dump of on-screen widgets.
+  fig_counter <- 0
+  tab_counter <- 0
+  next_figure_n <- function() { fig_counter <<- fig_counter + 1; fig_counter }
+  next_table_n <- function() { tab_counter <<- tab_counter + 1; tab_counter }
+  caption_tag <- function(prefix, n, text) {
+    tags$p(class = "report-caption", tags$strong(paste0(prefix, " ", n, ". ")), text)
+  }
+
   sections <- list(
     tags$h1("iDPSIR - Report"),
     tags$style(HTML(REPORT_CSS)),
@@ -59,9 +72,11 @@ build_full_report_html <- function(
 
   if (length(selected_snapshot_names) > 0 && length(graph_snapshots) > 0) {
     snapshot_sections <- lapply(selected_snapshot_names, function(snapshot_name) {
+      snap <- graph_snapshots[[snapshot_name]]
       tagList(
         tags$h3(snapshot_name),
-        tags$img(class = "report-graph-image", src = graph_snapshots[[snapshot_name]])
+        tags$img(class = "report-graph-image", src = snap$image),
+        caption_tag("Figure", next_figure_n(), snap$caption)
       )
     })
 
@@ -71,14 +86,34 @@ build_full_report_html <- function(
   if (isTRUE(include_general)) {
     sections <- c(sections, list(
       tags$h2("General metrics"),
-      report_html_table(compute_general_metrics(graph))
+      report_html_table(compute_general_metrics(graph)),
+      caption_tag(
+        "Table", next_table_n(),
+        "Network-level metrics (density, diameter, transitivity, modularity, number of connected components) computed over the full built graph."
+      )
     ))
   }
 
   if (isTRUE(include_centralities)) {
+    params_text <- sprintf(
+      "Computed with: %s, %s, %s.",
+      if (isTRUE(centrality_params$directed)) "directed graph" else "undirected graph",
+      if (isTRUE(centrality_params$normalized)) "normalized scores" else "raw (non-normalized) scores",
+      if (isTRUE(centrality_params$weighted)) "weighted by edge weight (link strength)" else "unweighted (topology only)"
+    )
+
     sections <- c(sections, list(
       tags$h2("Centralities"),
-      report_html_table(compute_all_metrics(graph))
+      report_html_table(compute_all_metrics(
+        graph,
+        directed = isTRUE(centrality_params$directed),
+        normalized = isTRUE(centrality_params$normalized),
+        weighted = isTRUE(centrality_params$weighted)
+      )),
+      caption_tag(
+        "Table", next_table_n(),
+        paste("Node centrality measures (degree, betweenness, closeness, PageRank, eigenvector centrality).", params_text)
+      )
     ))
   }
 
@@ -89,10 +124,13 @@ build_full_report_html <- function(
       tags$h2("DPSIR descriptors"),
       tags$h3("Nodes by category"),
       report_html_table(d$count_by_category),
+      caption_tag("Table", next_table_n(), "Number of nodes per DPSIR category in the built graph."),
       tags$h3("Transitions (edges by source -> target category)"),
       report_html_table(d$transitions),
+      caption_tag("Table", next_table_n(), "Number of edges observed between each pair of DPSIR categories (source -> target)."),
       tags$h3("Category x category matrix"),
       report_html_table(matrix_to_report_df(d$transition_matrix)),
+      caption_tag("Table", next_table_n(), "Same edge counts as the transitions table above, arranged as a source (row) x target (column) matrix."),
       tags$p(
         tags$strong("Impacts without Response: "),
         if (length(d$impacts_without_response) == 0) "none" else paste(d$impacts_without_response, collapse = ", ")
@@ -102,7 +140,8 @@ build_full_report_html <- function(
         if (length(d$pressures_without_response) == 0) "none" else paste(d$pressures_without_response, collapse = ", ")
       ),
       tags$h3("Average uncertainty/controllability by category (1=low, 2=medium, 3=high)"),
-      report_html_table(d$averages_by_category)
+      report_html_table(d$averages_by_category),
+      caption_tag("Table", next_table_n(), "Mean uncertainty and controllability score per DPSIR category, coded as 1 (low), 2 (medium), 3 (high).")
     ))
   }
 
@@ -142,8 +181,13 @@ build_full_report_html <- function(
       tags$ul(scenario_items),
       tags$h3("Equilibrium effect per factor"),
       report_html_table(comparison_df),
+      caption_tag(
+        "Table", next_table_n(),
+        "Equilibrium effect of each scenario on every node, computed via loop analysis (press perturbation, -A^-1 x press) relative to the baseline (no response applied)."
+      ),
       tags$h3("Summary per scenario"),
-      report_html_table(summary_df)
+      report_html_table(summary_df),
+      caption_tag("Table", next_table_n(), "Count of nodes whose equilibrium effect improves, worsens, or stays stable under each scenario.")
     ))
   }
 

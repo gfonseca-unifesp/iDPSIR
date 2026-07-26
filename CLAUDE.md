@@ -97,7 +97,14 @@ Checagem rápida de sintaxe sem subir o app:
   descritores/cenários) são todas opcionais via flags — nenhuma é recomputada aqui,
   só reaproveita as funções de `R/metrics.R`/`R/responses.R` já usadas nas outras
   abas. `graph_snapshots`/`selected_snapshot_names` viram uma seção "Network graph"
-  com um `<h3>` + `<img>` por snapshot selecionado, não uma imagem única.
+  com um `<h3>` + `<img>` por snapshot selecionado, não uma imagem única. Cada
+  figura e tabela do relatório ganha uma legenda numerada sequencialmente
+  ("Figure N"/"Table N", contadores fechados sobre `build_full_report_html`) — ver
+  "Legendas e parametrização no relatório" no Estado atual. `centrality_params`
+  (novo argumento, default `list(directed=TRUE, normalized=TRUE, weighted=FALSE)`
+  igual ao de `compute_all_metrics()`) é repassado direto pra `compute_all_metrics()`
+  na seção de Centralidades — antes o relatório sempre usava esses defaults
+  hardcoded, ignorando o que o usuário tivesse configurado na aba Metrics.
 - `R/modules/mod_data.R` → editor por formulário (passos Início/Modelo/Nós/Arestas/Revisar
   do wizard); estado em `reactiveValues`, não-reativo até "Construir/Reconstruir grafo".
 - `R/modules/mod_graph.R` → painel de exploração do grafo. Controles em caixas
@@ -116,8 +123,17 @@ Checagem rápida de sintaxe sem subir o app:
   filtro/destaque) para a aba Report — ver seção de captura de imagem abaixo. A
   caixa "Nodes" tem um botão "Clear selection" que desfaz tanto a seleção da
   tabela quanto o destaque no grafo (`visUnselectAll()`), já que nenhuma das duas
-  direções da sincronização cruzada tabela↔grafo limpava a seleção sozinha.
+  direções da sincronização cruzada tabela↔grafo limpava a seleção sozinha. Cada
+  snapshot guarda `list(image=, caption=)` em vez de só o dataURL: `caption` é
+  montada em `build_snapshot_caption()` a partir dos `input$...` ativos no momento
+  do clique (cor/paleta ou comunidade+algoritmo, filtros de subsistema/temporal,
+  base do tamanho do nó, base da espessura da aresta + limiar de confiança, e o
+  caminho destacado se houver um selecionado) — vira a legenda da figura na aba
+  Report.
 - `R/modules/mod_metrics.R` → painel único de métricas (Gerais / Centralidades / Descritores DPSIR).
+  `mod_metrics_server` retorna `centrality_params` (reactive com `directed`/
+  `normalized`/`weighted`, os mesmos toggles usados na tabela em tela) para a aba
+  Report reaproveitar — ver Fase 5, seção "Legendas e parametrização no relatório".
 - `R/modules/mod_responses.R` → aba "Scenarios": ativar respostas (nós de categoria
   feedback) com força 0-100%, aplicar cenário combinado, salvar e comparar múltiplos
   cenários lado a lado (comparação rápida em tela — a exportação em si vive em
@@ -580,10 +596,76 @@ legenda completa e visível (categorias DPSIR + tipos de aresta + "Low confidenc
 grafo centralizado, controles de navegação/seleção do vis-network ausentes da
 imagem final. Sem erros no console do servidor em nenhum passo.
 
+**Legendas e parametrização no relatório**, segundo pedido do usuário feito na
+mesma conversa do item acima ("é importante incluir as legendas das figuras e
+das tabelas... e descrever eventuais parametrizações feitas"). Duas mudanças:
+
+- **Numeração e legenda de toda figura/tabela**: `build_full_report_html`
+  (`R/report.R`) ganhou contadores fechados (`next_figure_n()`/`next_table_n()`)
+  e um `caption_tag()` que imprime um `<p class="report-caption">` logo abaixo
+  de cada tabela/imagem ("Figure 1.", "Table 1.", "Table 2."...) — numeração
+  sequencial pelo relatório inteiro, não reiniciada por seção. A legenda da
+  figura do grafo vem de `mod_graph.R` (ver abaixo); as legendas das tabelas são
+  texto fixo descrevendo o que a tabela mostra (a mesma explicação para
+  qualquer rede, já que a tabela em si não muda de estrutura).
+- **Parametrização descrita e de fato usada**: ao investigar onde descrever a
+  parametrização da aba Centralities, foi encontrado um bug real (não só uma
+  lacuna): `R/report.R` chamava `compute_all_metrics(graph)` **sem nenhum
+  parâmetro**, sempre usando os defaults da própria função
+  (`directed=TRUE, normalized=TRUE, weighted=FALSE`) — só que o toggle
+  `ina_toggle_directed()` usado na aba Metrics (`R/core/core_ui_components.R`)
+  tem `value=FALSE` (Undirected) como default, **diferente** do default de
+  `compute_all_metrics()`. Ou seja, o relatório já divergia silenciosamente da
+  tabela que o usuário via em tela, mesmo sem o usuário mexer em nada. Corrigido
+  expondo os três toggles (`directed`/`normalized`/`weighted`) como
+  `centrality_params` retornado por `mod_metrics_server`, encaminhado por
+  `mod_wizard_server` até `mod_report_server` e passado tanto para
+  `compute_all_metrics()` (corrige o valor) quanto para o texto da legenda
+  ("Computed with: undirected graph, normalized scores, weighted by edge
+  weight..." — corrige a descrição). Verificado ao vivo: alternar "Weighted"
+  pra ligado na aba Metrics e gerar o relatório em seguida produz os mesmos
+  números na tabela de Centralidades do relatório e da tela (confirmado
+  comparando `betweenness=0.17`/`closeness=0.67` idênticos nos dois lugares).
+- A legenda de cada figura de grafo (`mod_graph.R`'s `build_snapshot_caption()`)
+  é montada a partir dos `input$...` de exibição ativos no momento do clique em
+  "Save current view for report": cor por categoria+paleta ou por comunidade+
+  algoritmo, filtros de subsistema/temporal (ou "no filters applied"), base do
+  tamanho do nó, base da espessura da aresta + limiar de confiança, e o caminho
+  destacado se `path_highlight` não for "none". Parâmetros puramente cosméticos
+  (espaçamento, tamanho de fonte) ficaram de fora — não mudam o que a figura
+  *significa*, só como ela é desenhada.
+
+Testado ponta a ponta rodando o app de verdade: savepoint de 5 nós em ciclo
+(D1→P1→S1→I1→R1→D1) carregado via injeção de arquivo no `<input type=file>`
+(o upload real via diálogo do SO não é acessível neste ambiente de teste),
+grafo construído, um snapshot salvo, um cenário (R1 a 50%) aplicado e salvo, e
+na aba Metrics o toggle "Weighted" ligado (ficando `directed=FALSE,
+weighted=TRUE` — diferente do default antigo do relatório) antes de gerar o
+relatório com todas as seções + o snapshot + o cenário selecionados. HTML
+baixado (via `fetch()` direto na URL do `downloadHandler`, já que a seleção de
+linha das tabelas DT não reage a cliques sintéticos simples neste ambiente —
+contornado setando `input$..._rows_selected` diretamente via
+`Shiny.setInputValue`, que é o mesmo valor que a UI real produziria) e
+inspecionado: "Figure 1." com a legenda de exibição correta, "Table 1."
+a "Table 8." numeradas em sequência por todo o relatório, "Table 2." (Centralidades)
+descrevendo e usando exatamente "undirected graph, normalized scores, weighted
+by edge weight" — confirmado que os números batem com os mostrados na aba
+Metrics. Sem erros no console do servidor em nenhum passo.
+
 ## Próximo
 
-Fase 5 está completa (Marcos A-D). Relatório: adicionar legendas de figura/tabela e
-descrição da parametrização usada para gerar cada uma (próximo pedido do usuário).
+Fase 5 está completa (Marcos A-D). Qualidade das figuras do relatório e
+legendas/parametrização (pedidos do usuário pós-Fase 5, itens 3+4 de uma lista de 4)
+estão feitos. Restam da mesma lista, ainda não iniciados:
+- **Item 1**: exemplos didáticos no tutorial (com explicações/ressalvas), disponibilizados
+  como savepoints em `docs/` no GitHub, com hiperlink a partir do tutorial.
+- **Item 2**: (a) um `find_neutralization_step()`-style helper sobre `simulate_trajectory()`
+  pra estimar em quantos passos um Impacto seria neutralizado — risco baixo, incremento
+  direto; (b) modelagem não-linear de threshold na relação Estado→Impacto (valor de
+  corte no State que "aciona" o Impacto) — mudança arquitetural maior, tratar como
+  decisão à parte antes de planejar (mesmo padrão da decisão de escopo do SEM/path
+  analysis no PLANO seção 11), não como incremento incremental da Fase 5.
+
 Retomar matriz de conexões livre e aninhamento hierárquico de níveis (Fase 2, itens
 restantes) quando desenhados. Considerar incluir cenários salvos no savepoint (hoje
 só duram a sessão) se isso vier a ser pedido. Relatório: adicionar seção de

@@ -219,7 +219,7 @@ mod_report_ui <- function(id) {
   )
 }
 
-mod_report_server <- function(id, schema, nodes, edges, graph, saved_scenarios, graph_snapshots) {
+mod_report_server <- function(id, schema, nodes, edges, graph, saved_scenarios, graph_snapshots, centrality_params) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
@@ -281,6 +281,7 @@ mod_report_server <- function(id, schema, nodes, edges, graph, saved_scenarios, 
           selected_snapshot_names = selected_snapshot_names,
           include_general = isTRUE(input$include_general),
           include_centralities = isTRUE(input$include_centralities),
+          centrality_params = centrality_params(),
           include_descriptors = isTRUE(input$include_descriptors),
           saved_scenarios = saved,
           selected_scenario_names = selected_scenario_names

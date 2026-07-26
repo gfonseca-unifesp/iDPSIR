@@ -125,5 +125,16 @@ mod_metrics_server <- function(id, schema, graph) {
         )
       )
     })
+
+    # Exposed so the Report tab's Centralities table can use the same
+    # directed/normalized/weighted choice the user configured here, instead
+    # of silently falling back to compute_all_metrics()'s own defaults.
+    list(
+      centrality_params = reactive(list(
+        directed = isTRUE(input$directed),
+        normalized = isTRUE(input$normalized),
+        weighted = isTRUE(input$weighted)
+      ))
+    )
   })
 }

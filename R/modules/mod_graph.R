@@ -358,6 +358,52 @@ mod_graph_server <- function(id, schema, nodes, edges, graph) {
     graph_snapshots <- reactiveValues(list = list())
     snapshot_counter <- reactiveVal(1)
     pending_snapshot_name <- reactiveVal(NULL)
+    pending_snapshot_caption <- reactiveVal(NULL)
+
+    # Describes exactly which display/filter/highlight choices produced this
+    # view, so the Report tab can caption the figure instead of showing a
+    # bare image - the same choices affect what's visually meaningful, not
+    # cosmetic-only settings like spacing/font size.
+    build_snapshot_caption <- function() {
+      color_desc <- if (identical(input$color_by, "community")) {
+        paste0("nodes colored by community (", input$community_algorithm, " algorithm)")
+      } else {
+        paste0("nodes colored by DPSIR category (", input$palette, " palette)")
+      }
+
+      filters <- character()
+      if (!is.null(input$subsystem_filter) && input$subsystem_filter != "All") {
+        filters <- c(filters, paste0("subsystem = ", input$subsystem_filter))
+      }
+      if (!is.null(input$temporal_filter) && input$temporal_filter != "All") {
+        filters <- c(filters, paste0("temporal scale = ", input$temporal_filter))
+      }
+      filter_desc <- if (length(filters) > 0) paste0("filtered by ", paste(filters, collapse = ", ")) else "no filters applied"
+
+      size_labels <- c(all = "total degree", "in" = "incoming edges", "out" = "outgoing edges")
+      size_desc <- paste0(
+        "node size by ", size_labels[[input$node_size_mode]],
+        if (isTRUE(input$node_size_weighted)) " (weighted by edge weight)" else ""
+      )
+
+      edge_labels <- c(weight = "edge weight", confidence = "confidence", fixed = "fixed width")
+      edge_desc <- sprintf(
+        "edge width by %s, dashed below confidence %.2f",
+        edge_labels[[input$edge_width_by]], input$confidence_threshold
+      )
+
+      parts <- c(color_desc, filter_desc, size_desc, edge_desc)
+
+      if (!is.null(input$path_highlight) && input$path_highlight != "none") {
+        candidates <- path_candidates()
+        idx <- as.integer(input$path_highlight)
+        if (!is.na(idx) && idx <= nrow(candidates)) {
+          parts <- c(parts, paste0("highlighted pathway: ", candidates$nodes[idx]))
+        }
+      }
+
+      paste0(paste(parts, collapse = "; "), ".")
+    }
 
     observeEvent(input$save_snapshot, {
       name <- trimws(input$snapshot_name)
@@ -368,6 +414,7 @@ mod_graph_server <- function(id, schema, nodes, edges, graph) {
       }
 
       pending_snapshot_name(name)
+      pending_snapshot_caption(build_snapshot_caption())
       session$sendCustomMessage(
         "idpsir_capture_element",
         list(elementId = session$ns("network"), inputId = session$ns("snapshot_capture_result"))
@@ -379,7 +426,7 @@ mod_graph_server <- function(id, schema, nodes, edges, graph) {
       req(name)
 
       saved <- graph_snapshots$list
-      saved[[name]] <- input$snapshot_capture_result
+      saved[[name]] <- list(image = input$snapshot_capture_result, caption = pending_snapshot_caption())
       graph_snapshots$list <- saved
 
       snapshot_counter(snapshot_counter() + 1)

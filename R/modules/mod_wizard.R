@@ -62,8 +62,11 @@ mod_wizard_server <- function(id) {
     data <- mod_data_server("data")
     graph_result <- mod_graph_server("graph", data$schema, data$nodes, data$edges, data$graph)
     responses <- mod_responses_server("responses", data$schema, data$nodes, data$edges, data$graph)
-    mod_metrics_server("metrics", data$schema, data$graph)
-    mod_report_server("report", data$schema, data$nodes, data$edges, data$graph, responses$saved_scenarios, graph_result$graph_snapshots)
+    metrics_result <- mod_metrics_server("metrics", data$schema, data$graph)
+    mod_report_server(
+      "report", data$schema, data$nodes, data$edges, data$graph,
+      responses$saved_scenarios, graph_result$graph_snapshots, metrics_result$centrality_params
+    )
 
     output$progress_ui <- renderUI({
       req(input$current_step)
