@@ -28,3 +28,5 @@ desktop.ini
 
 # Savepoints exportados pelo app (dados de teste do usuario, nao codigo)
 *.idpsir.json
+# ...exceto os exemplos didaticos versionados para o tutorial (docs/)
+!docs/*.idpsir.json

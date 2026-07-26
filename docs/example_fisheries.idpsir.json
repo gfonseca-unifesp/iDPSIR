@@ -1,0 +1,137 @@
+{
+  "format_version": "1.0",
+  "metadata": {
+    "project_name": "Example: Coastal fisheries",
+    "author": "iDPSIR tutorial",
+    "created_at": "2026-07-26 17:23:58.421399",
+    "notes": "Worked example used in the getting-started tutorial (docs/tutorial.html): a single 5-node feedback loop (Driver to Response to Driver) demonstrating scenario simulation, immediate vs equilibrium effects, and the stability warning.",
+    "updated_at": "2026-07-26 17:23:58.421399"
+  },
+  "schema": [
+    {
+      "name": "Driver",
+      "order": 1,
+      "color": "#1f77b4",
+      "shape": "square",
+      "role": null
+    },
+    {
+      "name": "Pressure",
+      "order": 2,
+      "color": "#d62728",
+      "shape": "triangle",
+      "role": null
+    },
+    {
+      "name": "State",
+      "order": 3,
+      "color": "#2ca02c",
+      "shape": "dot",
+      "role": null
+    },
+    {
+      "name": "Impact",
+      "order": 4,
+      "color": "#ff7f0e",
+      "shape": "diamond",
+      "role": null
+    },
+    {
+      "name": "Response",
+      "order": 5,
+      "color": "#9467bd",
+      "shape": "star",
+      "role": "feedback"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "D1",
+      "label": "Coastal tourism growth",
+      "dpsir_category": "Driver",
+      "subsystem": "Coastal fisheries",
+      "uncertainty": "medium",
+      "controllability": "low",
+      "temporal_scale": "long"
+    },
+    {
+      "id": "P1",
+      "label": "Overfishing",
+      "dpsir_category": "Pressure",
+      "subsystem": "Coastal fisheries",
+      "uncertainty": "low",
+      "controllability": "medium",
+      "temporal_scale": "medium"
+    },
+    {
+      "id": "S1",
+      "label": "Fish stock decline",
+      "dpsir_category": "State",
+      "subsystem": "Coastal fisheries",
+      "uncertainty": "low",
+      "controllability": "low",
+      "temporal_scale": "medium"
+    },
+    {
+      "id": "I1",
+      "label": "Fisher income loss",
+      "dpsir_category": "Impact",
+      "subsystem": "Coastal fisheries",
+      "uncertainty": "medium",
+      "controllability": "low",
+      "temporal_scale": "medium"
+    },
+    {
+      "id": "R1",
+      "label": "Fishing quota policy",
+      "dpsir_category": "Response",
+      "subsystem": "Coastal fisheries",
+      "uncertainty": "medium",
+      "controllability": "high",
+      "temporal_scale": "medium"
+    }
+  ],
+  "edges": [
+    {
+      "from": "D1",
+      "to": "P1",
+      "weight": 2,
+      "confidence": 0.7,
+      "interaction_type": "positive",
+      "evidence_type": "expert_assessment"
+    },
+    {
+      "from": "P1",
+      "to": "S1",
+      "weight": 3,
+      "confidence": 0.85,
+      "interaction_type": "positive",
+      "evidence_type": "monitoring"
+    },
+    {
+      "from": "S1",
+      "to": "I1",
+      "weight": 2.5,
+      "confidence": 0.8,
+      "interaction_type": "positive",
+      "evidence_type": "observational"
+    },
+    {
+      "from": "I1",
+      "to": "R1",
+      "weight": 1.5,
+      "confidence": 0.6,
+      "interaction_type": "positive",
+      "evidence_type": "expert_assessment"
+    },
+    {
+      "from": "R1",
+      "to": "D1",
+      "weight": 0.5,
+      "confidence": 0.4,
+      "interaction_type": "negative",
+      "evidence_type": "expert_assessment"
+    }
+  ],
+  "positions": {}
+}

@@ -652,13 +652,71 @@ descrevendo e usando exatamente "undirected graph, normalized scores, weighted
 by edge weight" — confirmado que os números batem com os mostrados na aba
 Metrics. Sem erros no console do servidor em nenhum passo.
 
+**Exemplo didático no tutorial (item 1 da lista pós-Fase 5)**, com savepoint em
+`docs/`. `docs/example_fisheries.idpsir.json` — gerado via `build_savepoint()`/
+`write_savepoint()` num script standalone (não por edição manual de JSON, pra
+garantir que passa por `validate_schema`/`validate_dpsir_nodes`/
+`validate_dpsir_edges` de verdade antes de ir pro disco) — é uma rede de 5 nós
+em ciclo fechado (D1 Coastal tourism growth → P1 Overfishing → S1 Fish stock
+decline → I1 Fisher income loss → R1 Fishing quota policy → D1), com as duas
+arestas que fecham o ciclo (I1→R1 e R1→D1) deliberadamente com confiança baixa
+(0.6/0.4) por representarem a parte mais especulativa da história (pressão
+política reagindo à perda de renda; uma campanha de conscientização amenizando
+a demanda turística). Fechar o ciclo até o Driver foi uma escolha deliberada, não
+estética: uma primeira tentativa com a Resposta mitigando só a Pressão (mais
+"realista" no sentido de que Respostas normalmente não voltam até o Driver)
+deixa D1 sem nenhuma aresta de entrada, e um nó sem entrada zera uma linha
+inteira de `A` — o que gera exatamente o autovalor zero que torna a matriz
+singular (confirmado rodando: `check_stability` retorna instável com um
+autovalor exatamente `0+0i`, e `press_perturbation` cai no fallback de
+"equilíbrio indefinido" documentado no Marco A/B). Como o schema só permite
+Resposta linkar de volta pra categorias anteriores (nenhuma outra categoria
+pode), fechar o ciclo até o Driver é a única forma de dar a **todo** nó pelo
+menos uma entrada e assim ter uma matriz não-singular de verdade pra demonstrar
+o efeito de equilíbrio — por isso a rede final usa R1→D1, não R1→P1.
+
+Testado com a rede final (script standalone com `build_interaction_matrix`/
+`check_stability`/`press_perturbation`/`simulate_trajectory`/
+`robustness_check`, todos chamados de verdade, não simulados): matriz não-
+singular, mas **instável** (autovalores com parte real positiva) — mesmo
+padrão já documentado no Marco A/B/D: como o schema proíbe autoloops,
+`trace(A)=0` sempre, então `check_stability` nunca retorna `TRUE` pra uma rede
+com um ciclo genuíno. Ativar R1 a 70% produz efeito imediato só em D1 (único
+alvo direto de R1) e efeito de equilíbrio só em I1 — o imediato e o equilíbrio
+caem em nós completamente diferentes, o que virou o exemplo central da seção
+"Applying the response" do tutorial. A trajetória diverge (instável, como
+esperado) e o robustness check dá 100% de concordância em todos os nós mesmo
+com 100 simulações reamostrando as duas arestas de confiança baixa — mostrando
+que "a direção do efeito é confiável" e "o sistema vai de fato estabilizar" são
+perguntas independentes, a distinção central que o tutorial tenta ensinar.
+
+Verificado ponta a ponta rodando o app de verdade (não só o script standalone):
+o JSON gerado foi injetado no `<input type=file>` real do wizard (mesmo truque
+de `DataTransfer` já usado nesta sessão) e carregado via "Load savepoint",
+avançado por todos os passos do wizard até Explorar, grafo construído sem erro
+de validação ("Everything is valid"), nós/arestas na tela batendo exatamente com
+o JSON gerado, e o cenário aplicado a 70% na aba Scenarios reproduzindo os
+mesmos números do script standalone (`Total effect magnitude`: imediato 0.35,
+equilíbrio 0.47) — incluindo o aviso de instabilidade em linguagem simples, a
+tabela de robustez (100% em todos os fatores) e o toggle de trajetória, todos
+sem erro no console do servidor.
+
+`docs/tutorial.html`: nova seção "4 · Worked example" (TOC renumerado 4→6)
+entre "Explore tabs" e "Saving your work", com link relativo para o savepoint
+(`example_fisheries.idpsir.json`, mesma pasta) e um passo a passo usando os
+números reais verificados acima — não números inventados. Também corrigida a
+descrição da aba Scenarios em "3 · Explore tabs", que ainda descrevia o motor
+antigo pré-Fase 5 ("overall network effect: edges, total weight, density,
+before/after") — desatualizada desde o Marco B; agora descreve "Effect on the
+network" (nós afetados + magnitude, imediato vs equilíbrio, aviso de
+estabilidade) e os dois disclosures opcionais dos Marcos C/D (trajetória,
+robustez), que não apareciam no tutorial antes.
+
 ## Próximo
 
-Fase 5 está completa (Marcos A-D). Qualidade das figuras do relatório e
-legendas/parametrização (pedidos do usuário pós-Fase 5, itens 3+4 de uma lista de 4)
-estão feitos. Restam da mesma lista, ainda não iniciados:
-- **Item 1**: exemplos didáticos no tutorial (com explicações/ressalvas), disponibilizados
-  como savepoints em `docs/` no GitHub, com hiperlink a partir do tutorial.
+Fase 5 está completa (Marcos A-D). Da lista de 4 itens pedidos pelo usuário
+pós-Fase 5, os itens 3 (qualidade das figuras), 4 (legendas/parametrização) e 1
+(exemplo didático no tutorial) estão feitos. Resta:
 - **Item 2**: (a) um `find_neutralization_step()`-style helper sobre `simulate_trajectory()`
   pra estimar em quantos passos um Impacto seria neutralizado — risco baixo, incremento
   direto; (b) modelagem não-linear de threshold na relação Estado→Impacto (valor de

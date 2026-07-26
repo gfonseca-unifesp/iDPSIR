@@ -542,8 +542,9 @@
             <li class="sub"><a href="#t-report">Report</a></li>
           </ol>
         </li>
-        <li><a href="#savepoint">4 · Saving your work</a></li>
-        <li><a href="#glossary">5 · Glossary</a></li>
+        <li><a href="#worked-example">4 · Worked example</a></li>
+        <li><a href="#savepoint">5 · Saving your work</a></li>
+        <li><a href="#glossary">6 · Glossary</a></li>
       </ol>
     </nav>
 
@@ -825,7 +826,15 @@ P1,S1,3,0.85,negative,monitoring</pre>
             </div>
             <div class="control">
               <div class="label">Apply scenario<span class="widget">button</span></div>
-              <p>Runs every active response against the network and shows two tables: overall network effect (edges, total weight, density, before/after), and a plain <span class="chip improves">Improves</span> <span class="chip worsens">Worsens</span> <span class="chip stable">Stable</span> per factor — exact scores stay available in the CSV/Excel export if you need them.</p>
+              <p>Runs the active response(s) through the network's feedback loops (see the worked example below) and shows "Effect on the network" — how many factors are affected and by how much, immediately vs. once the effect has fully propagated — plus "Effect on each factor": a plain <span class="chip improves">Improves</span> <span class="chip worsens">Worsens</span> <span class="chip stable">Stable</span> per node (exact scores stay available in the CSV/Excel export). If the network's feedback loops aren't stable, a plain-language warning appears above these tables — see the worked example for what that means and why it's common, not a sign of a broken model.</p>
+            </div>
+            <div class="control">
+              <div class="label">Show how the effect evolves over time<span class="widget">optional, chart</span></div>
+              <p>A line per factor tracing the effect step by step instead of just the final immediate/equilibrium numbers — most useful exactly when the stability warning above is showing, since it lets you see whether the effect is settling down or still growing.</p>
+            </div>
+            <div class="control">
+              <div class="label">Show robustness to uncertainty<span class="widget">optional, table</span></div>
+              <p>Reruns the scenario many times, each time nudging every edge's weight within a range set by its confidence, and reports what fraction of runs agreed on the direction (Improves/Worsens/Stable) for each factor — low agreement flags a conclusion that a more confident estimate of the network could easily flip.</p>
             </div>
             <div class="control">
               <div class="label">Save this scenario<span class="widget">button</span></div>
@@ -882,6 +891,124 @@ P1,S1,3,0.85,negative,monitoring</pre>
           <div><strong>Graph image needs the Graph tab open first.</strong> The
           snapshot is taken from what's on screen there — visit it once this session
           (it's the default tab, so usually you already have) before checking the box.</div>
+        </div>
+      </section>
+
+      <!-- ============ WORKED EXAMPLE ============ -->
+      <section class="block" id="worked-example">
+        <div class="kicker">See it in action</div>
+        <h2>Worked example: a fisheries feedback loop</h2>
+        <p class="lead">Everything above is easier to follow with a real network in
+          front of you. This is a small, five-node example you can load in under a
+          minute — it walks through applying a response and reading the results, plus
+          two things worth understanding about <em>any</em> network you build here,
+          not just this one.</p>
+
+        <div class="code-cluster">
+          <div class="code-card">
+            <h4>Download the example</h4>
+            <p class="muted">A ready-to-load savepoint — no need to type anything in.
+              On the wizard's <strong>Start</strong> step, choose
+              <strong>Load savepoint</strong> and pick this file.</p>
+            <pre><a href="example_fisheries.idpsir.json" download>example_fisheries.idpsir.json</a></pre>
+          </div>
+        </div>
+
+        <h3>The story</h3>
+        <p>Growing <strong>coastal tourism</strong> (Driver) raises demand for
+          wild-caught fish, driving <strong>overfishing</strong> (Pressure), which
+          depletes the <strong>fish stock</strong> (State), which cuts into
+          <strong>fisher income</strong> (Impact). In response, a
+          <strong>fishing quota policy</strong> is introduced — paired with an
+          awareness campaign that's expected to modestly cool tourism-driven demand,
+          which is what closes the loop back to the Driver.</p>
+        <div class="table-wrap">
+          <table class="fields">
+            <tr><th>Link</th><th>Effect</th><th>Confidence</th></tr>
+            <tr><td class="key">Tourism → Overfishing</td><td>positive</td><td>0.70</td></tr>
+            <tr><td class="key">Overfishing → Stock decline</td><td>positive</td><td>0.85</td></tr>
+            <tr><td class="key">Stock decline → Income loss</td><td>positive</td><td>0.80</td></tr>
+            <tr><td class="key">Income loss → Quota policy</td><td>positive</td><td>0.60</td></tr>
+            <tr><td class="key">Quota policy → Tourism</td><td>negative</td><td>0.40</td></tr>
+          </table>
+        </div>
+        <p class="muted" style="font-size:14px; margin-top:10px">The last two links are
+          deliberately the softest: whether visible income loss actually moves policy,
+          and whether the campaign really dents demand, are both more assumption than
+          hard data — reflected in their lower confidence, not left out because they're
+          uncertain.</p>
+
+        <h3>Applying the response</h3>
+        <p>In <strong>Scenarios</strong>, turn on <strong>Fishing quota policy</strong>,
+          set it to 70%, and click <strong>Apply scenario</strong>. Two things happen at
+          once, and they don't point at the same place:</p>
+        <div class="table-wrap">
+          <table class="fields">
+            <tr><th>Metric</th><th>Immediate</th><th>Equilibrium</th></tr>
+            <tr><td class="key">Nodes affected</td><td>1</td><td>1</td></tr>
+            <tr><td class="key">Total effect magnitude</td><td>0.35</td><td>0.47</td></tr>
+          </table>
+        </div>
+        <p>The <strong>immediate</strong> effect only shows up on <strong>Coastal
+          tourism growth</strong> — the one node the policy has a direct link to.
+          The <strong>equilibrium</strong> effect — the result once the change has
+          rippled all the way around the loop — instead shows up entirely on
+          <strong>Fisher income loss</strong> (<span class="chip improves">Improves</span>),
+          with tourism itself settling back to no change at all. Immediate and
+          equilibrium aren't two views of the same number — they can land on
+          completely different factors, which is exactly why the app always shows
+          both instead of picking one.</p>
+
+        <div class="callout warn">
+          <span class="dot"></span>
+          <div><strong>You'll see "not stable" almost every time — that's expected.</strong>
+          The warning above the tables ("this network's feedback loops are not stable")
+          shows up here too, and it will for almost any closed feedback loop you build:
+          Responses are the only category allowed to link back to an earlier one, and a
+          node can never link to itself, so the underlying math structurally can't
+          produce a strict "yes, stable" verdict for a genuine loop. It isn't telling you
+          the model is wrong — it's telling you to lean on the immediate effect (always
+          reliable) and treat the equilibrium number as a direction, not a promise.</div>
+        </div>
+
+        <h3>Checking the two caveats yourself</h3>
+        <p>Still in this scenario, the two optional disclosures below the tables make
+          the warning above concrete instead of abstract:</p>
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-body">
+            <h4>Show how the effect evolves over time</h4>
+            <p>Ten steps in, the lines are still shooting away from zero rather than
+              leveling off — this network's loop doesn't actually settle at the
+              equilibrium number quoted above, it was only ever a mathematical
+              projection of <em>which direction</em> things are headed. When a network
+              <em>is</em> stable, this same chart is what confirms the lines really do
+              flatten out, instead of taking the equilibrium table on faith.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-body">
+            <h4>Show robustness to uncertainty</h4>
+            <p>Despite the loop closing through its two least-certain links, 100
+              simulations (each nudging every edge's weight within its confidence
+              range) agree <strong>100% of the time</strong> that Fisher income loss
+              improves. So while <em>whether</em> this system settles down is genuinely
+              unclear (caveat 1), <em>which direction</em> it's being pushed is not — a
+              distinct, and more answerable, question. A lower agreement percentage
+              here would mean the direction itself is up for grabs, not just the timing.</p>
+          </div>
+        </div>
+
+        <div class="callout">
+          <span class="dot"></span>
+          <div><strong>One more caveat, for later:</strong> every link here is treated as
+          proportional — double the quota's strength and its effect roughly doubles too
+          (try 40% and 100% and compare). Real systems often have thresholds instead —
+          a fish stock that tolerates pressure fine until it suddenly collapses past some
+          point. iDPSIR doesn't model that yet; read results as one useful, structured
+          lens on the system, not a substitute for expert judgment about where such
+          tipping points might sit.</div>
         </div>
       </section>
 
