@@ -1,5 +1,7 @@
 # iDPSIR
 
+[![Try it live](https://img.shields.io/badge/Try_it_live-online_demo-2ea44f)](https://gfonseca-unifesp.github.io/iDPSIR/)
+
 **R/Shiny** app for building and analyzing causal networks under the **DPSIR** model
 (Driver–Pressure–State–Impact–Response), aimed at environmental management. A guided
 wizard walks non-technical users through building the network (form-based editor or
@@ -16,6 +18,12 @@ same tutorial is one click away from inside the running app too, via the "Help"
 link in the top-right corner.
 
 ## How to run
+
+No R installation at all? **[Try it live](https://gfonseca-unifesp.github.io/iDPSIR/)**
+runs the same app entirely in your browser via WebAssembly ([shinylive](https://shinylive.io/)),
+no server involved — the first load takes a bit longer while R and its packages
+download into the browser, everything after that is instant. Good for a quick look;
+for real work, install R locally (below) so nothing depends on your connection.
 
 Requires R (>= 4.1). Missing packages are installed automatically on first run — no
 manual `install.packages()` step needed. From the project root:

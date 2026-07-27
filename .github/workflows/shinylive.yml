@@ -1,0 +1,63 @@
+name: Deploy shinylive demo
+
+# Publishes a WebAssembly build of the app (no server, runs entirely in the
+# visitor's browser) to GitHub Pages on every push to main. See item 8.1 of
+# ROADMAP_MELHORIAS_iDPSIR.md and the "Fase 8" notes in CLAUDE.md for why
+# this exists and how it was validated before being wired into CI.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: "release"
+
+      - name: Install shinylive
+        run: Rscript -e 'install.packages("shinylive")'
+
+      # shinylive::export() bundles every file under appdir as-is (it has no
+      # .gitignore-style exclusion) - exporting the repo root directly would
+      # sweep tests/, ROADMAP_MELHORIAS_iDPSIR.md, PLANO_iDPSIR.md and
+      # CLAUDE.md into the publicly served app's editable source tree.
+      # Staging only what the running app actually needs (app.R, global.R,
+      # R/, data/, docs/) keeps the export scoped to real app files, same as
+      # what shiny::runApp()/runGitHub() actually use.
+      - name: Stage app files
+        run: |
+          mkdir -p _app
+          cp app.R global.R _app/
+          cp -r R data docs _app/
+
+      - name: Export to shinylive (WebAssembly)
+        run: Rscript -e 'shinylive::export(appdir = "_app", destdir = "_site")'
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

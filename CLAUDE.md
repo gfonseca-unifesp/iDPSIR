@@ -300,6 +300,9 @@ Checagem rápida de sintaxe sem subir o app:
 - `data/` → CSVs de exemplo.
 - `tests/testthat.R`, `tests/testthat/*.R` → testes automatizados do núcleo
   numérico (item 6.3 do roadmap de publicação) — ver Estado atual.
+- `.github/workflows/shinylive.yml` → CI que publica uma build WebAssembly do
+  app (roda no navegador, sem servidor) no GitHub Pages a cada push em
+  `main` — item 8.1 do roadmap de publicação, ver Estado atual.
 
 Ao adicionar/remover um arquivo em `R/`, atualize os `source()` em `global.R`.
 
@@ -1259,6 +1262,80 @@ independe do estado do RNG antes de chamar). Suíte completa rodada de novo
 falha) e checagem de sintaxe de todos os arquivos `R/`, sem erro no console
 do servidor em nenhum passo.
 
+**Item 8.1 — spike concluído, CI implementado, na branch `fase-8-shinylive`.**
+Antes de aceitar 8.1 como "pronto pra fazer" (a maior incerteza técnica do
+roadmap, ver "Priorização geral" acima — bs4Dash carrega um tema AdminLTE3
+completo, compatibilidade com WASM era desconhecida), foi feito um spike
+isolado em vez de partir direto pra CI:
+
+1. Checado se as 13 dependências de `required_packages` têm binário WASM no
+   repositório do webR (`https://repo.r-wasm.org/bin/emscripten/contrib/4.4/PACKAGES`)
+   — todas têm, incluindo `bs4Dash` (2.3.4).
+2. `shinylive::export(appdir=".", destdir=...)` rodado de verdade sobre o
+   repo local, servido com `httpuv::runStaticServer()`, e testado no
+   navegador (não só "abriu a página"): savepoint de pescas carregado via
+   injeção de arquivo no `<input type=file>` **dentro do iframe** que o
+   shinylive usa pra rodar o app (mesmo truque de `DataTransfer` já usado
+   nesta sessão, só que atravessando `iframe.contentWindow`/`contentDocument`
+   em vez do documento principal), wizard percorrido até Explore, grafo
+   construído ("Graph built successfully" — confirma que `igraph`/`validate.R`
+   funcionam dentro do WASM), e o cenário R1 a 70% aplicado — os números
+   batem exatamente com os já verificados no app nativo (imediato 0.35,
+   equilíbrio 0.4667, 100% sign confidence, aviso de instabilidade). Ou seja,
+   não é só "a UI carrega": `eigen()`/`solve()` do R base (o núcleo de
+   `loop_analysis.R`) produzem resultado numericamente idêntico rodando em
+   WebAssembly no navegador.
+
+**Achado real, encontrado só ao inspecionar o export gerado (não documentado
+em lugar nenhum do pacote `shinylive`):** `shinylive::export(appdir=".")`
+não tem exclusão no estilo `.gitignore` — ele empacota **tudo** que está no
+diretório apontado por `appdir`, sem filtrar por extensão nem por relevância
+pro app rodar. Rodando a partir da raiz do repo, isso varreu `tests/`,
+`ROADMAP_MELHORIAS_iDPSIR.md`, `PLANO_iDPSIR.md`, `CLAUDE.md` — e até um
+savepoint de teste solto (não versionado) que estava na raiz do repo local —
+pra dentro da árvore de arquivos "do app" que a demo pública exibe/serve
+(confirmado via `grep` nos nomes de arquivo dentro do `app.json` gerado).
+Nada disso quebra o app, mas é ruído sem propósito numa demo pública — o
+workflow por isso **não** exporta a raiz do repo direto: `Stage app files`
+copia só `app.R`, `global.R`, `R/`, `data/`, `docs/` pra um diretório `_app/`
+temporário antes de chamar `shinylive::export()` nele, o mesmo conjunto de
+arquivos que `shiny::runApp()`/`runGitHub()` já usam de fato. Reexportado e
+retestado no navegador com esse conjunto reduzido: `app.json` resultante só
+lista os arquivos esperados (confirmado via o mesmo `grep`), e o app
+carrega/funciona identicamente ao teste anterior (mesmo savepoint de pescas,
+mesmo cenário, mesmos números).
+
+`.github/workflows/shinylive.yml` (novo): dois jobs — `build` (checkout,
+`r-lib/actions/setup-r@v2` com `r-version: "release"`, instala `shinylive`,
+copia os arquivos do app pra `_app/`, exporta pra `_site/`, sobe como
+artifact de Pages) e `deploy` (`actions/deploy-pages@v4`), gatilho em push
+pra `main` mais `workflow_dispatch` manual — mesmo padrão de dois-jobs
+recomendado pela própria documentação de `actions/deploy-pages`. YAML
+validado com `yaml::read_yaml()` (a chave `on:` aparece como `TRUE` no
+objeto R por causa da coerção booleana do YAML 1.1 — uma peculiaridade
+conhecida do parser do pacote `yaml`, não um erro real do arquivo; o parser
+do GitHub Actions interpreta `on:` normalmente). README ganhou um badge
+"Try it live" no topo e um parágrafo em "How to run" explicando o
+compromisso (sem instalar nada, mas primeiro carregamento mais lento —
+R e os pacotes baixam pro navegador).
+
+**Decisão de escopo, confirmada com o usuário antes de implementar:** não
+foi adicionado um botão "Load demo network" de carregamento automático no
+passo Start — o exemplo de pescas já está embutido no export (dentro de
+`docs/`) e carregável via "Load savepoint" já existente, o que já satisfaz
+o critério "pronto quando" do roadmap ("com o exemplo de pesca carregável,
+linkada no README"); um atalho dedicado ficaria fora do escopo do item 8.1.
+
+**Não testado ainda, porque exige uma ação fora do repositório:** o
+deploy de verdade no GitHub Pages. O workflow só roda de fato (e a URL do
+badge só resolve) depois de duas coisas que só o usuário pode fazer —
+habilitar Pages no repositório (Settings → Pages → Build and deployment →
+Source: **GitHub Actions**) e mesclar `fase-8-shinylive` em `main` (o
+gatilho é `push: branches: [main]`). A lógica de export/bundle em si já foi
+validada de ponta a ponta localmente (mesmos comandos que o workflow roda,
+só que executados à mão em vez de dentro do runner do GitHub) — o que falta
+é só a parte que não tem como simular sem a infraestrutura real do GitHub.
+
 ## Próximo
 
 Fase 5 está completa (Marcos A-D). Todos os 4 itens da lista pós-Fase 5 (1:
@@ -1277,13 +1354,20 @@ ordem combinada com o usuário:
   sem `ggplot2` no fim, `barplot()` do R base bastou).
 - [x] **6.4** — `sessionInfo` + parametrização/semente no relatório
   (concluído, ver acima).
+- [x] **8.1** — demo online via shinylive (implementado na branch
+  `fase-8-shinylive`, ver acima) — falta só habilitar GitHub Pages no
+  repositório e mesclar a branch em `main` pro deploy rodar de verdade.
+  Decidido junto com o usuário adiar 6.2 (renv) e fazer 8.1 primeiro, já
+  que era a maior incerteza técnica do roadmap — validada com o spike.
 - [ ] **6.1** — LICENSE (MIT, já confirmado)/CITATION.cff/DESCRIPTION — por
   último, aguardando lista de coautores do usuário.
-- Ordem combinada pro que resta: **6.2 (renv) → 8.1 (shinylive)** — 6.2 fica
-  por último antes do 8.1 de propósito, pra só travar a lista de
-  dependências agora que não há mais trabalho planejado que possa adicionar
-  um pacote novo. 8.1 continua com a ressalva de fazer um spike de bs4Dash
-  em WASM antes de tratar como gate garantido.
+- [ ] **6.2** — `renv` (pin de versões) — único item restante do roadmap
+  além do 6.1. A tensão renv-vs-`runGitHub()` (renv supõe biblioteca
+  persistente por projeto; `runGitHub()` baixa pra um diretório temporário
+  a cada execução) segue sem resolver — precisa de uma decisão de desenho
+  antes de implementar (ver opções levantadas com o usuário: renv só pra
+  dev local, ou `global.R` detectando e usando `renv::restore()` quando um
+  `renv.lock` existir).
 
 Pedido pelo usuário mas ainda não definido: "estrela"/"rosa" como layouts
 adicionais — precisa de uma conversa pra fixar o que cada termo significa
