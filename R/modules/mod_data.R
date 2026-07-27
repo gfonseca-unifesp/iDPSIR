@@ -79,6 +79,23 @@ mod_data_server <- function(id, seed = NULL) {
     # STEP 1: START
     # =================================================
 
+    # Each of the four starting modes is rendered as a uniform card (icon,
+    # title, one-line description, optional file input(s), button pinned to
+    # the same baseline via the "flex: 1" spacer) instead of a bare button
+    # next to three columns with file inputs above them - the mismatch made
+    # "New project" look unfinished next to the other three.
+    start_card <- function(icon_name, title, description, inputs = NULL, button) {
+      tags$div(
+        style = "height: 100%; display: flex; flex-direction: column; border: 1px solid #dee2e6; border-radius: 4px; padding: 14px;",
+        icon(icon_name, style = "font-size: 20px; color: #6c757d;"),
+        tags$p(title, style = "font-weight: 600; margin: 10px 0 4px;"),
+        tags$p(description, style = "font-size: 12.5px; color: #6c757d; margin: 0 0 8px;"),
+        inputs,
+        tags$div(style = "flex: 1;"),
+        button
+      )
+    }
+
     output$start_step <- renderUI({
       box(
         width = 12,
@@ -91,23 +108,41 @@ mod_data_server <- function(id, seed = NULL) {
         fluidRow(
           column(
             width = 3,
-            actionButton(ns("start_new"), "New project", icon = icon("file"), class = "btn-primary", width = "100%")
+            start_card(
+              "file", "New project",
+              "Start from a blank network and add nodes and edges by hand.",
+              button = actionButton(ns("start_new"), "New project", icon = icon("file"), class = "btn-primary", width = "100%")
+            )
           ),
           column(
             width = 3,
-            fileInput(ns("import_nodes_file"), "Import nodes (CSV)", accept = ".csv"),
-            fileInput(ns("import_edges_file"), "Import edges (CSV, optional)", accept = ".csv"),
-            actionButton(ns("start_import"), "Import matrices", icon = icon("upload"), width = "100%")
+            start_card(
+              "upload", "Import CSV files",
+              "Already have nodes and edges in spreadsheets? Upload them.",
+              inputs = tagList(
+                fileInput(ns("import_nodes_file"), "Nodes (CSV)", accept = ".csv"),
+                fileInput(ns("import_edges_file"), "Edges (CSV, optional)", accept = ".csv")
+              ),
+              button = actionButton(ns("start_import"), "Import matrices", icon = icon("upload"), width = "100%")
+            )
           ),
           column(
             width = 3,
-            fileInput(ns("savepoint_file"), "Load savepoint (.idpsir.json)", accept = ".json"),
-            actionButton(ns("start_savepoint"), "Load savepoint", icon = icon("folder-open"), width = "100%")
+            start_card(
+              "folder-open", "Load savepoint",
+              "Resume a project you saved earlier as a .idpsir.json file.",
+              inputs = fileInput(ns("savepoint_file"), ".idpsir.json file", accept = ".json"),
+              button = actionButton(ns("start_savepoint"), "Load savepoint", icon = icon("folder-open"), width = "100%")
+            )
           ),
           column(
             width = 3,
-            fileInput(ns("merge_files"), "Combine savepoints (2+ .idpsir.json)", accept = ".json", multiple = TRUE),
-            actionButton(ns("start_merge"), "Combine savepoints", icon = icon("object-group"), width = "100%")
+            start_card(
+              "object-group", "Combine savepoints",
+              "Merge two or more saved projects into one network.",
+              inputs = fileInput(ns("merge_files"), ".idpsir.json files (2+)", accept = ".json", multiple = TRUE),
+              button = actionButton(ns("start_merge"), "Combine savepoints", icon = icon("object-group"), width = "100%")
+            )
           )
         ),
 

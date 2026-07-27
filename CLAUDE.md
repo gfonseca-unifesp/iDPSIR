@@ -186,7 +186,16 @@ Checagem rápida de sintaxe sem subir o app:
   `rv$positions` (campo do savepoint que existia desde a Fase 1 mas nunca tinha
   nada escrevendo nele) ganhou um setter (`set_positions`) exposto no retorno do
   módulo, pra `mod_graph.R` gravar as posições arrastadas manualmente — ver
-  Fase 5 fast-follow "layout do grafo".
+  Fase 5 fast-follow "layout do grafo". Passo Início redesenhado: os 4 modos
+  de começar (New project/Import CSV/Load savepoint/Combine savepoints) viram
+  cards uniformes via `start_card()` (ícone + título + descrição de uma linha
+  + input(s) de arquivo quando houver + botão sempre na mesma base, via
+  espaçador `flex: 1` dentro de uma coluna flex de altura 100% — o Bootstrap
+  4 do bs4Dash já estica as colunas de um `fluidRow` pra mesma altura por
+  padrão, então basta isso pros 4 botões alinharem na mesma linha) — antes
+  "New project" era só um botão solto ao lado de 3 colunas com inputs de
+  arquivo acima, o que deixava a coluna "New project" com aparência
+  inacabada/desalinhada. Mockup revisado com o usuário antes de implementar.
 - `R/modules/mod_graph.R` → painel de exploração do grafo. Controles em caixas
   colapsáveis (`bs4Dash::box(collapsible = TRUE)`) empilhadas numa coluna à esquerda,
   agrupadas por tema (Display, Node & edge emphasis, Layout & spacing, Pathway
@@ -1334,6 +1343,19 @@ rodou com sucesso. Verificado também deste lado com `curl -o /dev/null -w
 O badge "Try it live" no README aponta pra essa URL e já resolve de
 verdade — item 8.1 do roadmap está pronto ponta a ponta, não só validado
 localmente.
+
+**Passo Início redesenhado (fora do roadmap de publicação, pedido direto do
+usuário ao revisar a UI).** Os 4 cards descritos no bullet de `mod_data.R`
+acima — mockup mostrado ao usuário antes de implementar (`start_card()` com
+ícone/título/descrição/input(s)/botão numa base comum). Testado ponta a
+ponta rodando o app de verdade: os 4 cards renderizam com a mesma altura e
+os botões alinhados na mesma linha de base (confirmado por screenshot);
+"New project" clicado (via `Shiny.setInputValue`/clique direto no DOM — o
+`ref` de um `read_page` desatualizado após a mudança de layout apontava pro
+elemento errado numa primeira tentativa, corrigido clicando o elemento por
+`id` diretamente) mostra a mensagem de confirmação normalmente abaixo dos
+cards; avançar pro passo Model funciona sem erro. Sem erro no console do
+servidor em nenhum passo.
 
 ## Próximo
 
