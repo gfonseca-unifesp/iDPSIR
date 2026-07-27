@@ -636,6 +636,7 @@ mod_data_server <- function(id, seed = NULL) {
       nodes = reactive(rv$nodes),
       edges = reactive(rv$edges),
       positions = reactive(rv$positions),
+      set_positions = function(pos) { rv$positions <- pos },
       graph = reactive(rv$graph),
       loaded = reactive(rv$loaded)
     )

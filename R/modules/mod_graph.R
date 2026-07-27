@@ -24,6 +24,21 @@
 # of whatever is on screen (any palette/coloring/filter/highlight combo) for
 # later inclusion in the Report tab - see the comment above graph_snapshots
 # below for why this replaced the old auto-capture-on-tab-switch mechanism.
+#
+# Layout: "Layered by category" (fixed X per DPSIR category, the original
+# default) draws a small feedback-loop network as a straight row with one
+# long arc closing the loop - readable for D->P->S->I->R flow, poor for
+# reading a cycle as a cycle. "Circular" (R/graph.R's compute_circular_layout)
+# places every node evenly around a ring regardless of category, so a loop's
+# closing edge is just another chord instead of a diagram-spanning arc.
+# Dragging a node pins it (fixed.x/fixed.y in graph.R) so it stops drifting
+# back under the physics solver - previously only X was locked, so any
+# manual rearrangement kept getting nudged by the "avoid overlap" solver
+# the moment you let go. Dragged positions are kept in mod_data.R's
+# `positions` (a savepoint field that already existed but had nothing
+# writing to it) via `positions`/`set_positions` passed in below, so they
+# survive filter/color changes and a savepoint save/reload, not just the
+# current render.
 
 mod_graph_ui <- function(id) {
   ns <- NS(id)
@@ -34,10 +49,16 @@ mod_graph_ui <- function(id) {
 
       box(
         width = 12, title = "Display", status = "primary", solidHeader = TRUE, collapsible = TRUE,
+        selectInput(
+          ns("layout_mode"), "Layout",
+          choices = c("Layered by category" = "layered", "Circular" = "circular")
+        ),
         selectInput(ns("palette"), "Color palette", choices = get_dpsir_palette_choices()),
         checkboxInput(ns("use_shapes"), "Use DPSIR shapes", value = TRUE),
         selectInput(ns("subsystem_filter"), "Subsystem", choices = "All"),
-        selectInput(ns("temporal_filter"), "Temporal scale", choices = "All")
+        selectInput(ns("temporal_filter"), "Temporal scale", choices = "All"),
+        checkboxInput(ns("show_node_legend"), "Show category/community legend", value = TRUE),
+        checkboxInput(ns("show_edge_legend"), "Show edge-type legend", value = TRUE)
       ),
 
       box(
@@ -61,7 +82,14 @@ mod_graph_ui <- function(id) {
         sliderInput(ns("y_spacing"), "Vertical spacing between nodes", min = 30, max = 250, value = 80, step = 10),
         sliderInput(ns("avoid_overlap"), "Avoid node overlap", min = 0, max = 1, value = 0.5, step = 0.1),
         sliderInput(ns("node_font_size"), "Graph label font size", min = 8, max = 40, value = 14, step = 1),
-        sliderInput(ns("legend_font_size"), "Legend font size", min = 8, max = 40, value = 14, step = 1)
+        sliderInput(ns("legend_font_size"), "Legend font size", min = 8, max = 40, value = 14, step = 1),
+        tags$hr(),
+        p(
+          class = "text-muted", style = "font-size: 13px;",
+          "Drag a node to pin it in place - it stops following the layout above",
+          "until you reset it."
+        ),
+        actionButton(ns("reset_positions"), "Reset dragged positions", icon = icon("rotate-left"), class = "btn-outline-secondary btn-sm")
       ),
 
       box(
@@ -111,7 +139,7 @@ mod_graph_ui <- function(id) {
   )
 }
 
-mod_graph_server <- function(id, schema, nodes, edges, graph) {
+mod_graph_server <- function(id, schema, nodes, edges, graph, positions, set_positions) {
   moduleServer(id, function(input, output, session) {
     observeEvent(nodes(), {
       n <- nodes()
@@ -244,7 +272,11 @@ mod_graph_server <- function(id, schema, nodes, edges, graph) {
           y_spacing = input$y_spacing,
           avoid_overlap = input$avoid_overlap,
           node_font_size = input$node_font_size,
-          legend_font_size = input$legend_font_size
+          legend_font_size = input$legend_font_size,
+          layout_mode = input$layout_mode,
+          manual_positions = positions(),
+          show_node_legend = input$show_node_legend,
+          show_edge_legend = input$show_edge_legend
         )
       } else {
         build_network_visual(
@@ -262,15 +294,30 @@ mod_graph_server <- function(id, schema, nodes, edges, graph) {
           avoid_overlap = input$avoid_overlap,
           node_font_size = input$node_font_size,
           legend_font_size = input$legend_font_size,
-          highlighted_nodes = highlighted_nodes()
+          highlighted_nodes = highlighted_nodes(),
+          layout_mode = input$layout_mode,
+          manual_positions = positions(),
+          show_node_legend = input$show_node_legend,
+          show_edge_legend = input$show_edge_legend
         )
       }
 
       widget %>%
-        visEvents(select = sprintf(
-          "function(properties) { Shiny.setInputValue('%s', properties.nodes, {priority: 'event'}); }",
-          session$ns("node_click")
-        ))
+        visEvents(
+          select = sprintf(
+            "function(properties) { Shiny.setInputValue('%s', properties.nodes, {priority: 'event'}); }",
+            session$ns("node_click")
+          ),
+          dragEnd = sprintf(
+            "function(properties) {
+              if (properties.nodes.length === 0) return;
+              var pos = this.getPositions(properties.nodes);
+              var payload = properties.nodes.map(function(id) { return {id: id, x: pos[id].x, y: pos[id].y}; });
+              Shiny.setInputValue('%s', payload, {priority: 'event'});
+            }",
+            session$ns("node_drag")
+          )
+        )
     })
 
     output$membership_table <- renderDT({
@@ -287,6 +334,50 @@ mod_graph_server <- function(id, schema, nodes, edges, graph) {
       )
 
       datatable(df, rownames = FALSE, options = list(pageLength = 10, scrollX = TRUE, dom = "t"))
+    })
+
+    # =================================================
+    # MANUAL NODE POSITIONS (dragging pins a node in place -
+    # see fixed.x/fixed.y in graph.R for why this stopped nodes
+    # drifting back under the physics solver). Persisted through
+    # mod_data.R's `positions` savepoint field, which existed
+    # already but had nothing writing to it until now.
+    # =================================================
+
+    observeEvent(input$node_drag, {
+      payload <- input$node_drag
+
+      # Confirmed empirically (not assumed): Shiny's default JSON
+      # deserialization flattens an array of {id,x,y} objects into one
+      # repeating named vector (id,x,y,id,x,y,...), not a data.frame or a
+      # list of lists - true for both a single dragged node and several.
+      dragged <- if (is.data.frame(payload)) {
+        payload
+      } else if (is.atomic(payload)) {
+        nm <- names(payload)
+        data.frame(
+          id = as.character(payload[nm == "id"]),
+          x = as.numeric(payload[nm == "x"]),
+          y = as.numeric(payload[nm == "y"]),
+          stringsAsFactors = FALSE
+        )
+      } else {
+        do.call(rbind, lapply(payload, function(p) {
+          data.frame(id = as.character(p$id), x = as.numeric(p$x), y = as.numeric(p$y), stringsAsFactors = FALSE)
+        }))
+      }
+
+      current <- positions()
+      if (is.null(current)) {
+        current <- data.frame(id = character(), x = numeric(), y = numeric(), stringsAsFactors = FALSE)
+      }
+
+      current <- current[!current$id %in% dragged$id, ]
+      set_positions(rbind(current, dragged))
+    })
+
+    observeEvent(input$reset_positions, {
+      set_positions(NULL)
     })
 
     # =================================================
@@ -365,6 +456,8 @@ mod_graph_server <- function(id, schema, nodes, edges, graph) {
     # bare image - the same choices affect what's visually meaningful, not
     # cosmetic-only settings like spacing/font size.
     build_snapshot_caption <- function() {
+      layout_desc <- paste0("layout: ", c(layered = "layered by category", circular = "circular")[[input$layout_mode]])
+
       color_desc <- if (identical(input$color_by, "community")) {
         paste0("nodes colored by community (", input$community_algorithm, " algorithm)")
       } else {
@@ -392,7 +485,7 @@ mod_graph_server <- function(id, schema, nodes, edges, graph) {
         edge_labels[[input$edge_width_by]], input$confidence_threshold
       )
 
-      parts <- c(color_desc, filter_desc, size_desc, edge_desc)
+      parts <- c(layout_desc, color_desc, filter_desc, size_desc, edge_desc)
 
       if (!is.null(input$path_highlight) && input$path_highlight != "none") {
         candidates <- path_candidates()

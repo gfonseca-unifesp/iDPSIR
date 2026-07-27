@@ -60,7 +60,7 @@ mod_wizard_server <- function(id) {
     ns <- session$ns
 
     data <- mod_data_server("data")
-    graph_result <- mod_graph_server("graph", data$schema, data$nodes, data$edges, data$graph)
+    graph_result <- mod_graph_server("graph", data$schema, data$nodes, data$edges, data$graph, data$positions, data$set_positions)
     responses <- mod_responses_server("responses", data$schema, data$nodes, data$edges, data$graph)
     metrics_result <- mod_metrics_server("metrics", data$schema, data$graph)
     mod_report_server(

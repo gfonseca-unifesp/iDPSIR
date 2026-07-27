@@ -41,8 +41,13 @@ Checagem rápida de sintaxe sem subir o app:
   vocabulários controlados de nós/arestas, legenda).
 - `R/validate.R` → validação de nós/arestas contra o schema.
 - `R/graph.R` → `build_igraph`, mapeamento visual por schema, layout em camadas
-  (`compute_layered_layout`), `build_network_visual` (tooltips, espessura por weight,
-  tracejado por confidence), `sanitize_edges`.
+  (`compute_layered_layout`) ou circular (`compute_circular_layout`, todos os nós
+  igualmente espaçados num anel — `compute_graph_layout` despacha entre os dois por
+  `layout_mode`), com sobreposição opcional de posições arrastadas manualmente
+  (`apply_manual_positions`, ver Fase 5 fast-follow "layout do grafo" no Estado
+  atual). `build_network_visual` (tooltips, espessura por weight, tracejado por
+  confidence, legendas de nó/aresta opcionais via `show_node_legend`/
+  `show_edge_legend`), `sanitize_edges`.
 - `R/metrics.R` → centralidades (grau, intermediação, proximidade, pagerank, eigenvector —
   com opção `weighted`; betweenness/closeness convertem weight→distância via `1/weight`),
   métricas gerais (densidade, diâmetro, transitividade, modularidade, componentes) e
@@ -137,6 +142,10 @@ Checagem rápida de sintaxe sem subir o app:
   do wizard); estado em `reactiveValues`, não-reativo até "Construir/Reconstruir grafo".
   Formulário de aresta tem um campo opcional "Threshold" (em branco na maioria das
   arestas) — ver Fase 5 fast-follow "threshold não-linear" no Estado atual.
+  `rv$positions` (campo do savepoint que existia desde a Fase 1 mas nunca tinha
+  nada escrevendo nele) ganhou um setter (`set_positions`) exposto no retorno do
+  módulo, pra `mod_graph.R` gravar as posições arrastadas manualmente — ver
+  Fase 5 fast-follow "layout do grafo".
 - `R/modules/mod_graph.R` → painel de exploração do grafo. Controles em caixas
   colapsáveis (`bs4Dash::box(collapsible = TRUE)`) empilhadas numa coluna à esquerda,
   agrupadas por tema (Display, Node & edge emphasis, Layout & spacing, Pathway
@@ -156,10 +165,18 @@ Checagem rápida de sintaxe sem subir o app:
   direções da sincronização cruzada tabela↔grafo limpava a seleção sozinha. Cada
   snapshot guarda `list(image=, caption=)` em vez de só o dataURL: `caption` é
   montada em `build_snapshot_caption()` a partir dos `input$...` ativos no momento
-  do clique (cor/paleta ou comunidade+algoritmo, filtros de subsistema/temporal,
-  base do tamanho do nó, base da espessura da aresta + limiar de confiança, e o
-  caminho destacado se houver um selecionado) — vira a legenda da figura na aba
-  Report.
+  do clique (layout ativo, cor/paleta ou comunidade+algoritmo, filtros de
+  subsistema/temporal, base do tamanho do nó, base da espessura da aresta +
+  limiar de confiança, e o caminho destacado se houver um selecionado) — vira
+  a legenda da figura na aba Report. Fast-follow "layout do grafo": dropdown
+  "Layout" (Layered by category / Circular) na caixa Display; arrastar um nó
+  o fixa no lugar (`fixed.x`/`fixed.y`, ver `R/graph.R`) e a posição é enviada
+  ao servidor via evento `dragEnd` do vis.js, guardada em `positions`/
+  `set_positions` (passados de `mod_data.R`, ver abaixo) — sobrevive a trocas
+  de filtro/cor e a salvar/recarregar o savepoint, não só ao render atual.
+  Botão "Reset dragged positions" limpa todas as posições manuais de uma vez.
+  Checkboxes "Show category/community legend"/"Show edge-type legend" na
+  caixa Display escondem a legenda por completo quando ambos desligados.
 - `R/modules/mod_metrics.R` → painel único de métricas (Gerais / Centralidades / Descritores DPSIR).
   `mod_metrics_server` retorna `centrality_params` (reactive com `directed`/
   `normalized`/`weighted`, os mesmos toggles usados na tabela em tela) para a aba
@@ -899,6 +916,69 @@ no repo (relevante pra uso público, já que o README convida
 `shiny::runGitHub()`); sem `renv.lock`/`tests/` (já sinalizado no próprio
 README como "ainda planejado").
 
+**Fast-follow "layout do grafo"**, a pedido do usuário ao revisar o app antes
+do release: o exemplo de pescas (5 nós, 1 por categoria) sempre desenhava
+como uma linha reta — não é um bug de renderização, é consequência direta de
+`compute_layered_layout` (X fixo por categoria, Y só se espalha *dentro* de
+uma categoria — com 1 nó por categoria, Y=0 pra todo mundo). Pra um ciclo de
+feedback (o assunto central da Fase 5), isso é ruim: a aresta que fecha o
+loop precisa arquear por cima do diagrama inteiro em vez de parecer um loop.
+Segundo problema relatado, causa diferente: arrastar um nó não "grudava" —
+`nodes$fixed.y` era sempre `FALSE`, então o solver de física (`avoidOverlap`)
+continuava reposicionando o nó verticalmente mesmo depois do usuário soltar o
+mouse. Um terceiro achado, não relatado mas descoberto ao investigar o
+segundo: o campo `positions` do savepoint (existe desde a Fase 1) nunca teve
+nada escrevendo nele — mesmo sem a física brigando, um rebuild ou reload
+esqueceria qualquer arranjo manual de qualquer forma.
+
+Três correções, mantendo `check_stability`/`press_perturbation`/etc.
+intocados (mudança é só visual): (1) `compute_circular_layout` nova em
+`R/graph.R` — todos os nós igualmente espaçados num anel, raio cresce com o
+número de nós, ignorando categoria; dropdown "Layout" na caixa Display
+alterna entre "Layered by category" e "Circular". (2) `fixed.y` passou a ser
+`TRUE` para nós arrastados manualmente (`nodes$id %in% manually_placed`) e
+para *todos* os nós em modo circular (um anel geométrico preciso não deveria
+ser perturbado por física) — nós não-arrastados em modo layered continuam
+com Y livre, então "Avoid node overlap" não quebrou pra quem não arrasta
+nada. (3) Evento `dragEnd` do vis.js (`visEvents()`, mesmo padrão do `select`
+já existente) envia a posição final pro servidor, que grava em
+`mod_data.R`'s `rv$positions` via um setter novo (`set_positions`) — o campo
+do savepoint finalmente ganhou um escritor. Botão "Reset dragged positions"
+limpa tudo de uma vez (`set_positions(NULL)`).
+
+**Bug real, encontrado só ao testar em runtime** (não em checagem de
+sintaxe, nem óbvio por leitura de código): a primeira versão do parser do
+lado do servidor assumia que `input$node_drag` chegaria como um data.frame
+(pra 2+ nós arrastados) ou uma lista aninhada (pra 1 nó) — quebrou
+imediatamente com "$ operator is invalid for atomic vectors" assim que
+testado de verdade. Depurado com `message(str(...))` no log do servidor: a
+deserialização de JSON do Shiny achata um array de objetos `{id,x,y}` num
+único **vetor nomeado com nomes repetidos** (`c(id=,x=,y=,id=,x=,y=,...)`),
+tanto pra 1 nó quanto pra vários — nem data.frame, nem lista de listas.
+Corrigido lendo por nome (`payload[names(payload)=="id"]`, etc.) em vez de
+por posição/estrutura, o que funciona igual pra 1 ou N nós arrastados de
+uma vez (drag múltiplo, com `multiselect=TRUE` já ligado em `visInteraction`).
+
+Também aproveitado: `show_node_legend`/`show_edge_legend` (checkboxes na
+caixa Display) tornam `visLegend()` inteiramente condicional em
+`build_network_visual`/`build_community_visual` — com os dois desligados, a
+chamada nem roda, sem `<div>` de legenda vazio sobrando.
+
+Testado ponta a ponta rodando o app de verdade: savepoint de pescas
+carregado, layout circular confirmado formando um anel de verdade (`getPositions()`
+via JS batendo com a fórmula — raio=200, ângulos em incrementos de 72°);
+arrastar D1 (via `Shiny.setInputValue` simulando o evento `dragEnd`, já que
+um drag de mouse de verdade não é viável neste ambiente de teste) prende o
+nó exatamente na posição solta enquanto os outros nós continuam reagindo à
+física normalmente; "Reset dragged positions" devolve D1 à posição
+calculada; savepoint baixado contém `"positions":[{"id":"D1","x":500,"y":-300}]`
+de verdade (não mais sempre vazio); savepoint recarregado (via `fetch()` do
+link de download, reinjetado como upload) reconstrói o grafo com D1 já na
+posição salva, sem precisar arrastar de novo. Legendas somem e voltam
+corretamente ao alternar os checkboxes (confirmado inspecionando o `<div>`
+`legend<containerId>` diretamente no DOM, não só o objeto do widget). Sem
+erro no console do servidor em nenhum passo, depois de corrigido o parser.
+
 ## Próximo
 
 Fase 5 está completa (Marcos A-D). Todos os 4 itens da lista pedida pelo
@@ -906,7 +986,12 @@ usuário pós-Fase 5 (1: exemplo didático, 2a: passos até neutralizar, 2b:
 threshold opcional por aresta, 3: qualidade das figuras, 4: legendas/
 parametrização) estão feitos. `main` sincronizada com o GitHub, README
 atualizado, tutorial acessível de dentro do app, dois arquivos órfãos
-removidos.
+removidos, layout circular + posições manuais persistentes + legendas
+opcionais no Graph.
+
+Pedido pelo usuário mas ainda não definido: "estrela"/"rosa" como layouts
+adicionais — precisa de uma conversa pra fixar o que cada termo significa
+antes de implementar (ver discussão registrada na sessão).
 
 Retomar matriz de conexões livre e aninhamento hierárquico de níveis (Fase 2, itens
 restantes) quando desenhados. Considerar incluir cenários salvos no savepoint (hoje

@@ -139,6 +139,57 @@ compute_layered_layout <- function(nodes, schema, x_spacing = 200, y_spacing = 8
 }
 
 # =====================================================
+# LAYOUT CIRCULAR (todos os nos igualmente espacados num
+# anel, ignorando categoria - le ciclos/loops de feedback
+# muito melhor que colunas fixas por categoria: a aresta
+# que fecha o loop vira só mais uma corda do círculo, em
+# vez de um arco cruzando o diagrama inteiro)
+# =====================================================
+
+compute_circular_layout <- function(nodes, x_spacing = 200) {
+  n <- nrow(nodes)
+
+  if (n == 0) {
+    return(data.frame(id = character(), x = numeric(), y = numeric(), stringsAsFactors = FALSE))
+  }
+
+  # Raio cresce com o numero de nos para eles nao se amontoarem no anel.
+  radius <- max(x_spacing, x_spacing * n / (2 * pi))
+  angle <- 2 * pi * (seq_len(n) - 1) / n - pi / 2
+
+  data.frame(
+    id = nodes$id,
+    x = radius * cos(angle),
+    y = radius * sin(angle),
+    stringsAsFactors = FALSE
+  )
+}
+
+compute_graph_layout <- function(nodes, schema, layout_mode = "layered", x_spacing = 200, y_spacing = 80) {
+  if (identical(layout_mode, "circular")) {
+    compute_circular_layout(nodes, x_spacing = x_spacing)
+  } else {
+    compute_layered_layout(nodes, schema, x_spacing = x_spacing, y_spacing = y_spacing)
+  }
+}
+
+# Sobrepoe posicoes arrastadas manualmente (ver "SAVE CURRENT VIEW"/drag
+# handling em mod_graph.R) por cima do layout computado - so afeta os nos
+# que o usuario de fato arrastou; o resto continua na posicao calculada.
+apply_manual_positions <- function(layout, manual_positions) {
+  if (is.null(manual_positions) || nrow(manual_positions) == 0) {
+    return(layout)
+  }
+
+  idx <- match(manual_positions$id, layout$id)
+  valid <- !is.na(idx)
+  layout$x[idx[valid]] <- manual_positions$x[valid]
+  layout$y[idx[valid]] <- manual_positions$y[valid]
+
+  layout
+}
+
+# =====================================================
 # TOOLTIPS
 # =====================================================
 
@@ -300,7 +351,11 @@ build_network_visual <- function(
     avoid_overlap = 0.5,
     node_font_size = 14,
     legend_font_size = 14,
-    highlighted_nodes = NULL
+    highlighted_nodes = NULL,
+    layout_mode = "layered",
+    manual_positions = NULL,
+    show_node_legend = TRUE,
+    show_edge_legend = TRUE
 ) {
   req(nodes)
 
@@ -326,13 +381,22 @@ build_network_visual <- function(
   edges <- edges[edges$from %in% valid_nodes & edges$to %in% valid_nodes, ]
 
   # ===================================================
-  # LAYERED LAYOUT (fixed X per category, free Y)
+  # LAYOUT (layered by category, or circular; manually
+  # dragged positions override either on a per-node basis)
   # ===================================================
 
-  layout <- compute_layered_layout(nodes, schema, x_spacing = x_spacing, y_spacing = y_spacing)
+  layout <- compute_graph_layout(nodes, schema, layout_mode = layout_mode, x_spacing = x_spacing, y_spacing = y_spacing)
+  layout <- apply_manual_positions(layout, manual_positions)
   nodes <- merge(nodes, layout, by = "id", sort = FALSE)
+
+  # Circular mode is a precise ring - physics would only distort it, so
+  # every node is pinned. Layered mode keeps Y free (so the "avoid overlap"
+  # physics slider still spreads out same-category nodes) EXCEPT for nodes
+  # the user has actually dragged, which get pinned in place so they stop
+  # drifting back under the solver - the specific complaint this fixes.
+  manually_placed <- if (!is.null(manual_positions) && nrow(manual_positions) > 0) manual_positions$id else character()
   nodes$`fixed.x` <- TRUE
-  nodes$`fixed.y` <- FALSE
+  nodes$`fixed.y` <- identical(layout_mode, "circular") | nodes$id %in% manually_placed
 
   # ===================================================
   # NODE SIZE (degree, optionally weighted by edge strength)
@@ -378,7 +442,7 @@ build_network_visual <- function(
   legend_edges <- build_edge_legend(confidence_threshold)
   legend_edges$`font.size` <- legend_font_size
 
-  visNetwork(
+  widget <- visNetwork(
     nodes,
     edges,
     width = "100%",
@@ -413,14 +477,20 @@ build_network_visual <- function(
         hover = TRUE
       ),
       selectedBy = "group"
-    ) %>%
-    visLegend(
-      useGroups = FALSE,
-      addNodes = legend_nodes,
-      addEdges = legend_edges,
-      position = "right",
-      main = "DPSIR"
     )
+
+  if (isTRUE(show_node_legend) || isTRUE(show_edge_legend)) {
+    widget <- widget %>%
+      visLegend(
+        useGroups = FALSE,
+        addNodes = if (isTRUE(show_node_legend)) legend_nodes else NULL,
+        addEdges = if (isTRUE(show_edge_legend)) legend_edges else NULL,
+        position = "right",
+        main = "DPSIR"
+      )
+  }
+
+  widget
 }
 
 # =====================================================
@@ -455,7 +525,11 @@ build_community_visual <- function(
     y_spacing = 80,
     avoid_overlap = 0.5,
     node_font_size = 14,
-    legend_font_size = 14
+    legend_font_size = 14,
+    layout_mode = "layered",
+    manual_positions = NULL,
+    show_node_legend = TRUE,
+    show_edge_legend = TRUE
 ) {
   req(nodes)
 
@@ -479,7 +553,7 @@ build_community_visual <- function(
   edges <- edges[edges$from %in% valid_nodes & edges$to %in% valid_nodes, ]
 
   # ===================================================
-  # COLOR/GROUP BY COMMUNITY (same layered X/Y as the main graph)
+  # COLOR/GROUP BY COMMUNITY (same layout as the main graph)
   # ===================================================
 
   community_labels <- setNames(paste("Community", unname(membership)), names(membership))
@@ -490,10 +564,13 @@ build_community_visual <- function(
   nodes$color <- unname(community_colors[nodes$group])
   nodes$shape <- "dot"
 
-  layout <- compute_layered_layout(nodes, schema, x_spacing = x_spacing, y_spacing = y_spacing)
+  layout <- compute_graph_layout(nodes, schema, layout_mode = layout_mode, x_spacing = x_spacing, y_spacing = y_spacing)
+  layout <- apply_manual_positions(layout, manual_positions)
   nodes <- merge(nodes, layout, by = "id", sort = FALSE)
+
+  manually_placed <- if (!is.null(manual_positions) && nrow(manual_positions) > 0) manual_positions$id else character()
   nodes$`fixed.x` <- TRUE
-  nodes$`fixed.y` <- FALSE
+  nodes$`fixed.y` <- identical(layout_mode, "circular") | nodes$id %in% manually_placed
 
   nodes <- size_nodes_by_degree(nodes, graph, node_size_mode, node_size_weighted)
   nodes <- border_by_uncertainty(nodes)
@@ -507,7 +584,7 @@ build_community_visual <- function(
   legend_edges <- build_edge_legend(confidence_threshold)
   legend_edges$`font.size` <- legend_font_size
 
-  visNetwork(
+  widget <- visNetwork(
     nodes,
     edges,
     width = "100%",
@@ -542,14 +619,20 @@ build_community_visual <- function(
         hover = TRUE
       ),
       selectedBy = "group"
-    ) %>%
-    visLegend(
-      useGroups = FALSE,
-      addNodes = legend_nodes,
-      addEdges = legend_edges,
-      position = "right",
-      main = "Community"
     )
+
+  if (isTRUE(show_node_legend) || isTRUE(show_edge_legend)) {
+    widget <- widget %>%
+      visLegend(
+        useGroups = FALSE,
+        addNodes = if (isTRUE(show_node_legend)) legend_nodes else NULL,
+        addEdges = if (isTRUE(show_edge_legend)) legend_edges else NULL,
+        position = "right",
+        main = "Community"
+      )
+  }
+
+  widget
 }
 
 # =====================================================
