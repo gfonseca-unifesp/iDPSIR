@@ -1051,6 +1051,64 @@ corretamente ao alternar os checkboxes (confirmado inspecionando o `<div>`
 `legend<containerId>` diretamente no DOM, não só o objeto do widget). Sem
 erro no console do servidor em nenhum passo, depois de corrigido o parser.
 
+**Bug real pós-lançamento: nó arrastado travava depois do primeiro drag,
+não aceitava mais mudanças.** Reportado pelo usuário já em uso, bem depois
+do fast-follow acima ter sido dado como testado — porque aquele teste só
+simulava o evento `dragEnd` UMA vez (`Shiny.setInputValue`), nunca um
+SEGUNDO drag no mesmo nó, que é exatamente onde o bug aparece. Investigado
+lendo o código-fonte minificado do `vis-network.js` que o pacote
+`visNetwork` empacota (não assumido por documentação ou memória — greppado
+direto): `onDragStart` tira uma "foto" do `fixed.x`/`fixed.y` de cada nó
+selecionado no **início** de cada gesto de arrastar
+(`xFixed:r.options.fixed.x,yFixed:r.options.fixed.y`) e só deixa `onDrag`
+atualizar aquele eixo se a foto disser `false`; `onDragEnd` restaura os
+valores originais **na instância de rede em memória**. Isso funciona bem
+dentro de uma única sessão do widget — mas nosso código pinava um nó
+arrastado gravando `fixed.y = TRUE` no **próximo re-render completo**
+(`renderVisNetwork` reconstrói um `vis.Network` novo do zero a cada
+`positions()` mudar), e esse novo widget nasce com `fixed.y = TRUE` já
+"de fábrica" pro nó que foi arrastado — não há "instância anterior" pra
+restaurar nada. Resultado: no segundo drag desse nó, `onDragStart` tira a
+foto e vê `yFixed = TRUE`, e `onDrag` nunca mais atualiza a posição —
+o nó trava, exatamente o relato do usuário.
+
+Corrigido trocando o mecanismo de pino: `fixed.y` volta a ser **sempre
+`FALSE`** (então todo drag, não só o primeiro, é respeitado), e quem
+impede o nó de derivar sob a física entre um drag e outro passa a ser
+`physics = FALSE` nesse nó específico — opção que o `onDragStart`/`onDrag`
+do vis-network **nunca consulta** pra decidir se move o nó, então não tem
+como travar o drag por essa via. `fixed.x` continua sempre `TRUE` (não
+mudou; nunca foi a parte quebrada, e nós nunca puderam ser arrastados
+horizontalmente mesmo antes deste bug — mantém o nó na coluna da
+categoria DPSIR, comportamento intencional). Modo circular, que antes
+pinava todo nó com `fixed.x=TRUE,fixed.y=TRUE` desde o primeiro render
+(ou seja, **nenhum** nó nunca foi arrastável em modo circular, um segundo
+bug latente que ninguém tinha reportado ainda), passou a usar
+`physics=FALSE` em todo nó pelo mesmo motivo — mantém o anel preciso e
+libera o drag ao mesmo tempo.
+
+Verificado sem depender de um drag de mouse real (o ambiente de teste
+não tem o Browser pane com renderização de tela disponível nesta sessão,
+então nem `computer{action:"screenshot"}` nem eventos DOM sintéticos
+`PointerEvent`/`MouseEvent` disparam o reconhecimento de gesto do
+Hammer.js que o vis-network usa por baixo): em vez disso, cada ciclo
+completo "arrastar → salvar posição no servidor → re-render" foi
+disparado via `Shiny.setInputValue('...node_drag', [{id,x,y}], ...)`
+(o mesmo payload em array que o handler `dragEnd` real envia — usar um
+objeto solto em vez de array reproduziu de propósito o erro antigo "$
+operator is invalid for atomic vectors", confirmando que o parser só
+aceita o formato real), e o estado resultante do nó foi lido direto do
+widget (`network.body.data.nodes.get('D1')`) depois de cada ciclo: após
+o primeiro drag, `fixed:{x:true,y:false}, physics:false` (antes do fix
+teria sido `fixed:{x:true,y:true}`, o estado comprovadamente travado);
+repetido um segundo drag no mesmo nó — posição atualiza normalmente,
+mesmo `fixed`/`physics` corretos; "Reset dragged positions" devolve o nó
+a `physics:true` e à posição calculada do layout. Sem erro no console do
+servidor em nenhum ciclo. Suíte `testthat` completa re-rodada (sem
+mudança de contagem — o fix é só de `R/graph.R`/visual, fora do núcleo
+numérico coberto pelos testes) e checagem de sintaxe de todos os arquivos
+`R/`, ambas limpas.
+
 **Roadmap de publicação (`ROADMAP_MELHORIAS_iDPSIR.md`) — rumo a submissão
 JOSS/SoftwareX.** O usuário trouxe um roadmap externo (Fases 6-11, escrito
 para ser executado incrementalmente) e confirmou: alvo é submissão real, não
