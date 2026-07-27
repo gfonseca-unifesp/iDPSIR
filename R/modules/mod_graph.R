@@ -239,10 +239,10 @@ mod_graph_server <- function(id, schema, nodes, edges, graph, positions, set_pos
       # converted to undirected to avoid an error.
       switch(
         input$community_algorithm,
-        "Louvain" = cluster_louvain(as.undirected(g)),
+        "Louvain" = cluster_louvain(as_undirected(g)),
         "Walktrap" = cluster_walktrap(g),
         "Infomap" = cluster_infomap(g),
-        "Label Propagation" = cluster_label_prop(as.undirected(g))
+        "Label Propagation" = cluster_label_prop(as_undirected(g))
       )
     })
 

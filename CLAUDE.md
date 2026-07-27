@@ -251,6 +251,8 @@ Checagem rápida de sintaxe sem subir o app:
   `docs/tutorial.html` (servido pelo `addResourcePath("tutorial", "docs")` em
   `global.R`) numa aba nova — ver Estado atual.
 - `data/` → CSVs de exemplo.
+- `tests/testthat.R`, `tests/testthat/*.R` → testes automatizados do núcleo
+  numérico (item 6.3 do roadmap de publicação) — ver Estado atual.
 
 Ao adicionar/remover um arquivo em `R/`, atualize os `source()` em `global.R`.
 
@@ -1042,6 +1044,50 @@ marcado, relatório baixado contendo `<h2>References</h2>` com a tabela
 Link/Reference correta e numerada em sequência com as demais tabelas
 ("Table 2." nesse teste) — sem erro no console do servidor em nenhum passo.
 
+**Item 6.3 concluído: testes `testthat` do núcleo numérico.** `tests/testthat.R`
+(runner) + `tests/testthat/helper-setup.R` + quatro arquivos de teste
+(`test-loop_analysis.R`, `test-metrics.R`, `test-io.R`, `test-validate.R`),
+77 expectativas, todas passando. Como o app ainda não é um pacote R instalável
+(item 6.1, adiado), `helper-setup.R` **não** faz `source("global.R")` — isso
+puxaria `library(shiny)`/`bs4Dash`/`DT`/etc. e rodaria o auto-install de
+pacotes à toa, já que os testes só exercitam `schema.R`/`validate.R`/`graph.R`/
+`metrics.R`/`loop_analysis.R`/`io.R`, nenhum dos quais precisa de UI. Só
+`library(igraph)` + os seis `source()` relevantes.
+
+**Achado real ao rodar pela primeira vez, não assumido**: `testthat::test_dir()`
+executa cada `helper-*.R`/`test-*.R` com o *working directory* setado pra
+dentro de `tests/testthat/` (não o diretório de onde `test_dir()` foi chamado)
+— confirmado empiricamente depois que `source("R/schema.R")` falhou com
+"arquivo não encontrado" mesmo rodando o runner da raiz do repo. Corrigido
+usando `"../../R/..."` em vez de `"R/..."` tanto no helper quanto nos
+`read_savepoint("../../docs/example_fisheries.idpsir.json")` dos testes que
+usam o exemplo de pescas como fixture.
+
+**Achado real de quebra**, também só ao rodar de verdade (não em checagem de
+sintaxe): `as.undirected()` está deprecated desde igraph 2.1.0 (substituído
+por `as_undirected()`) — surgiu como *warning* rodando os testes de
+`compute_all_metrics(directed=FALSE)`, não algo que eu tivesse ido procurar.
+Corrigido nos dois arquivos **sourceados** que ainda usavam a forma antiga
+(`R/metrics.R`, `R/modules/mod_graph.R`); `R/modules/mod_communities.R` (não
+sourceado desde a Fase 4.2) foi deixado como estava — não vale a pena manter
+código morto atualizado. Testado ponta a ponta rodando o app de verdade
+depois da troca: "Color nodes by: Community" no savepoint de pescas continua
+detectando comunidades e colorindo o grafo sem erro (Louvain sobre o grafo
+não-direcionado via `as_undirected()`), confirmado lendo os grupos de cada
+nó diretamente do widget vis.js via JS.
+
+Dois exemplos numéricos usados como fixture, ambos verificados antes de virar
+teste permanente (nunca a partir de suposição): (1) a cadeia trófica clássica
+de 3 espécies (Recurso→Consumidor→Predador, só o Recurso com autorregulação)
+— construída como matriz `A` direto, contornando `build_igraph()`/o schema de
+propósito, já que o schema proíbe o autoloop que essa autorregulação exige;
+autovalores/imediato/equilíbrio conferidos com `eigen()`/álgebra manual antes
+de virar `expect_equal()`; (2) `docs/example_fisheries.idpsir.json`, cujos
+números (imediato -0.35 em D1, equilíbrio -0.4667 em I1, 2 passos até 90%,
+100% de concordância na robustez) já tinham sido verificados de forma
+independente múltiplas vezes nesta sessão antes desta rodada de testes —
+reaproveitados como regressão, não recalculados de olho fechado.
+
 ## Próximo
 
 Fase 5 está completa (Marcos A-D). Todos os 4 itens da lista pós-Fase 5 (1:
@@ -1054,8 +1100,7 @@ opcionais no Graph.
 **Trabalhando agora no roadmap de publicação** (`ROADMAP_MELHORIAS_iDPSIR.md`),
 ordem combinada com o usuário:
 - [x] **7.3** — referência/DOI por aresta (concluído, ver acima).
-- [ ] **6.3** — testes `testthat` do núcleo numérico (`R/loop_analysis.R`
-  principalmente; também `R/metrics.R`, `R/io.R`, `R/validate.R`) — próximo.
+- [x] **6.3** — testes `testthat` do núcleo numérico (concluído, ver acima).
 - [ ] **6.1** — LICENSE (MIT, já confirmado)/CITATION.cff/DESCRIPTION — por
   último, aguardando lista de coautores do usuário.
 - Itens 6.2, 6.4, 7.1, 7.2, 8.1 do roadmap ainda não escalonados — retomar

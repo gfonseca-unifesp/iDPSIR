@@ -93,7 +93,7 @@ compute_communities <- function(g) {
     return(NULL)
   }
 
-  cluster_louvain(as.undirected(g))
+  cluster_louvain(as_undirected(g))
 }
 
 compute_density <- function(g) {
@@ -151,7 +151,7 @@ compute_all_metrics <- function(g, directed = TRUE, normalized = TRUE, weighted 
     node_labels <- V(g)$name
   }
 
-  g_analysis <- if (isTRUE(directed)) g else as.undirected(g)
+  g_analysis <- if (isTRUE(directed)) g else as_undirected(g)
 
   data.frame(
     id = V(g)$name,

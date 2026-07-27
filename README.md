@@ -28,6 +28,27 @@ Or, without cloning the repo:
 shiny::runGitHub("iDPSIR", "gfonseca-unifesp", "main")
 ```
 
+## Testing
+
+The scientific core (`R/loop_analysis.R`, `R/metrics.R`, `R/io.R`, `R/validate.R`) has
+an automated `testthat` suite, checked against hand-verified numeric examples (a
+classic stable trophic-chain matrix and the fisheries worked example). Run it from the
+project root:
+
+```r
+testthat::test_dir("tests/testthat")
+```
+
+or from a shell:
+
+```bash
+Rscript tests/testthat.R
+```
+
+Requires the `testthat` package (not a runtime dependency of the app itself, so it's
+not auto-installed by `global.R` — install it with `install.packages("testthat")` if
+missing).
+
 ## Structure
 
 ```
@@ -58,7 +79,11 @@ iDPSIR/
 │   └── server_main.R           # top-level server (ina_server)
 ├── data/                      # example data (sample_nodes.csv, sample_edges.csv)
 ├── docs/                      # getting-started tutorial (tutorial.html) and a worked-example savepoint (example_fisheries.idpsir.json)
+├── tests/
+│   ├── testthat.R             # test runner: Rscript tests/testthat.R
+│   └── testthat/               # tests for the scientific core (loop_analysis, metrics, io, validate)
 ├── PLANO_iDPSIR.md            # restructuring plan and roadmap (in Portuguese)
+├── ROADMAP_MELHORIAS_iDPSIR.md # roadmap towards a JOSS/SoftwareX submission (in Portuguese)
 └── README.md
 ```
 
