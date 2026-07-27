@@ -32,6 +32,7 @@ create_empty_edges_table <- function() {
     interaction_type = character(),
     evidence_type = character(),
     threshold = numeric(),
+    reference = character(),
     stringsAsFactors = FALSE
   )
 }
@@ -470,7 +471,8 @@ mod_data_server <- function(id, seed = NULL) {
         weight = 1, confidence = 1,
         interaction_type = get_interaction_types()[1],
         evidence_type = get_evidence_types()[1],
-        threshold = NA_real_
+        threshold = NA_real_,
+        reference = ""
       )
 
       modalDialog(
@@ -487,6 +489,12 @@ mod_data_server <- function(id, seed = NULL) {
           "Leave blank for most edges. Only used by the Scenarios tab's trajectory",
           "chart: how much the source factor has to change (in this scenario) before",
           "this edge switches on, instead of always contributing proportionally."
+        ),
+        textInput(ns("em_reference"), "Reference (optional)", value = d$reference, placeholder = "DOI, URL, or citation"),
+        tags$p(
+          class = "text-muted", style = "font-size: 13px;",
+          "The evidence this link is based on - shown on hover and listed in the",
+          "report, so a reader can trace any prediction back to its source."
         ),
         footer = tagList(
           modalButton("Cancel"),
@@ -552,6 +560,7 @@ mod_data_server <- function(id, seed = NULL) {
         interaction_type = input$em_interaction,
         evidence_type = input$em_evidence,
         threshold = if (is.null(threshold)) NA_real_ else threshold,
+        reference = trimws(input$em_reference %||% ""),
         stringsAsFactors = FALSE
       )
 

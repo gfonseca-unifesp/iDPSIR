@@ -50,6 +50,7 @@ build_full_report_html <- function(
     include_centralities = FALSE,
     centrality_params = list(directed = TRUE, normalized = TRUE, weighted = FALSE),
     include_descriptors = FALSE,
+    include_references = FALSE,
     saved_scenarios = list(),
     selected_scenario_names = character()
 ) {
@@ -189,6 +190,30 @@ build_full_report_html <- function(
       report_html_table(summary_df),
       caption_tag("Table", next_table_n(), "Count of nodes whose equilibrium effect improves, worsens, or stays stable under each scenario.")
     ))
+  }
+
+  if (isTRUE(include_references)) {
+    edges_df <- graph_to_edges(graph)
+
+    if (!is.null(edges_df$reference) && any(nzchar(edges_df$reference))) {
+      node_labels <- setNames(V(graph)$label, V(graph)$name)
+      ref_rows <- edges_df[nzchar(edges_df$reference), ]
+
+      ref_df <- data.frame(
+        Link = paste0(unname(node_labels[ref_rows$from]), " -> ", unname(node_labels[ref_rows$to])),
+        Reference = ref_rows$reference,
+        stringsAsFactors = FALSE
+      )
+
+      sections <- c(sections, list(
+        tags$h2("References"),
+        report_html_table(ref_df),
+        caption_tag(
+          "Table", next_table_n(),
+          "Sources cited for each edge that has one, letting a reader trace a prediction back to the evidence it's based on."
+        )
+      ))
+    }
   }
 
   tagList(sections)

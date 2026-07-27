@@ -48,6 +48,17 @@ normalize_dpsir_edges <- function(edges) {
     edges$threshold <- suppressWarnings(as.numeric(edges$threshold))
   }
 
+  # Optional free-text citation for the edge (DOI, URL, or a plain reference
+  # like "Smith et al. 2020") - deliberately not format-validated, the same
+  # way evidence_type's sibling free-text fields aren't. Defaults to "" so
+  # older savepoints/CSVs without the column keep working unchanged.
+  if (!"reference" %in% names(edges)) {
+    edges$reference <- ""
+  } else {
+    edges$reference[is.na(edges$reference)] <- ""
+    edges$reference <- trimws(as.character(edges$reference))
+  }
+
   edges
 }
 

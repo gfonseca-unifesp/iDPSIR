@@ -45,9 +45,10 @@ Checagem rápida de sintaxe sem subir o app:
   igualmente espaçados num anel — `compute_graph_layout` despacha entre os dois por
   `layout_mode`), com sobreposição opcional de posições arrastadas manualmente
   (`apply_manual_positions`, ver Fase 5 fast-follow "layout do grafo" no Estado
-  atual). `build_network_visual` (tooltips, espessura por weight, tracejado por
-  confidence, legendas de nó/aresta opcionais via `show_node_legend`/
-  `show_edge_legend`), `sanitize_edges`.
+  atual). `build_network_visual` (tooltips com `reference` da aresta quando
+  presente — ver item 7.3 do roadmap de publicação no Estado atual —, espessura
+  por weight, tracejado por confidence, legendas de nó/aresta opcionais via
+  `show_node_legend`/`show_edge_legend`), `sanitize_edges`.
 - `R/metrics.R` → centralidades (grau, intermediação, proximidade, pagerank, eigenvector —
   com opção `weighted`; betweenness/closeness convertem weight→distância via `1/weight`),
   métricas gerais (densidade, diâmetro, transitividade, modularidade, componentes) e
@@ -127,7 +128,8 @@ Checagem rápida de sintaxe sem subir o app:
 - `R/report.R` → montagem do relatório HTML autocontido (`build_full_report_html`,
   `report_html_table`, `format_report_cell`, `matrix_to_report_df`), usado só por
   `mod_report.R`. Seções (imagens de grafo salvas/métricas gerais/centralidades/
-  descritores/cenários) são todas opcionais via flags — nenhuma é recomputada aqui,
+  descritores/referências/cenários) são todas opcionais via flags — nenhuma é
+  recomputada aqui,
   só reaproveita as funções de `R/metrics.R`/`R/responses.R` já usadas nas outras
   abas. `graph_snapshots`/`selected_snapshot_names` viram uma seção "Network graph"
   com um `<h3>` + `<img>` por snapshot selecionado, não uma imagem única. Cada
@@ -138,10 +140,16 @@ Checagem rápida de sintaxe sem subir o app:
   igual ao de `compute_all_metrics()`) é repassado direto pra `compute_all_metrics()`
   na seção de Centralidades — antes o relatório sempre usava esses defaults
   hardcoded, ignorando o que o usuário tivesse configurado na aba Metrics.
+  Item 7.3 do roadmap de publicação: seção opcional "References", uma tabela
+  Link ("De -> Para" usando os rótulos dos nós) x Reference, uma linha por
+  aresta que tiver `reference` preenchido — omitida por completo se nenhuma
+  aresta tiver (ver Estado atual).
 - `R/modules/mod_data.R` → editor por formulário (passos Início/Modelo/Nós/Arestas/Revisar
   do wizard); estado em `reactiveValues`, não-reativo até "Construir/Reconstruir grafo".
   Formulário de aresta tem um campo opcional "Threshold" (em branco na maioria das
-  arestas) — ver Fase 5 fast-follow "threshold não-linear" no Estado atual.
+  arestas) — ver Fase 5 fast-follow "threshold não-linear" no Estado atual — e um
+  campo opcional "Reference" (texto livre, DOI/URL/citação) — ver item 7.3 do
+  roadmap de publicação no Estado atual.
   `rv$positions` (campo do savepoint que existia desde a Fase 1 mas nunca tinha
   nada escrevendo nele) ganhou um setter (`set_positions`) exposto no retorno do
   módulo, pra `mod_graph.R` gravar as posições arrastadas manualmente — ver
@@ -218,7 +226,8 @@ Checagem rápida de sintaxe sem subir o app:
   tem threshold, avisando que as tabelas de equilíbrio/robustez acima não
   refletem esse gatilho.
 - `R/modules/mod_report.R` → aba "Report" (última do Explorar): checkboxes para
-  métricas gerais/centralidades/descritores DPSIR, seleção múltipla de imagens de
+  métricas gerais/centralidades/descritores DPSIR/referências de aresta, seleção
+  múltipla de imagens de
   grafo salvas (`mod_graph.R`'s "Save current view for report") e seleção múltipla
   de cenários salvos (baseline sempre incluído) — mesmo padrão de tabela com
   `selection = "multiple"` para as duas. Um único botão "Download report (HTML)"
@@ -253,7 +262,9 @@ Ao adicionar/remover um arquivo em `R/`, atualize os `source()` em `global.R`.
 (`positive`/`negative` — sinal do efeito causal, usado tanto na cor da aresta quanto,
 futuramente, como sinal direto da matriz de interação da Fase 5), `evidence_type`,
 `threshold` (opcional, `NA` por padrão — ver Fase 5 fast-follow "threshold
-não-linear" abaixo; só usado pelo gráfico de trajetória em `mod_responses.R`).
+não-linear" abaixo; só usado pelo gráfico de trajetória em `mod_responses.R`),
+`reference` (opcional, `""` por padrão — texto livre/DOI/URL citando a evidência
+por trás da aresta, ver item 7.3 do roadmap de publicação abaixo).
 **Conexões DPSIR (padrão):** D→P, P→S, S→I, I→R, R→{D,P,S,I}.
 
 ## Estado atual
@@ -979,15 +990,78 @@ corretamente ao alternar os checkboxes (confirmado inspecionando o `<div>`
 `legend<containerId>` diretamente no DOM, não só o objeto do widget). Sem
 erro no console do servidor em nenhum passo, depois de corrigido o parser.
 
+**Roadmap de publicação (`ROADMAP_MELHORIAS_iDPSIR.md`) — rumo a submissão
+JOSS/SoftwareX.** O usuário trouxe um roadmap externo (Fases 6-11, escrito
+para ser executado incrementalmente) e confirmou: alvo é submissão real, não
+só "deixar robusto". Avaliação feita antes de aceitar o roadmap ao pé da
+letra — três ajustes técnicos registrados:
+- **Item 7.1 (determinância de sinal)** como escrito sugere computar via
+  "permanente" da matriz — isso é combinatorialmente inviável (Ryser: O(2ⁿ·n)),
+  trava em redes de ~20+ nós. `robustness_check()` (Marco D da Fase 5) já
+  implementa a via de simulação equivalente (reamostra pesos por confidence,
+  mede concordância de sinal) — 7.1 na prática é "formalizar/renomear no
+  vocabulário de Dambacher" o que já existe, não construir do zero.
+- **Item 6.2 (renv)** tem uma tensão não endereçada no roadmap: `renv` supõe
+  uma biblioteca por projeto persistente, mas `shiny::runGitHub()` baixa pra
+  um diretório temporário a cada execução — as duas coisas não se compõem de
+  graça, precisa de desenho explícito antes de implementar.
+- **Item 8.1 (shinylive)** é o item de maior incerteza técnica do roadmap
+  inteiro, apesar de listado como gating: o próprio roadmap pede pra
+  "validar bs4Dash" — bs4Dash carrega um tema AdminLTE3 completo com
+  dependências JS reais, compatibilidade com WASM é desconhecida até testar.
+  Recomendado um spike isolado antes de tratar como gate garantido.
+
+Ordem combinada com o usuário: **7.3 → 6.3 → 6.1** (6.1 fica por último —
+falta a lista completa de coautores pro `CITATION.cff`).
+
+**Item 7.3 concluído: referência/DOI por aresta.** Campo opcional `reference`
+(texto livre — DOI, URL, ou citação simples — deliberadamente **sem** validação
+de formato, mesma lógica de `evidence_type` e dos demais campos de texto livre
+do app) seguindo exatamente o mesmo padrão já estabelecido pelo `threshold`
+(fast-follow "threshold não-linear" acima): `R/validate.R`'s
+`normalize_dpsir_edges()` garante a coluna sempre presente (default `""`,
+não `NA`, pra casar com o padrão de `nzchar()`/`== ''` já usado em
+`interaction_type`/`evidence_type`); `R/modules/mod_data.R`'s formulário de
+aresta ganhou um `textInput` "Reference (optional)"; `R/graph.R`'s
+`build_edge_tooltip()` mostra a referência no hover; `R/report.R`'s
+`build_full_report_html()` ganhou `include_references` e uma seção
+"References" (tabela Link × Reference, uma linha por aresta com referência
+preenchida, omitida por completo se nenhuma aresta tiver) — `R/modules/mod_report.R`
+ganhou o checkbox correspondente. `data/sample_edges.csv` e
+`docs/example_fisheries.idpsir.json` ganharam a coluna (a maioria das arestas
+em branco; a aresta P1→S1 do exemplo de pescas, a mais monitorada da rede,
+ganhou uma citação ilustrativa — marcada explicitamente como "not a real
+source" pra não ser confundida com literatura de verdade).
+
+Testado ponta a ponta rodando o app de verdade: savepoint de pescas
+carregado (com a referência já no JSON), tabela de Arestas mostrando a coluna
+`reference` corretamente, grafo construído sem erro, tooltip da aresta P1→S1
+mostrando a citação completa (confirmado lendo `network.body.data.edges` via
+JS, não só inspeção visual), checkbox "Edge references" na aba Report
+marcado, relatório baixado contendo `<h2>References</h2>` com a tabela
+Link/Reference correta e numerada em sequência com as demais tabelas
+("Table 2." nesse teste) — sem erro no console do servidor em nenhum passo.
+
 ## Próximo
 
-Fase 5 está completa (Marcos A-D). Todos os 4 itens da lista pedida pelo
-usuário pós-Fase 5 (1: exemplo didático, 2a: passos até neutralizar, 2b:
-threshold opcional por aresta, 3: qualidade das figuras, 4: legendas/
-parametrização) estão feitos. `main` sincronizada com o GitHub, README
-atualizado, tutorial acessível de dentro do app, dois arquivos órfãos
-removidos, layout circular + posições manuais persistentes + legendas
+Fase 5 está completa (Marcos A-D). Todos os 4 itens da lista pós-Fase 5 (1:
+exemplo didático, 2a: passos até neutralizar, 2b: threshold opcional por
+aresta, 3: qualidade das figuras, 4: legendas/parametrização) estão feitos.
+`main` sincronizada com o GitHub, README atualizado, tutorial acessível de
+dentro do app, layout circular + posições manuais persistentes + legendas
 opcionais no Graph.
+
+**Trabalhando agora no roadmap de publicação** (`ROADMAP_MELHORIAS_iDPSIR.md`),
+ordem combinada com o usuário:
+- [x] **7.3** — referência/DOI por aresta (concluído, ver acima).
+- [ ] **6.3** — testes `testthat` do núcleo numérico (`R/loop_analysis.R`
+  principalmente; também `R/metrics.R`, `R/io.R`, `R/validate.R`) — próximo.
+- [ ] **6.1** — LICENSE (MIT, já confirmado)/CITATION.cff/DESCRIPTION — por
+  último, aguardando lista de coautores do usuário.
+- Itens 6.2, 6.4, 7.1, 7.2, 8.1 do roadmap ainda não escalonados — retomar
+  a conversa de priorização depois de 6.3/6.1, com as três ressalvas técnicas
+  acima em mente (7.1 sem permanente, 6.2 com desenho explícito pra
+  runGitHub(), 8.1 com spike antes de virar gate).
 
 Pedido pelo usuário mas ainda não definido: "estrela"/"rosa" como layouts
 adicionais — precisa de uma conversa pra fixar o que cada termo significa

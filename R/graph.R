@@ -13,6 +13,7 @@ create_empty_graph_edges <- function() {
     weight = numeric(),
     confidence = numeric(),
     threshold = numeric(),
+    reference = character(),
     arrows = character(),
     width = numeric(),
     stringsAsFactors = FALSE
@@ -211,7 +212,8 @@ build_edge_tooltip <- function(edges) {
     "Confidence: {ifelse(is.na(edges$confidence), '-', edges$confidence)}<br>",
     "Interaction: {ifelse(is.na(edges$interaction_type) | edges$interaction_type == '', '-', edges$interaction_type)}<br>",
     "Evidence: {ifelse(is.na(edges$evidence_type) | edges$evidence_type == '', '-', edges$evidence_type)}<br>",
-    "Threshold: {ifelse(is.na(edges$threshold), '-', edges$threshold)}"
+    "Threshold: {ifelse(is.na(edges$threshold), '-', edges$threshold)}<br>",
+    "Reference: {ifelse(is.na(edges$reference) | edges$reference == '', '-', edges$reference)}"
   )
 }
 

@@ -70,7 +70,8 @@ State, Impact, Response), `subsystem`, `uncertainty` (low/medium/high),
 
 **Edges** (`data/sample_edges.csv`): `from`, `to`, `weight`, `confidence` (0-1),
 `interaction_type` (positive/negative), `evidence_type`, `threshold` (optional,
-blank for most edges — see Scenarios below).
+blank for most edges — see Scenarios below), `reference` (optional DOI/URL/citation
+backing the link, listed in the report if included).
 
 **Default DPSIR connections:** Driver→Pressure, Pressure→State, State→Impact,
 Impact→Response, and Response→{Driver, Pressure, State, Impact}. The schema is
@@ -107,7 +108,8 @@ has four tabs:
 - **Metrics** — general network metrics, centralities, and DPSIR descriptors (gaps
   such as Impacts without a Response, or Pressures not covered by one).
 - **Report** — pick which sections (saved graph snapshots, metrics, centralities,
-  descriptors, saved scenarios) go into one self-contained downloadable HTML report.
+  descriptors, edge references, saved scenarios) go into one self-contained
+  downloadable HTML report.
 
 A savepoint (`.idpsir.json`) can be downloaded from any step and reloaded later to
 resume a project.

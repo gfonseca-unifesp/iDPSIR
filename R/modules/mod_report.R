@@ -198,7 +198,8 @@ mod_report_ui <- function(id) {
         h5("Sections"),
         checkboxInput(ns("include_general"), "General metrics", value = TRUE),
         checkboxInput(ns("include_centralities"), "Centralities", value = FALSE),
-        checkboxInput(ns("include_descriptors"), "DPSIR descriptors", value = FALSE)
+        checkboxInput(ns("include_descriptors"), "DPSIR descriptors", value = FALSE),
+        checkboxInput(ns("include_references"), "Edge references", value = FALSE)
       ),
       column(
         width = 4,
@@ -283,6 +284,7 @@ mod_report_server <- function(id, schema, nodes, edges, graph, saved_scenarios, 
           include_centralities = isTRUE(input$include_centralities),
           centrality_params = centrality_params(),
           include_descriptors = isTRUE(input$include_descriptors),
+          include_references = isTRUE(input$include_references),
           saved_scenarios = saved,
           selected_scenario_names = selected_scenario_names
         )

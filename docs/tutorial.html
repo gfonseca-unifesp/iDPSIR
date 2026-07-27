@@ -659,6 +659,7 @@ S1,Water quality decline,State,Water,medium,low,long</pre>
                     <tr><td class="key">interaction_type</td><td>positive / negative</td></tr>
                     <tr><td class="key">evidence_type</td><td>e.g. observational, monitoring</td></tr>
                     <tr><td class="key">threshold</td><td>Optional, leave blank for most edges (see Scenarios below)</td></tr>
+                    <tr><td class="key">reference</td><td>Optional citation (DOI, URL, or plain text) backing this link</td></tr>
                   </table>
                 </div>
                 <pre>from,to,weight,confidence,interaction_type,evidence_type
@@ -735,6 +736,7 @@ P1,S1,3,0.85,negative,monitoring</pre>
                 <tr><td class="key">interaction_type</td><td><code>positive</code> (the link increases its target) or <code>negative</code> (it decreases/mitigates it) — colors the edge red or green and appears in its tooltip.</td></tr>
                 <tr><td class="key">evidence_type</td><td>e.g. observational, expert_assessment, monitoring — where the link comes from, shown on hover.</td></tr>
                 <tr><td class="key">threshold</td><td>Optional — leave blank for most edges. Only affects the Scenarios tab's trajectory chart: this edge contributes nothing until the simulated change at its source factor crosses this value, instead of always scaling proportionally. Everything else (the equilibrium/robustness numbers, the graph itself) ignores it.</td></tr>
+                <tr><td class="key">reference</td><td>Optional — a DOI, URL, or plain citation backing this specific link. Shown on hover and, if you check "Edge references" on the Report tab, listed in a References section so a reader can trace any prediction back to its evidence.</td></tr>
               </table>
             </div>
           </div>
@@ -880,7 +882,7 @@ P1,S1,3,0.85,negative,monitoring</pre>
           <div class="tabmock-body">
             <div class="control">
               <div class="label">Sections<span class="widget">checkboxes</span></div>
-              <p>Network graph image, general metrics, centralities, DPSIR descriptors — check whichever apply.</p>
+              <p>Network graph image, general metrics, centralities, DPSIR descriptors, edge references — check whichever apply. "Edge references" adds a References section listing every edge that has one (Edges step), so a reader can trace a prediction back to its evidence.</p>
             </div>
             <div class="control">
               <div class="label">Scenarios<span class="widget">multi-select table</span></div>

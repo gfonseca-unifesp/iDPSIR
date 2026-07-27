@@ -3,9 +3,9 @@
   "metadata": {
     "project_name": "Example: Coastal fisheries",
     "author": "iDPSIR tutorial",
-    "created_at": "2026-07-26 17:23:58.421399",
+    "created_at": "2026-07-27 10:10:41.626885",
     "notes": "Worked example used in the getting-started tutorial (docs/tutorial.html): a single 5-node feedback loop (Driver to Response to Driver) demonstrating scenario simulation, immediate vs equilibrium effects, and the stability warning.",
-    "updated_at": "2026-07-26 17:23:58.421399"
+    "updated_at": "2026-07-27 10:10:41.626885"
   },
   "schema": [
     {
@@ -98,7 +98,8 @@
       "weight": 2,
       "confidence": 0.7,
       "interaction_type": "positive",
-      "evidence_type": "expert_assessment"
+      "evidence_type": "expert_assessment",
+      "reference": ""
     },
     {
       "from": "P1",
@@ -106,7 +107,8 @@
       "weight": 3,
       "confidence": 0.85,
       "interaction_type": "positive",
-      "evidence_type": "monitoring"
+      "evidence_type": "monitoring",
+      "reference": "Illustrative citation (not a real source) - Regional Fisheries Catch Monitoring Report, 2023"
     },
     {
       "from": "S1",
@@ -114,7 +116,8 @@
       "weight": 2.5,
       "confidence": 0.8,
       "interaction_type": "positive",
-      "evidence_type": "observational"
+      "evidence_type": "observational",
+      "reference": ""
     },
     {
       "from": "I1",
@@ -122,7 +125,8 @@
       "weight": 1.5,
       "confidence": 0.6,
       "interaction_type": "positive",
-      "evidence_type": "expert_assessment"
+      "evidence_type": "expert_assessment",
+      "reference": ""
     },
     {
       "from": "R1",
@@ -130,7 +134,8 @@
       "weight": 0.5,
       "confidence": 0.4,
       "interaction_type": "negative",
-      "evidence_type": "expert_assessment"
+      "evidence_type": "expert_assessment",
+      "reference": ""
     }
   ],
   "positions": {}
