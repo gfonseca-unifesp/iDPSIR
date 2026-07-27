@@ -11,7 +11,9 @@ a self-contained HTML report, all without requiring familiarity with graph theor
 
 New to iDPSIR? See the [getting-started tutorial](docs/tutorial.html) — it walks
 through every step and includes a worked example with a downloadable savepoint
-([`docs/example_fisheries.idpsir.json`](docs/example_fisheries.idpsir.json)).
+([`docs/example_fisheries.idpsir.json`](docs/example_fisheries.idpsir.json)). The
+same tutorial is one click away from inside the running app too, via the "Help"
+link in the top-right corner.
 
 ## How to run
 
@@ -114,27 +116,33 @@ savepoint, or combine two or more savepoints into one) → **Model** (schema/pal
 advanced) → **Nodes** → **Edges** → **Review and build** → **Explore**, which itself
 has four tabs:
 
-- **Graph** — layered DPSIR visualization with filters, node/edge emphasis, spacing
-  controls, and pathway highlighting. "Color nodes by" switches between DPSIR
-  category and detected community (Louvain/Walktrap/Infomap/Label Propagation,
-  redrawn with edges, not bare colored dots) without leaving the tab. Any view can
-  be saved as a named snapshot to include in the report.
+- **Graph** — layered (by DPSIR category) or circular layout, filters, node/edge
+  emphasis, spacing controls, and pathway highlighting. "Color nodes by" switches
+  between DPSIR category and detected community (Louvain/Walktrap/Infomap/Label
+  Propagation, redrawn with edges, not bare colored dots) without leaving the tab.
+  Dragging a node pins it in place (persisted in the savepoint, "Reset dragged
+  positions" clears it); category/community and edge-type legends can each be
+  toggled off. Any view can be saved as a named snapshot to include in the report.
 - **Scenarios** — turn on Response nodes at a given implementation strength and apply
   a combined scenario. Runs on loop analysis (Levins 1974): the signed, weighted graph
   becomes a community matrix, and activating a response is a sustained perturbation
   propagated through it, including any feedback loop. Shows the immediate (one-step)
-  and equilibrium (full feedback) effect on every factor, a plain-language stability
-  warning when the network's feedback loops aren't stable, how many steps it takes for
-  the effect to reach 90% of its projected value on each Impact ("when will this be
-  neutralized"), an optional step-by-step trajectory chart (respecting any per-edge
-  nonlinear `threshold` set in the Edges step), and an optional robustness check
-  against how confident each edge's weight is. Save a scenario and compare multiple
-  saved scenarios side by side.
+  and equilibrium (full feedback) effect on every factor with a sign confidence score
+  (% of simulations, resampling edge weights within their confidence range, that agree
+  on the predicted direction), a plain-language stability warning when the network's
+  feedback loops aren't stable, how many steps it takes for the effect to reach 90% of
+  its projected value on each Impact ("when will this be neutralized"), an optional
+  step-by-step trajectory chart (respecting any per-edge nonlinear `threshold` set in
+  the Edges step), an optional robustness check against how confident each edge's
+  weight is, and an optional ranking of which edges' weight most affects the result
+  ("which edges matter most"). Save a scenario and compare multiple saved scenarios
+  side by side.
 - **Metrics** — general network metrics, centralities, and DPSIR descriptors (gaps
   such as Impacts without a Response, or Pressures not covered by one).
 - **Report** — pick which sections (saved graph snapshots, metrics, centralities,
-  descriptors, edge references, saved scenarios) go into one self-contained
-  downloadable HTML report.
+  descriptors, edge references, saved scenarios, reproducibility info — R/package
+  versions and the parameters used in the stochastic analyses) go into one
+  self-contained downloadable HTML report.
 
 A savepoint (`.idpsir.json`) can be downloaded from any step and reloaded later to
 resume a project.

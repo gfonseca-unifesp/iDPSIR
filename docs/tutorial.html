@@ -781,6 +781,18 @@ P1,S1,3,0.85,negative,monitoring</pre>
           </div>
           <div class="tabmock-body">
             <div class="control">
+              <div class="label">Layout<span class="widget">dropdown</span></div>
+              <p>Switch between <strong>Layered by category</strong> (the default — each DPSIR category gets its own column) and <strong>Circular</strong> (every node equally spaced around a ring, ignoring category) — the circular option often reads better for a network built mostly around one feedback loop, where a layered layout forces the closing edge to arc all the way back across the diagram.</p>
+            </div>
+            <div class="control">
+              <div class="label">Drag a node<span class="widget">click + drag on the graph</span></div>
+              <p>Dragging a node pins it exactly where you drop it — it stays there through filter changes and survives saving/reloading the savepoint. "Reset dragged positions" (below the graph) clears every manual placement at once and goes back to the automatic layout.</p>
+            </div>
+            <div class="control">
+              <div class="label">Show category/community legend, Show edge-type legend<span class="widget">checkboxes</span></div>
+              <p>Turn either legend off if it's taking up space you'd rather give to the graph itself, e.g. before saving a snapshot for the report.</p>
+            </div>
+            <div class="control">
               <div class="label">Color palette<span class="widget">dropdown</span></div>
               <p>Switches all category colors at once — includes a colorblind-safe option.</p>
             </div>
@@ -830,7 +842,11 @@ P1,S1,3,0.85,negative,monitoring</pre>
             </div>
             <div class="control">
               <div class="label">Apply scenario<span class="widget">button</span></div>
-              <p>Runs the active response(s) through the network's feedback loops (see the worked example below) and shows "Effect on the network" — how many factors are affected and by how much, immediately vs. once the effect has fully propagated — plus "Effect on each factor": a plain <span class="chip improves">Improves</span> <span class="chip worsens">Worsens</span> <span class="chip stable">Stable</span> per node (exact scores stay available in the CSV/Excel export). If the network's feedback loops aren't stable, a plain-language warning appears above these tables — see the worked example for what that means and why it's common, not a sign of a broken model.</p>
+              <p>Runs the active response(s) through the network's feedback loops (see the worked example below) and shows "Effect on the network" — how many factors are affected and by how much, immediately vs. once the effect has fully propagated — plus "Effect on each factor": a plain <span class="chip improves">Improves</span> <span class="chip worsens">Worsens</span> <span class="chip stable">Stable</span> per node, alongside a <strong>Sign confidence (%)</strong> column (exact scores stay available in the CSV/Excel export). If the network's feedback loops aren't stable, a plain-language warning appears above these tables — see the worked example for what that means and why it's common, not a sign of a broken model.</p>
+            </div>
+            <div class="control">
+              <div class="label">Sign confidence (%)<span class="widget">column</span></div>
+              <p>How often 100 simulations — each one nudging every edge's weight within a range set by its confidence — agreed with the predicted direction (Improves/Worsens/Stable) shown next to it. A low number flags a prediction that's a coin flip once you account for how uncertain the underlying edges are, even if the equilibrium number itself looks decisive.</p>
             </div>
             <div class="control">
               <div class="label">When will Impacts be neutralized?<span class="widget">table</span></div>
@@ -842,7 +858,11 @@ P1,S1,3,0.85,negative,monitoring</pre>
             </div>
             <div class="control">
               <div class="label">Show robustness to uncertainty<span class="widget">optional, table</span></div>
-              <p>Reruns the scenario many times, each time nudging every edge's weight within a range set by its confidence, and reports what fraction of runs agreed on the direction (Improves/Worsens/Stable) for each factor — low agreement flags a conclusion that a more confident estimate of the network could easily flip.</p>
+              <p>The same check behind "Sign confidence (%)" above, but configurable — pick a different number of simulations and see the full table sorted from least to most reliable, instead of just the fixed 100-simulation score shown by default.</p>
+            </div>
+            <div class="control">
+              <div class="label">Show which edges matter most<span class="widget">optional, chart + table</span></div>
+              <p>Bumps each edge's weight up by 10%, one at a time, and measures how much this scenario's overall equilibrium effect moves — a bar chart plus a ranked table, useful for deciding which weight estimate is worth double-checking first if you're short on time to review every edge.</p>
             </div>
             <div class="control">
               <div class="label">Save this scenario<span class="widget">button</span></div>
@@ -882,7 +902,7 @@ P1,S1,3,0.85,negative,monitoring</pre>
           <div class="tabmock-body">
             <div class="control">
               <div class="label">Sections<span class="widget">checkboxes</span></div>
-              <p>Network graph image, general metrics, centralities, DPSIR descriptors, edge references — check whichever apply. "Edge references" adds a References section listing every edge that has one (Edges step), so a reader can trace a prediction back to its evidence.</p>
+              <p>Network graph image, general metrics, centralities, DPSIR descriptors, edge references, reproducibility info — check whichever apply. "Edge references" adds a References section listing every edge that has one (Edges step), so a reader can trace a prediction back to its evidence. "Reproducibility info" adds the R and package versions used to generate the report, plus the exact parameters behind the sign confidence/robustness/sensitivity figures (including the fixed random seed) — regenerating the report from the same savepoint reproduces the same numbers.</p>
             </div>
             <div class="control">
               <div class="label">Scenarios<span class="widget">multi-select table</span></div>
@@ -980,8 +1000,11 @@ P1,S1,3,0.85,negative,monitoring</pre>
         </div>
 
         <h3>Checking the two caveats yourself</h3>
-        <p>Still in this scenario, the two optional disclosures below the tables make
-          the warning above concrete instead of abstract:</p>
+        <p>"Effect on each factor" already shows a <strong>Sign confidence (%)</strong>
+          column next to Fisher income loss's <span class="chip improves">Improves</span> —
+          100%, in this example — without opening anything. The two optional disclosures
+          below the tables make that number (and the separate stability question) concrete
+          instead of abstract:</p>
         <div class="step">
           <div class="step-num">1</div>
           <div class="step-body">
@@ -1044,6 +1067,8 @@ P1,S1,3,0.85,negative,monitoring</pre>
           <div class="gloss-item"><dt>Density</dt><dd>How many of the possible connections in the network actually exist — higher means a more tightly linked system.</dd></div>
           <div class="gloss-item"><dt>Centrality</dt><dd>A family of scores for "how important is this node," measured in different ways (see Metrics above).</dd></div>
           <div class="gloss-item"><dt>Community</dt><dd>A cluster of nodes more connected to each other than to the rest of the network.</dd></div>
+          <div class="gloss-item"><dt>Sign confidence</dt><dd>How often a prediction's direction (Improves/Worsens/Stable) holds up across simulations that vary each edge's weight within its confidence range — low confidence means a more precise estimate of the network could flip the conclusion.</dd></div>
+          <div class="gloss-item"><dt>Edge sensitivity</dt><dd>How much a scenario's result would move if one edge's weight were nudged up 10% — the edges ranked highest are the ones most worth double-checking.</dd></div>
         </dl>
       </section>
 
