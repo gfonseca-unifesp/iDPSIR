@@ -262,6 +262,18 @@ test_that("global_sensitivity ranks edges by how much a 10% weight bump moves th
   expect_equal(sens$link[1], "Consumer -> Predator")
 })
 
+test_that("robustness_check with the default seed is reproducible across repeated calls regardless of prior RNG state (roadmap item 6.4)", {
+  g <- fisheries_graph()
+  press <- build_press_vector(g, active_ids = "R1", strengths = c(R1 = 0.7))
+
+  set.seed(999) # deliberately different from the function's own default seed
+  a <- robustness_check(g, press, n_simulations = 30)
+  set.seed(1) # a different prior RNG state again
+  b <- robustness_check(g, press, n_simulations = 30)
+
+  expect_identical(a, b)
+})
+
 test_that("global_sensitivity attributes zero influence to an edge whose source has zero baseline equilibrium", {
   # In the fisheries example (a single 5-node cycle), only I1 ends up with a
   # nonzero equilibrium effect - so only the one edge feeding INTO the node

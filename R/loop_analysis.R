@@ -318,7 +318,16 @@ classify_effect_sign <- function(x, threshold = 1e-9) {
 # imediato quando a matriz e singular) - da um uso real ao `confidence`,
 # que ate aqui so controlava o tracejado no grafo. `press` fica fixo (a
 # mesma resposta/forca do cenario) - so os pesos das arestas variam.
-robustness_check <- function(g, press, n_simulations = 100, spread = 0.5, threshold = 1e-9) {
+#
+# Roadmap item 6.4: `seed` fixo por padrao (`set.seed(seed)` logo antes de
+# reamostrar) - sem isso, aplicar o mesmo cenario duas vezes (ou gerar o
+# relatorio duas vezes a partir do mesmo savepoint) dava um "Sign confidence"
+# ligeiramente diferente a cada vez, so por causa do sorteio dos pesos, o
+# que contradiz a propria ideia de um relatorio reprodutivel. Com a semente
+# fixa, a mesma chamada (mesmo grafo/press/n_simulations/spread/seed) sempre
+# devolve exatamente o mesmo resultado, independente do estado do RNG antes
+# de chamar.
+robustness_check <- function(g, press, n_simulations = 100, spread = 0.5, threshold = 1e-9, seed = 42) {
   stopifnot(inherits(g, "igraph"))
   stopifnot(n_simulations >= 1)
 
@@ -339,6 +348,7 @@ robustness_check <- function(g, press, n_simulations = 100, spread = 0.5, thresh
   g_sim <- g
   any_singular <- used_immediate
 
+  set.seed(seed)
   for (sim in seq_len(n_simulations)) {
     multiplier <- runif(length(base_weight), 1 - variation, 1 + variation)
     E(g_sim)$weight <- base_weight * multiplier
@@ -382,8 +392,8 @@ robustness_check <- function(g, press, n_simulations = 100, spread = 0.5, thresh
 # approach already IS a practical numerical implementation of the same
 # concept, so `sign_determinacy()` is a thin, literature-aligned name for
 # it - not a second, independent method to cross-check against.
-sign_determinacy <- function(g, press, n_simulations = 100, spread = 0.5, threshold = 1e-9) {
-  robustness_check(g, press, n_simulations = n_simulations, spread = spread, threshold = threshold)
+sign_determinacy <- function(g, press, n_simulations = 100, spread = 0.5, threshold = 1e-9, seed = 42) {
+  robustness_check(g, press, n_simulations = n_simulations, spread = spread, threshold = threshold, seed = seed)
 }
 
 # Sign confidence (%) de N cenarios lado a lado - mesma forma de

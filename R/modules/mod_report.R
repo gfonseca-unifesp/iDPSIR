@@ -199,7 +199,8 @@ mod_report_ui <- function(id) {
         checkboxInput(ns("include_general"), "General metrics", value = TRUE),
         checkboxInput(ns("include_centralities"), "Centralities", value = FALSE),
         checkboxInput(ns("include_descriptors"), "DPSIR descriptors", value = FALSE),
-        checkboxInput(ns("include_references"), "Edge references", value = FALSE)
+        checkboxInput(ns("include_references"), "Edge references", value = FALSE),
+        checkboxInput(ns("include_reproducibility"), "Reproducibility info (session, package versions, analysis parameters)", value = FALSE)
       ),
       column(
         width = 4,
@@ -286,7 +287,8 @@ mod_report_server <- function(id, schema, nodes, edges, graph, saved_scenarios, 
           include_descriptors = isTRUE(input$include_descriptors),
           include_references = isTRUE(input$include_references),
           saved_scenarios = saved,
-          selected_scenario_names = selected_scenario_names
+          selected_scenario_names = selected_scenario_names,
+          include_reproducibility = isTRUE(input$include_reproducibility)
         )
 
         htmltools::save_html(page, file)

@@ -140,7 +140,15 @@ Checagem rápida de sintaxe sem subir o app:
   quanto ele mudou (soma dos módulos das diferenças) — reaproveita
   `press_perturbation()` direto, sem simulação nova e sem pacote novo
   (`barplot()` do R base no gráfico, mesma razão que manteve a trajetória em
-  `matplot()` em vez de `ggplot2` no Marco C).
+  `matplot()` em vez de `ggplot2` no Marco C). Roadmap item 6.4
+  (reprodutibilidade): `robustness_check()`/`sign_determinacy()` ganharam
+  `seed=42` (`set.seed(seed)` logo antes do loop de reamostragem) — antes,
+  aplicar o mesmo cenário duas vezes (ou gerar o relatório duas vezes a
+  partir do mesmo savepoint) dava um "Sign confidence" ligeiramente
+  diferente a cada vez, só pelo sorteio dos pesos; com a semente fixa a
+  mesma chamada sempre devolve o mesmo resultado, não importa o estado do
+  RNG antes de chamar. `global_sensitivity()` não precisou de mudança — já
+  é determinístico (OAT sem amostragem aleatória).
 - `R/report.R` → montagem do relatório HTML autocontido (`build_full_report_html`,
   `report_html_table`, `format_report_cell`, `matrix_to_report_df`), usado só por
   `mod_report.R`. Seções (imagens de grafo salvas/métricas gerais/centralidades/
@@ -159,7 +167,16 @@ Checagem rápida de sintaxe sem subir o app:
   Item 7.3 do roadmap de publicação: seção opcional "References", uma tabela
   Link ("De -> Para" usando os rótulos dos nós) x Reference, uma linha por
   aresta que tiver `reference` preenchido — omitida por completo se nenhuma
-  aresta tiver (ver Estado atual).
+  aresta tiver (ver Estado atual). Item 6.4 do roadmap ("sessionInfo +
+  parametrização"): seção opcional "Reproducibility" no fim do relatório —
+  versão do R (`R.version.string`) + tabela de versões de cada pacote em
+  `required_packages` (reaproveitado direto de `global.R`, sem duplicar a
+  lista — `utils::packageVersion()` por pacote, com fallback "not
+  installed" se algum não estiver presente) e um parágrafo fixo com os
+  parâmetros das análises estocásticas (`n_simulations=100`, `spread=0.5`,
+  `seed=42` pra confiança de sinal/robustez; `relative_change=0.1` pra
+  sensibilidade — os mesmos defaults usados de fato em `mod_responses.R`,
+  não números inventados pro texto).
 - `R/modules/mod_data.R` → editor por formulário (passos Início/Modelo/Nós/Arestas/Revisar
   do wizard); estado em `reactiveValues`, não-reativo até "Construir/Reconstruir grafo".
   Formulário de aresta tem um campo opcional "Threshold" (em branco na maioria das
@@ -256,8 +273,8 @@ Checagem rápida de sintaxe sem subir o app:
   eager em "Apply scenario" (igual `sign_confidence`) pra sobreviver em
   cenários salvos e entrar no relatório.
 - `R/modules/mod_report.R` → aba "Report" (última do Explorar): checkboxes para
-  métricas gerais/centralidades/descritores DPSIR/referências de aresta, seleção
-  múltipla de imagens de
+  métricas gerais/centralidades/descritores DPSIR/referências de aresta/item 6.4
+  ("Reproducibility info"), seleção múltipla de imagens de
   grafo salvas (`mod_graph.R`'s "Save current view for report") e seleção múltipla
   de cenários salvos (baseline sempre incluído) — mesmo padrão de tabela com
   `selection = "multiple"` para as duas. Um único botão "Download report (HTML)"
@@ -1195,6 +1212,53 @@ tabela/figura tem sua própria legenda numerada" já estabelecido no item de
 legendas/parametrização acima). Sem erro no console do servidor em nenhum
 passo.
 
+**Item 6.4 concluído: `sessionInfo` + parametrização/semente no relatório.**
+Duas mudanças, ambas em `R/loop_analysis.R`/`R/report.R`/`R/modules/mod_report.R`
+— descritas nos bullets acima:
+- **Semente fixa nas reamostragens.** `robustness_check()`/`sign_determinacy()`
+  ganharam `seed=42` (default), com `set.seed(seed)` logo antes do loop que
+  sorteia os multiplicadores de peso. Sem isso, "Sign confidence" e a tabela
+  de robustez mudavam ligeiramente a cada "Apply scenario" — mesmo cenário,
+  mesmo grafo, número diferente só pelo sorteio — o que contradiz a própria
+  ideia de um relatório reprodutível (o critério "pronto quando" do roadmap
+  é literal: "rodar de novo com a mesma semente reproduz números idênticos").
+  `global_sensitivity()` não precisou de nada — já é 100% determinístico (OAT
+  sem amostragem).
+- **Seção "Reproducibility" no relatório**, opcional (checkbox "Reproducibility
+  info", desligado por padrão, mesmo padrão dos outros opcionais). Duas
+  partes: "Session info" (versão do R + tabela de versões de cada pacote em
+  `required_packages`, reaproveitado direto de `global.R` em vez de duplicar
+  a lista — cada versão via `utils::packageVersion()`, com fallback "not
+  installed" se um pacote faltar) e "Analysis parameters" (texto fixo citando
+  os defaults realmente usados em `mod_responses.R`: `n_simulations=100`,
+  `spread=0.5`, `seed=42` pra confiança de sinal/robustez, `relative_change=0.1`
+  pra sensibilidade — não números inventados pro texto, os mesmos already
+  hardcoded nas chamadas do módulo).
+
+Testado ponta a ponta rodando o app de verdade: savepoint de pescas
+carregado, R1 a 70% aplicado (mesmos números já verificados: imediato 0.35,
+equilíbrio 0.4667, 100% sign confidence, 2 passos até neutralizar — nenhuma
+regressão do fix de semente), cenário salvo, checkbox "Reproducibility info"
+marcado via `Shiny.setInputValue` (seleção de linha de tabela não reage a
+clique sintético neste ambiente, mesmo contorno já usado em testes
+anteriores desta sessão) e relatório baixado via `fetch()` direto na URL do
+`downloadHandler`: seção "Reproducibility" presente com "R version 4.3.2"
+(a versão de fato instalada nesta máquina), tabela com as 13 versões de
+`required_packages` (shiny 1.10.0, bs4Dash 2.3.5, igraph 2.1.4, etc.),
+numerada em sequência com as demais tabelas ("Table 6." nesse teste), e o
+parágrafo de parâmetros citando exatamente `n_simulations = 100`,
+`spread = 0.5`, `seed = 42`, `relative_change = 0.1`. Seções anteriores
+("Sign confidence per factor", "Which edges matter most", "Equilibrium
+effect per factor") confirmadas presentes no mesmo HTML, sem regressão.
+Novo teste de regressão em `test-loop_analysis.R` (`robustness_check` com a
+semente default chamado duas vezes, cada uma precedida de um
+`set.seed()` externo diferente — 999 e depois 1 — confirmando
+`expect_identical()` entre as duas chamadas, provando que o resultado
+independe do estado do RNG antes de chamar). Suíte completa rodada de novo
+(43 assertivas em `loop_analysis` agora, uma a mais que antes; nenhuma
+falha) e checagem de sintaxe de todos os arquivos `R/`, sem erro no console
+do servidor em nenhum passo.
+
 ## Próximo
 
 Fase 5 está completa (Marcos A-D). Todos os 4 itens da lista pós-Fase 5 (1:
@@ -1211,13 +1275,15 @@ ordem combinada com o usuário:
 - [x] **7.1** — determinância de sinal (concluído, ver acima).
 - [x] **7.2** — sensibilidade/ranking de arestas (concluído, ver acima; ficou
   sem `ggplot2` no fim, `barplot()` do R base bastou).
+- [x] **6.4** — `sessionInfo` + parametrização/semente no relatório
+  (concluído, ver acima).
 - [ ] **6.1** — LICENSE (MIT, já confirmado)/CITATION.cff/DESCRIPTION — por
   último, aguardando lista de coautores do usuário.
-- Ordem combinada pro que resta: **6.4 (sessionInfo + seed no relatório) →
-  6.2 (renv) → 8.1 (shinylive)** — 6.2 continua depois de 6.4 de propósito,
-  pra só travar a lista de dependências quando não houver mais trabalho pela
-  frente que possa adicionar um pacote novo. 8.1 continua com a ressalva de
-  fazer um spike de bs4Dash em WASM antes de tratar como gate garantido.
+- Ordem combinada pro que resta: **6.2 (renv) → 8.1 (shinylive)** — 6.2 fica
+  por último antes do 8.1 de propósito, pra só travar a lista de
+  dependências agora que não há mais trabalho planejado que possa adicionar
+  um pacote novo. 8.1 continua com a ressalva de fazer um spike de bs4Dash
+  em WASM antes de tratar como gate garantido.
 
 Pedido pelo usuário mas ainda não definido: "estrela"/"rosa" como layouts
 adicionais — precisa de uma conversa pra fixar o que cada termo significa

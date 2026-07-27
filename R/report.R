@@ -52,7 +52,8 @@ build_full_report_html <- function(
     include_descriptors = FALSE,
     include_references = FALSE,
     saved_scenarios = list(),
-    selected_scenario_names = character()
+    selected_scenario_names = character(),
+    include_reproducibility = FALSE
 ) {
   # Sequential "Figure N"/"Table N" numbering across the whole report, plus
   # a caption paragraph under each - both requested so the report reads like
@@ -258,6 +259,37 @@ build_full_report_html <- function(
         )
       ))
     }
+  }
+
+  if (isTRUE(include_reproducibility)) {
+    pkgs <- if (exists("required_packages", inherits = TRUE)) required_packages else character()
+    version_df <- data.frame(
+      Package = pkgs,
+      Version = vapply(
+        pkgs,
+        function(p) tryCatch(as.character(utils::packageVersion(p)), error = function(e) "not installed"),
+        character(1)
+      ),
+      stringsAsFactors = FALSE
+    )
+
+    sections <- c(sections, list(
+      tags$h2("Reproducibility"),
+      tags$h3("Session info"),
+      tags$p(R.version.string),
+      report_html_table(version_df),
+      caption_tag("Table", next_table_n(), "R and package versions used to generate this report."),
+      tags$h3("Analysis parameters"),
+      tags$p(
+        "Sign confidence and robustness-to-uncertainty figures above resample every edge's weight ",
+        tags$code("n_simulations = 100"), " times within a range set by its confidence and ",
+        tags$code("spread = 0.5"), ", using a fixed random seed (", tags$code("seed = 42"), ") so that",
+        " regenerating this report from the same savepoint reproduces the exact same numbers.",
+        " Edge sensitivity ranks each edge by a one-at-a-time ", tags$code("+10%"),
+        " weight bump (", tags$code("relative_change = 0.1"), "), which involves no random sampling",
+        " and is already fully deterministic."
+      )
+    ))
   }
 
   tagList(sections)
