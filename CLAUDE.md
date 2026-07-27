@@ -1326,15 +1326,14 @@ passo Start — o exemplo de pescas já está embutido no export (dentro de
 o critério "pronto quando" do roadmap ("com o exemplo de pesca carregável,
 linkada no README"); um atalho dedicado ficaria fora do escopo do item 8.1.
 
-**Não testado ainda, porque exige uma ação fora do repositório:** o
-deploy de verdade no GitHub Pages. O workflow só roda de fato (e a URL do
-badge só resolve) depois de duas coisas que só o usuário pode fazer —
-habilitar Pages no repositório (Settings → Pages → Build and deployment →
-Source: **GitHub Actions**) e mesclar `fase-8-shinylive` em `main` (o
-gatilho é `push: branches: [main]`). A lógica de export/bundle em si já foi
-validada de ponta a ponta localmente (mesmos comandos que o workflow roda,
-só que executados à mão em vez de dentro do runner do GitHub) — o que falta
-é só a parte que não tem como simular sem a infraestrutura real do GitHub.
+**Deploy real confirmado — item 8.1 completo.** `fase-8-shinylive` foi
+mesclada em `main` (fast-forward) e enviada pro GitHub; o usuário habilitou
+Pages (Settings → Pages → Source: GitHub Actions) e confirmou que o workflow
+rodou com sucesso. Verificado também deste lado com `curl -o /dev/null -w
+"%{http_code}"` contra `https://gfonseca-unifesp.github.io/iDPSIR/`: `200`.
+O badge "Try it live" no README aponta pra essa URL e já resolve de
+verdade — item 8.1 do roadmap está pronto ponta a ponta, não só validado
+localmente.
 
 ## Próximo
 
@@ -1354,11 +1353,11 @@ ordem combinada com o usuário:
   sem `ggplot2` no fim, `barplot()` do R base bastou).
 - [x] **6.4** — `sessionInfo` + parametrização/semente no relatório
   (concluído, ver acima).
-- [x] **8.1** — demo online via shinylive (implementado na branch
-  `fase-8-shinylive`, ver acima) — falta só habilitar GitHub Pages no
-  repositório e mesclar a branch em `main` pro deploy rodar de verdade.
-  Decidido junto com o usuário adiar 6.2 (renv) e fazer 8.1 primeiro, já
-  que era a maior incerteza técnica do roadmap — validada com o spike.
+- [x] **8.1** — demo online via shinylive (concluído, ver acima — mesclada
+  em `main`, Pages habilitado pelo usuário, deploy confirmado ao vivo em
+  `https://gfonseca-unifesp.github.io/iDPSIR/`). Decidido junto com o
+  usuário adiar 6.2 (renv) e fazer 8.1 primeiro, já que era a maior
+  incerteza técnica do roadmap — validada com o spike antes de implementar.
 - [ ] **6.1** — LICENSE (MIT, já confirmado)/CITATION.cff/DESCRIPTION — por
   último, aguardando lista de coautores do usuário.
 - [ ] **6.2** — `renv` (pin de versões) — único item restante do roadmap
