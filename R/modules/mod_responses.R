@@ -52,6 +52,15 @@
 # equilibrium/robustness/neutralization numbers above stay exactly as before
 # (the linear, small-perturbation regime) - a small `threshold_note` warns
 # when this divergence between the chart and the tables above applies.
+#
+# Roadmap item 7.1 ("sign determinacy", Dambacher et al. framing): every
+# prediction in "Effect on each factor" now carries a "Sign confidence (%)"
+# column, computed via sign_determinacy() (R/loop_analysis.R - a thin,
+# literature-named alias for the same robustness_check() resampling used
+# below) at a fixed N=100 every time a scenario is applied, not hidden
+# behind the optional disclosure. "Show robustness to uncertainty" stays as
+# the deeper-dive version, with an adjustable simulation count, for
+# double-checking a borderline result.
 
 mod_responses_ui <- function(id) {
   ns <- NS(id)
@@ -166,13 +175,15 @@ mod_responses_server <- function(id, schema, nodes, edges, graph) {
 
       press <- build_press_vector(graph(), active_ids, strengths / 100)
       result <- press_perturbation(interaction_matrix(), press)
+      sign_confidence <- suppressWarnings(sign_determinacy(graph(), press, n_simulations = 100))
 
       current_scenario(list(
         name = input$scenario_name,
         active = active_ids,
         strengths = strengths,
         press = press,
-        result = result
+        result = result,
+        sign_confidence = sign_confidence
       ))
     })
 
@@ -201,9 +212,11 @@ mod_responses_server <- function(id, schema, nodes, edges, graph) {
           sliderInput(ns("robustness_simulations"), "Number of simulations", min = 20, max = 500, value = 100, step = 20),
           p(
             class = "text-muted",
-            "Each edge's weight is randomly varied within a range based on its confidence",
-            "(high confidence = little variation, low = a lot), simulated many times, and",
-            "checked how often each factor's effect kept the same direction."
+            "The \"Sign confidence (%)\" column above already runs this check at 100",
+            "simulations. Each edge's weight is randomly varied within a range based on",
+            "its confidence (high confidence = little variation, low = a lot); use this",
+            "to try a different number of simulations, or see the full table sorted",
+            "from least to most reliable."
           ),
           DTOutput(ns("robustness_table"))
         ),
@@ -275,7 +288,7 @@ mod_responses_server <- function(id, schema, nodes, edges, graph) {
       sc <- current_scenario()
       req(sc, isTRUE(input$show_robustness))
 
-      robustness_df <- robustness_check(graph(), sc$press, n_simulations = input$robustness_simulations)
+      robustness_df <- sign_determinacy(graph(), sc$press, n_simulations = input$robustness_simulations)
       effect_df <- summarize_scenario_effect(graph(), sc$result)
 
       robustness_df$direction <- effect_df$direction[match(robustness_df$id, effect_df$id)]
@@ -338,8 +351,9 @@ mod_responses_server <- function(id, schema, nodes, edges, graph) {
       req(sc)
 
       df <- summarize_scenario_effect(graph(), sc$result)
-      df <- df[, c("node", "category", "direction", "id", "immediate", "equilibrium")]
-      names(df) <- c("Factor", "Category", "Effect", "ID", "Immediate", "Equilibrium")
+      df$sign_confidence <- sc$sign_confidence$agreement_pct[match(df$id, sc$sign_confidence$id)]
+      df <- df[, c("node", "category", "direction", "sign_confidence", "id", "immediate", "equilibrium")]
+      names(df) <- c("Factor", "Category", "Effect", "Sign confidence (%)", "ID", "Immediate", "Equilibrium")
 
       datatable(
         df,
@@ -348,11 +362,12 @@ mod_responses_server <- function(id, schema, nodes, edges, graph) {
         options = list(
           dom = "Bfrtip",
           buttons = c("csv", "excel"),
-          columnDefs = list(list(visible = FALSE, targets = c(3, 4, 5))),
+          columnDefs = list(list(visible = FALSE, targets = c(4, 5, 6))),
           pageLength = 10,
           scrollX = TRUE
         )
       ) %>%
+        formatRound(columns = "Sign confidence (%)", digits = 0) %>%
         formatRound(columns = c("Immediate", "Equilibrium"), digits = 3)
     })
 
@@ -432,6 +447,13 @@ mod_responses_server <- function(id, schema, nodes, edges, graph) {
         tags$hr(),
         h5("Scenario comparison"),
         DTOutput(ns("comparison_table")),
+        h5("Sign confidence per factor"),
+        p(
+          class = "text-muted",
+          "How often each scenario's predicted direction held up across 100 simulations",
+          "that resampled every edge's weight within a range set by its confidence."
+        ),
+        DTOutput(ns("comparison_sign_confidence_table")),
         h5("Summary per scenario"),
         DTOutput(ns("comparison_summary_table"))
       )
@@ -455,6 +477,36 @@ mod_responses_server <- function(id, schema, nodes, edges, graph) {
 
       datatable(df, rownames = FALSE, options = list(dom = "t")) %>%
         formatRound(columns = numeric_cols, digits = 3)
+    })
+
+    output$comparison_sign_confidence_table <- renderDT({
+      names_sel <- selected_scenario_names()
+      saved <- saved_scenarios$list
+
+      scenario_sign_conf <- lapply(names_sel, function(scenario_name) saved[[scenario_name]]$sign_confidence)
+      names(scenario_sign_conf) <- names_sel
+
+      # Baseline's press is all-zero, so its equilibrium is exactly 0
+      # regardless of how edge weights are resampled (-A^-1 * 0 = 0 for any
+      # invertible A) - agreement is trivially 100% everywhere, computed
+      # directly instead of wastefully re-running simulations to confirm it.
+      baseline_sign_conf <- data.frame(
+        id = V(graph())$name,
+        node = if (!is.null(V(graph())$label)) V(graph())$label else V(graph())$name,
+        category = if (!is.null(V(graph())$dpsir_category)) V(graph())$dpsir_category else "",
+        agreement_pct = 100,
+        stringsAsFactors = FALSE
+      )
+      scenario_sign_conf <- c(list(Baseline = baseline_sign_conf), scenario_sign_conf)
+
+      df <- compare_scenario_sign_confidence(graph(), scenario_sign_conf)
+      df$id <- NULL
+      numeric_cols <- setdiff(names(df), c("node", "category"))
+      names(df)[names(df) == "node"] <- "Factor"
+      names(df)[names(df) == "category"] <- "Category"
+
+      datatable(df, rownames = FALSE, options = list(dom = "t")) %>%
+        formatRound(columns = numeric_cols, digits = 0)
     })
 
     output$comparison_summary_table <- renderDT({

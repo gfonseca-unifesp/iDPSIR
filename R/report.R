@@ -154,6 +154,21 @@ build_full_report_html <- function(
     comparison_df <- compare_scenario_effects(graph, c(list(Baseline = baseline_result), scenario_results))
     comparison_df$id <- NULL
 
+    # Baseline's press is all-zero, so its equilibrium is exactly 0 no
+    # matter how edge weights are resampled - agreement is trivially 100%
+    # everywhere, computed directly rather than re-running simulations.
+    baseline_sign_conf <- data.frame(
+      id = V(graph)$name,
+      node = if (!is.null(V(graph)$label)) V(graph)$label else V(graph)$name,
+      category = if (!is.null(V(graph)$dpsir_category)) V(graph)$dpsir_category else "",
+      agreement_pct = 100,
+      stringsAsFactors = FALSE
+    )
+    scenario_sign_conf <- lapply(selected_scenario_names, function(scenario_name) saved_scenarios[[scenario_name]]$sign_confidence)
+    names(scenario_sign_conf) <- selected_scenario_names
+    sign_conf_df <- compare_scenario_sign_confidence(graph, c(list(Baseline = baseline_sign_conf), scenario_sign_conf))
+    sign_conf_df$id <- NULL
+
     summary_df <- do.call(rbind, lapply(selected_scenario_names, function(scenario_name) {
       sc <- saved_scenarios[[scenario_name]]
       effect_df <- summarize_scenario_effect(graph, sc$result)
@@ -185,6 +200,12 @@ build_full_report_html <- function(
       caption_tag(
         "Table", next_table_n(),
         "Equilibrium effect of each scenario on every node, computed via loop analysis (press perturbation, -A^-1 x press) relative to the baseline (no response applied)."
+      ),
+      tags$h3("Sign confidence per factor"),
+      report_html_table(sign_conf_df),
+      caption_tag(
+        "Table", next_table_n(),
+        "Percentage of 100 resampled simulations (varying each edge's weight within a range set by its confidence) that agreed with the equilibrium effect's direction shown above - low values flag a prediction that a more confident estimate of the network could easily flip."
       ),
       tags$h3("Summary per scenario"),
       report_html_table(summary_df),

@@ -200,3 +200,28 @@ test_that("press_perturbation on the fisheries example matches previously verifi
   expect_equal(unname(result$immediate[c("P1", "S1", "I1", "R1")]), c(0, 0, 0, 0))
   expect_equal(unname(result$equilibrium[c("D1", "P1", "S1", "R1")]), c(0, 0, 0, 0))
 })
+
+test_that("sign_determinacy is coherent with robustness_check (roadmap item 7.1 - not a second, independent method)", {
+  g <- fisheries_graph()
+  press <- build_press_vector(g, active_ids = "R1", strengths = c(R1 = 0.7))
+
+  set.seed(123)
+  a <- sign_determinacy(g, press, n_simulations = 20)
+  set.seed(123)
+  b <- robustness_check(g, press, n_simulations = 20)
+
+  expect_equal(a, b)
+})
+
+test_that("compare_scenario_sign_confidence builds a node x scenario wide table", {
+  g <- fisheries_graph()
+
+  sign_conf_a <- data.frame(id = V(g)$name, agreement_pct = 100, stringsAsFactors = FALSE)
+  sign_conf_b <- data.frame(id = V(g)$name, agreement_pct = 80, stringsAsFactors = FALSE)
+
+  df <- compare_scenario_sign_confidence(g, list(A = sign_conf_a, B = sign_conf_b))
+
+  expect_equal(nrow(df), vcount(g))
+  expect_true(all(df$A == 100))
+  expect_true(all(df$B == 80))
+})

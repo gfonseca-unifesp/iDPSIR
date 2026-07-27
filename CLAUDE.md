@@ -124,7 +124,16 @@ Checagem rápida de sintaxe sem subir o app:
   mudança pra quem não usa threshold). `check_stability`/`press_perturbation`/
   `robustness_check`/`find_neutralization_step` continuam ignorando threshold
   de propósito — descrevem só o regime linear; só a trajetória ganha o
-  gatilho.
+  gatilho. Roadmap item 7.1 ("determinância de sinal", vocabulário de
+  Dambacher et al.): `sign_determinacy(g, press, n_simulations=100, spread=0.5)`
+  é um alias fino de `robustness_check()` — mesma reamostragem de peso por
+  `confidence`, só com o nome alinhado à literatura, sem virar um segundo
+  método independente pra validar contra o primeiro (a rota analítica via
+  permanente da matriz é combinatorialmente inviável — ver nota no próprio
+  arquivo). `compare_scenario_sign_confidence(g, scenario_sign_confidence)`
+  é o equivalente de `compare_scenario_effects()` pra confiança de sinal em
+  vez de efeito de equilíbrio, usado tanto na comparação em tela quanto na
+  seção "Scenarios compared" do relatório.
 - `R/report.R` → montagem do relatório HTML autocontido (`build_full_report_html`,
   `report_html_table`, `format_report_cell`, `matrix_to_report_df`), usado só por
   `mod_report.R`. Seções (imagens de grafo salvas/métricas gerais/centralidades/
@@ -224,7 +233,17 @@ Checagem rápida de sintaxe sem subir o app:
   tiver threshold definido (`Th` todo `NA`), o resultado é idêntico a antes;
   um `threshold_note` aparece acima do gráfico só quando pelo menos uma aresta
   tem threshold, avisando que as tabelas de equilíbrio/robustez acima não
-  refletem esse gatilho.
+  refletem esse gatilho. Roadmap item 7.1: "Effect on each factor" ganha uma
+  coluna "Sign confidence (%)" sempre visível (não escondida atrás do
+  disclosure opcional) — calculada via `sign_determinacy()` a N=100 fixo em
+  todo "Apply scenario", não só quando o usuário abre "Show robustness to
+  uncertainty" (que continua existindo, agora só como a versão configurável/
+  aprofundada, reaproveitando o mesmo `sign_determinacy()`). A comparação de
+  múltiplos cenários salvos ganhou uma tabela "Sign confidence per factor"
+  (`compare_scenario_sign_confidence()`) ao lado da de efeito de equilíbrio;
+  o baseline (sem resposta) tem confiança 100% computada direto (press
+  zero ⇒ equilíbrio zero não importa como os pesos sejam reamostrados),
+  sem gastar simulação à toa.
 - `R/modules/mod_report.R` → aba "Report" (última do Explorar): checkboxes para
   métricas gerais/centralidades/descritores DPSIR/referências de aresta, seleção
   múltipla de imagens de
@@ -1088,6 +1107,39 @@ números (imediato -0.35 em D1, equilíbrio -0.4667 em I1, 2 passos até 90%,
 independente múltiplas vezes nesta sessão antes desta rodada de testes —
 reaproveitados como regressão, não recalculados de olho fechado.
 
+**Item 7.1 concluído: determinância de sinal.** `sign_determinacy()` e
+`compare_scenario_sign_confidence()` (`R/loop_analysis.R`), coluna "Sign
+confidence (%)" em "Effect on each factor", tabela "Sign confidence per
+factor" na comparação de cenários (em tela e no relatório) — descritos nos
+bullets acima. Como já avaliado antes de aceitar o item do roadmap ao pé da
+letra (ver "Priorização geral" acima): a rota analítica via permanente da
+matriz foi descartada de propósito (combinatorialmente inviável), e
+`robustness_check()` do Marco D já era, na prática, a implementação numérica
+certa — 7.1 formalizou/expôs isso como resultado de primeira classe (sempre
+visível, não só atrás do disclosure opcional) em vez de construir um segundo
+método.
+
+Decisão de design: a confiança de sinal passou a ser calculada
+automaticamente em todo "Apply scenario" (N=100 fixo), não só quando o
+usuário abre "Show robustness to uncertainty" — o disclosure continua
+existindo, agora reposicionado como a versão configurável/aprofundada
+(ajustar N, ver a tabela ordenada por confiabilidade) que reaproveita a
+mesma função. Testado que `sign_determinacy()` bate número por número com
+`robustness_check()` sob a mesma seed (é literalmente o mesmo código, só com
+nome alinhado à literatura de Dambacher) — não é uma segunda implementação
+correndo o risco de divergir da primeira.
+
+Testado ponta a ponta rodando o app de verdade: savepoint de pescas
+carregado, cenário a 70% aplicado — coluna "Sign confidence (%)" mostrando
+100% pra todos os 5 fatores (bate com o já verificado via `robustness_check`
+nesta mesma rede em testes anteriores desta sessão); dois cenários salvos
+(70% e 40%) comparados — tabela "Sign confidence per factor" aparece com
+Baseline/Scenario 1/Scenario 2, todos 100% (baseline calculado direto, sem
+rodar simulação, já que press=0 sempre dá equilíbrio=0 não importa a
+reamostragem); relatório gerado com os dois cenários selecionados contém a
+seção "Sign confidence per factor" com os mesmos números — sem erro no
+console do servidor em nenhum passo.
+
 ## Próximo
 
 Fase 5 está completa (Marcos A-D). Todos os 4 itens da lista pós-Fase 5 (1:
@@ -1101,12 +1153,16 @@ opcionais no Graph.
 ordem combinada com o usuário:
 - [x] **7.3** — referência/DOI por aresta (concluído, ver acima).
 - [x] **6.3** — testes `testthat` do núcleo numérico (concluído, ver acima).
+- [x] **7.1** — determinância de sinal (concluído, ver acima).
 - [ ] **6.1** — LICENSE (MIT, já confirmado)/CITATION.cff/DESCRIPTION — por
   último, aguardando lista de coautores do usuário.
-- Itens 6.2, 6.4, 7.1, 7.2, 8.1 do roadmap ainda não escalonados — retomar
-  a conversa de priorização depois de 6.3/6.1, com as três ressalvas técnicas
-  acima em mente (7.1 sem permanente, 6.2 com desenho explícito pra
-  runGitHub(), 8.1 com spike antes de virar gate).
+- Ordem combinada pro que resta: **7.2 (sensibilidade/ranking de arestas) →
+  6.4 (sessionInfo + seed no relatório) → 6.2 (renv) → 8.1 (shinylive)** — 6.2
+  fica depois de 7.2/6.4 de propósito, pra só travar a lista de dependências
+  quando não houver mais trabalho pela frente que possa adicionar um pacote
+  novo (7.2 cogita `ggplot2` pro gráfico tornado, ainda não é dependência do
+  app hoje). 8.1 continua com a ressalva de fazer um spike de bs4Dash em
+  WASM antes de tratar como gate garantido.
 
 Pedido pelo usuário mas ainda não definido: "estrela"/"rosa" como layouts
 adicionais — precisa de uma conversa pra fixar o que cada termo significa

@@ -368,6 +368,49 @@ robustness_check <- function(g, press, n_simulations = 100, spread = 0.5, thresh
 }
 
 # =====================================================
+# SIGN DETERMINACY (roadmap item 7.1 - Dambacher et al. framing)
+# =====================================================
+#
+# The literature's "sign determinacy" asks exactly the question
+# robustness_check() (Marco D) already answers numerically: if the network's
+# edge weights are uncertain, how often does a prediction's SIGN survive
+# that uncertainty? The classic route (Dambacher, Puccia & Levins) computes
+# this analytically via the interaction matrix's adjoint/permanent - but a
+# matrix permanent is combinatorially expensive (Ryser's formula:
+# O(2^n * n)) and becomes infeasible past a couple dozen nodes, squarely
+# within reach of a real DPSIR network. robustness_check()'s resampling
+# approach already IS a practical numerical implementation of the same
+# concept, so `sign_determinacy()` is a thin, literature-aligned name for
+# it - not a second, independent method to cross-check against.
+sign_determinacy <- function(g, press, n_simulations = 100, spread = 0.5, threshold = 1e-9) {
+  robustness_check(g, press, n_simulations = n_simulations, spread = spread, threshold = threshold)
+}
+
+# Sign confidence (%) de N cenarios lado a lado - mesma forma de
+# compare_scenario_effects(), so que com agreement_pct no lugar do efeito de
+# equilibrio. Usado na comparacao em tela e na secao "Scenarios compared"
+# do relatorio.
+compare_scenario_sign_confidence <- function(g, scenario_sign_confidence) {
+  stopifnot(inherits(g, "igraph"), is.list(scenario_sign_confidence), length(scenario_sign_confidence) >= 1)
+
+  node_names <- V(g)$name
+
+  df <- data.frame(
+    id = node_names,
+    node = if (!is.null(V(g)$label)) V(g)$label else node_names,
+    category = if (!is.null(V(g)$dpsir_category)) V(g)$dpsir_category else rep("", length(node_names)),
+    stringsAsFactors = FALSE
+  )
+
+  for (scenario_name in names(scenario_sign_confidence)) {
+    sc_df <- scenario_sign_confidence[[scenario_name]]
+    df[[scenario_name]] <- sc_df$agreement_pct[match(node_names, sc_df$id)]
+  }
+
+  df
+}
+
+# =====================================================
 # NEUTRALIZATION STEP (fast-follow pos-Fase 5)
 # =====================================================
 #
