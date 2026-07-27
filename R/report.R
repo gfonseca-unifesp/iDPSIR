@@ -211,6 +211,29 @@ build_full_report_html <- function(
       report_html_table(summary_df),
       caption_tag("Table", next_table_n(), "Count of nodes whose equilibrium effect improves, worsens, or stays stable under each scenario.")
     ))
+
+    sensitivity_sections <- lapply(selected_scenario_names, function(scenario_name) {
+      sc <- saved_scenarios[[scenario_name]]
+      top <- utils::head(sc$sensitivity[order(-sc$sensitivity$influence), c("link", "weight", "confidence", "influence")], 5)
+      names(top) <- c("Link", "Weight", "Confidence", "Influence")
+
+      tagList(
+        tags$h4(scenario_name),
+        report_html_table(top),
+        caption_tag(
+          "Table", next_table_n(),
+          sprintf(
+            "For \"%s\", the edges whose weight - if bumped up 10%% - would move its equilibrium effect the most, ranked highest first. Worth double-checking these estimates first if you're unsure about them.",
+            scenario_name
+          )
+        )
+      )
+    })
+
+    sections <- c(sections, list(
+      tags$h3("Which edges matter most (top 5 per scenario)"),
+      tagList(sensitivity_sections)
+    ))
   }
 
   if (isTRUE(include_references)) {

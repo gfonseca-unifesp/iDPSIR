@@ -516,3 +516,60 @@ summarize_neutralization <- function(g, press, target_fraction = 0.9, max_steps 
 
   do.call(rbind, rows)
 }
+
+# =====================================================
+# EDGE SENSITIVITY (roadmap item 7.2)
+# =====================================================
+#
+# sign_determinacy() answers "how much can I trust this prediction's
+# direction, given how uncertain each edge is". This answers a different,
+# complementary question: "if I had estimated ONE edge's weight a bit
+# differently, how much would my conclusion have changed" - i.e. which
+# edge is most worth double-checking. One-at-a-time (OAT): bump a single
+# edge's weight up by `relative_change` (10% by default), recompute the
+# equilibrium effect for the same press, and measure how much it moved
+# (summed absolute difference across `target_ids`, default every node) -
+# reuses press_perturbation() directly, no new resampling/simulation loop
+# and no new package (deliberately plain base R, same reasoning that kept
+# the trajectory chart on matplot() instead of adding ggplot2 in Marco C).
+global_sensitivity <- function(g, press, relative_change = 0.1, target_ids = NULL) {
+  stopifnot(inherits(g, "igraph"))
+  stopifnot(ecount(g) > 0)
+
+  node_names <- V(g)$name
+  if (is.null(target_ids)) target_ids <- node_names
+
+  baseline <- suppressWarnings(press_perturbation(build_interaction_matrix(g), press))
+  baseline_effect <- baseline$equilibrium
+  if (all(is.na(baseline_effect))) baseline_effect <- baseline$immediate
+
+  edge_ends <- ends(g, E(g), names = TRUE)
+  base_weight <- E(g)$weight
+  node_labels <- if (!is.null(V(g)$label)) setNames(V(g)$label, node_names) else setNames(node_names, node_names)
+
+  influence <- numeric(ecount(g))
+  g_sim <- g
+
+  for (k in seq_len(ecount(g))) {
+    E(g_sim)$weight <- base_weight
+    E(g_sim)$weight[k] <- base_weight[k] * (1 + relative_change)
+
+    result_sim <- suppressWarnings(press_perturbation(build_interaction_matrix(g_sim), press))
+    effect_sim <- result_sim$equilibrium
+    if (all(is.na(effect_sim))) effect_sim <- result_sim$immediate
+
+    influence[k] <- sum(abs(effect_sim[target_ids] - baseline_effect[target_ids]))
+  }
+
+  out <- data.frame(
+    from = edge_ends[, 1],
+    to = edge_ends[, 2],
+    link = paste0(unname(node_labels[edge_ends[, 1]]), " -> ", unname(node_labels[edge_ends[, 2]])),
+    weight = base_weight,
+    confidence = E(g)$confidence,
+    influence = influence,
+    stringsAsFactors = FALSE
+  )
+
+  out[order(-out$influence), ]
+}

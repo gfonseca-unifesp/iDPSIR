@@ -133,7 +133,14 @@ Checagem rápida de sintaxe sem subir o app:
   arquivo). `compare_scenario_sign_confidence(g, scenario_sign_confidence)`
   é o equivalente de `compare_scenario_effects()` pra confiança de sinal em
   vez de efeito de equilíbrio, usado tanto na comparação em tela quanto na
-  seção "Scenarios compared" do relatório.
+  seção "Scenarios compared" do relatório. Roadmap item 7.2 ("qual aresta
+  importa mais"): `global_sensitivity(g, press, relative_change=0.1,
+  target_ids=NULL)` — one-at-a-time (OAT): aumenta o peso de UMA aresta por
+  vez em 10%, recalcula o efeito de equilíbrio pro mesmo `press`, e mede
+  quanto ele mudou (soma dos módulos das diferenças) — reaproveita
+  `press_perturbation()` direto, sem simulação nova e sem pacote novo
+  (`barplot()` do R base no gráfico, mesma razão que manteve a trajetória em
+  `matplot()` em vez de `ggplot2` no Marco C).
 - `R/report.R` → montagem do relatório HTML autocontido (`build_full_report_html`,
   `report_html_table`, `format_report_cell`, `matrix_to_report_df`), usado só por
   `mod_report.R`. Seções (imagens de grafo salvas/métricas gerais/centralidades/
@@ -243,7 +250,11 @@ Checagem rápida de sintaxe sem subir o app:
   (`compare_scenario_sign_confidence()`) ao lado da de efeito de equilíbrio;
   o baseline (sem resposta) tem confiança 100% computada direto (press
   zero ⇒ equilíbrio zero não importa como os pesos sejam reamostrados),
-  sem gastar simulação à toa.
+  sem gastar simulação à toa. Roadmap item 7.2: disclosure opcional "Show
+  which edges matter most", com gráfico de barras horizontal (`barplot()`
+  base R) + tabela ordenada de `global_sensitivity()` — calculado de forma
+  eager em "Apply scenario" (igual `sign_confidence`) pra sobreviver em
+  cenários salvos e entrar no relatório.
 - `R/modules/mod_report.R` → aba "Report" (última do Explorar): checkboxes para
   métricas gerais/centralidades/descritores DPSIR/referências de aresta, seleção
   múltipla de imagens de
@@ -1140,6 +1151,50 @@ reamostragem); relatório gerado com os dois cenários selecionados contém a
 seção "Sign confidence per factor" com os mesmos números — sem erro no
 console do servidor em nenhum passo.
 
+**Item 7.2 concluído: sensibilidade/ranking de arestas.** `global_sensitivity()`
+(`R/loop_analysis.R`) e o disclosure "Show which edges matter most" (gráfico
+de barras + tabela em `mod_responses.R`) — descritos nos bullets acima. Rota
+one-at-a-time (OAT): aumenta o peso de uma aresta por vez em 10%, recalcula
+o efeito de equilíbrio pro mesmo `press`, mede quanto mudou (soma dos módulos
+das diferenças) e ordena do maior pro menor — reaproveita `press_perturbation()`
+direto, sem simulação nova. Mantida a mesma decisão de não adicionar `ggplot2`
+já tomada no Marco C (trajetória via `matplot()`): o gráfico usa `barplot()`
+do R base.
+
+**Achado ao testar, não um bug:** a primeira rede testada
+(`docs/example_fisheries.idpsir.json`) mostrou só **uma** aresta com
+influência não-zero (I1→R1), as outras 4 todas exatamente zero. Verificado
+por que antes de assumir que fosse um bug: a sensibilidade de
+`-A⁻¹·press` a perturbar `A[i,j]` é proporcional ao efeito de equilíbrio
+*já existente no nó de origem* dessa aresta — e no ciclo único de 5 nós do
+exemplo de pescas, só I1 termina com equilíbrio não-zero (efeito de R1 a
+70% cai só em I1, já documentado no item 2a acima), então só a aresta que
+sai de I1 pode ter influência alguma; as outras 4, saindo de nós com
+equilíbrio zero, não têm o que amplificar. Confirmado independentemente com
+uma segunda rede construída à mão (cadeia trófica Recurso→Consumidor→
+Predador, onde todo nó tem equilíbrio não-zero) mostrando as 5 arestas com
+influência positiva, ordenadas corretamente. Testado também contra
+`data/sample_nodes.csv`/`sample_edges.csv` (rede de 10 nós já documentada
+como tendo matriz singular, ver Fase 5 Marco A): `global_sensitivity()`
+recorre ao mesmo fallback de `press_perturbation()` (efeito imediato em vez
+de equilíbrio quando a matriz é singular), mostrando só as 3 arestas que
+saem diretamente de R1 (únicas alcançáveis pelo efeito imediato de um
+passo) — comportamento correto herdado do fallback já existente, sem
+código extra.
+
+Testado ponta a ponta rodando o app de verdade: savepoint de pescas
+carregado, R1 a 70% aplicado, checkbox "Show which edges matter most"
+ligado — gráfico de barras mostrando só I1→R1 com barra visível, as outras
+4 arestas em zero (batendo com o script standalone); tabela ordenada
+mostrando os mesmos números (`Influence` arredondado a 3 casas). Entra
+também no relatório: seção "Which edges matter most (top 5 per scenario)"
+com uma tabela por cenário selecionado, cada uma com sua própria legenda
+numerada (corrigido de um primeiro rascunho que usava uma legenda só
+compartilhada entre todos os cenários — quebrava o padrão de "toda
+tabela/figura tem sua própria legenda numerada" já estabelecido no item de
+legendas/parametrização acima). Sem erro no console do servidor em nenhum
+passo.
+
 ## Próximo
 
 Fase 5 está completa (Marcos A-D). Todos os 4 itens da lista pós-Fase 5 (1:
@@ -1154,15 +1209,15 @@ ordem combinada com o usuário:
 - [x] **7.3** — referência/DOI por aresta (concluído, ver acima).
 - [x] **6.3** — testes `testthat` do núcleo numérico (concluído, ver acima).
 - [x] **7.1** — determinância de sinal (concluído, ver acima).
+- [x] **7.2** — sensibilidade/ranking de arestas (concluído, ver acima; ficou
+  sem `ggplot2` no fim, `barplot()` do R base bastou).
 - [ ] **6.1** — LICENSE (MIT, já confirmado)/CITATION.cff/DESCRIPTION — por
   último, aguardando lista de coautores do usuário.
-- Ordem combinada pro que resta: **7.2 (sensibilidade/ranking de arestas) →
-  6.4 (sessionInfo + seed no relatório) → 6.2 (renv) → 8.1 (shinylive)** — 6.2
-  fica depois de 7.2/6.4 de propósito, pra só travar a lista de dependências
-  quando não houver mais trabalho pela frente que possa adicionar um pacote
-  novo (7.2 cogita `ggplot2` pro gráfico tornado, ainda não é dependência do
-  app hoje). 8.1 continua com a ressalva de fazer um spike de bs4Dash em
-  WASM antes de tratar como gate garantido.
+- Ordem combinada pro que resta: **6.4 (sessionInfo + seed no relatório) →
+  6.2 (renv) → 8.1 (shinylive)** — 6.2 continua depois de 6.4 de propósito,
+  pra só travar a lista de dependências quando não houver mais trabalho pela
+  frente que possa adicionar um pacote novo. 8.1 continua com a ressalva de
+  fazer um spike de bs4Dash em WASM antes de tratar como gate garantido.
 
 Pedido pelo usuário mas ainda não definido: "estrela"/"rosa" como layouts
 adicionais — precisa de uma conversa pra fixar o que cada termo significa

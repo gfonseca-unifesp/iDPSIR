@@ -61,6 +61,14 @@
 # behind the optional disclosure. "Show robustness to uncertainty" stays as
 # the deeper-dive version, with an adjustable simulation count, for
 # double-checking a borderline result.
+#
+# Roadmap item 7.2 ("which edge matters most"): a "Show which edges matter
+# most (optional)" disclosure plots global_sensitivity() (R/loop_analysis.R)
+# - a horizontal bar chart (base R barplot(), no ggplot2, same reasoning as
+# the trajectory chart) ranking edges by how much bumping their weight up
+# 10% (one at a time) would move this scenario's equilibrium effect.
+# Computed eagerly in "Apply scenario" (like sign_confidence above) so a
+# saved scenario carries its own ranking into the report, not just on screen.
 
 mod_responses_ui <- function(id) {
   ns <- NS(id)
@@ -176,6 +184,7 @@ mod_responses_server <- function(id, schema, nodes, edges, graph) {
       press <- build_press_vector(graph(), active_ids, strengths / 100)
       result <- press_perturbation(interaction_matrix(), press)
       sign_confidence <- suppressWarnings(sign_determinacy(graph(), press, n_simulations = 100))
+      sensitivity <- suppressWarnings(global_sensitivity(graph(), press))
 
       current_scenario(list(
         name = input$scenario_name,
@@ -183,7 +192,8 @@ mod_responses_server <- function(id, schema, nodes, edges, graph) {
         strengths = strengths,
         press = press,
         result = result,
-        sign_confidence = sign_confidence
+        sign_confidence = sign_confidence,
+        sensitivity = sensitivity
       ))
     })
 
@@ -219,6 +229,19 @@ mod_responses_server <- function(id, schema, nodes, edges, graph) {
             "from least to most reliable."
           ),
           DTOutput(ns("robustness_table"))
+        ),
+        tags$hr(),
+        checkboxInput(ns("show_sensitivity"), "Show which edges matter most (optional)", value = FALSE),
+        conditionalPanel(
+          condition = sprintf("input['%s']", ns("show_sensitivity")),
+          p(
+            class = "text-muted",
+            "Bumps each edge's weight up by 10%, one at a time, and measures how much",
+            "this scenario's overall equilibrium effect moves - the edges at the top",
+            "are the ones most worth double-checking your weight estimate for."
+          ),
+          plotOutput(ns("sensitivity_plot"), height = "320px"),
+          DTOutput(ns("sensitivity_table"))
         ),
         tags$hr(),
         actionButton(ns("save_scenario"), "Save this scenario", icon = icon("save"), class = "btn-outline-primary")
@@ -298,6 +321,37 @@ mod_responses_server <- function(id, schema, nodes, edges, graph) {
 
       datatable(robustness_df, rownames = FALSE, options = list(dom = "t", pageLength = 10)) %>%
         formatRound(columns = "Agreement (%)", digits = 0)
+    })
+
+    output$sensitivity_plot <- renderPlot({
+      sc <- current_scenario()
+      req(sc, isTRUE(input$show_sensitivity))
+
+      sens <- sc$sensitivity
+      if (all(sens$influence < 1e-9)) {
+        plot.new()
+        text(0.5, 0.5, "No single edge's weight noticeably changes this scenario's effect.")
+        return(invisible())
+      }
+
+      top <- head(sens[order(sens$influence), ], 10) # ascending so barplot draws highest on top
+      barplot(
+        top$influence, names.arg = top$link, horiz = TRUE, las = 1,
+        col = "#4E79A7", border = NA, cex.names = 0.8,
+        xlab = "Change in total equilibrium effect (+10% weight)",
+        main = "Which edges matter most for this scenario"
+      )
+    })
+
+    output$sensitivity_table <- renderDT({
+      sc <- current_scenario()
+      req(sc, isTRUE(input$show_sensitivity))
+
+      df <- sc$sensitivity[, c("link", "weight", "confidence", "influence")]
+      names(df) <- c("Link", "Weight", "Confidence", "Influence")
+
+      datatable(df, rownames = FALSE, options = list(dom = "t", pageLength = 10)) %>%
+        formatRound(columns = c("Influence"), digits = 3)
     })
 
     output$network_effect_table <- renderDT({

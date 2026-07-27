@@ -35,6 +35,24 @@ stable_chain_matrix <- function() {
   )
 }
 
+# Same trophic chain as stable_chain_matrix(), as a real igraph object (with
+# weight/confidence edge attributes) for functions that need a graph, not
+# just a bare matrix - e.g. global_sensitivity(). Values matched by
+# construction: build_interaction_matrix(stable_chain_graph()) is identical
+# to stable_chain_matrix().
+stable_chain_graph <- function() {
+  nodes <- data.frame(id = c("Resource", "Consumer", "Predator"), stringsAsFactors = FALSE)
+  edges <- data.frame(
+    from = c("Resource", "Consumer", "Resource", "Predator", "Consumer"),
+    to   = c("Resource", "Resource", "Consumer", "Consumer", "Predator"),
+    weight = c(1, 1, 1, 1, 1),
+    confidence = c(0.9, 0.8, 0.8, 0.7, 0.8),
+    interaction_type = c("negative", "negative", "positive", "negative", "positive"),
+    stringsAsFactors = FALSE
+  )
+  graph_from_data_frame(edges, vertices = nodes, directed = TRUE)
+}
+
 fisheries_graph <- function() {
   sp <- read_savepoint("../../docs/example_fisheries.idpsir.json")
   build_igraph(sp$nodes, sp$edges, get_default_dpsir_schema())
@@ -224,4 +242,38 @@ test_that("compare_scenario_sign_confidence builds a node x scenario wide table"
   expect_equal(nrow(df), vcount(g))
   expect_true(all(df$A == 100))
   expect_true(all(df$B == 80))
+})
+
+test_that("global_sensitivity ranks edges by how much a 10% weight bump moves the equilibrium effect", {
+  g <- stable_chain_graph()
+  press <- c(Resource = 0, Consumer = 0, Predator = 1)
+
+  sens <- global_sensitivity(g, press)
+
+  expect_equal(nrow(sens), ecount(g))
+  expect_true(all(sens$influence >= 0))
+  expect_true(all(diff(sens$influence) <= 1e-9)) # sorted descending
+  # Verified independently (scratchpad/test_sensitivity4.R): every edge has
+  # some influence here because every node's baseline equilibrium is nonzero
+  # (unlike the fisheries example's single-cycle structure, where only one
+  # node ends up with a nonzero equilibrium and only its one incoming edge
+  # can show any sensitivity at all).
+  expect_true(all(sens$influence > 0))
+  expect_equal(sens$link[1], "Consumer -> Predator")
+})
+
+test_that("global_sensitivity attributes zero influence to an edge whose source has zero baseline equilibrium", {
+  # In the fisheries example (a single 5-node cycle), only I1 ends up with a
+  # nonzero equilibrium effect - so only the one edge feeding INTO the node
+  # whose row equation determines I1 (I1 -> R1) can move it; every other
+  # edge's 10% bump leaves the equilibrium completely unchanged. Confirmed
+  # independently in scratchpad/test_sensitivity.R before writing this.
+  g <- fisheries_graph()
+  press <- build_press_vector(g, active_ids = "R1", strengths = c(R1 = 0.7))
+
+  sens <- global_sensitivity(g, press)
+
+  expect_equal(sens$link[1], "Fisher income loss -> Fishing quota policy")
+  expect_true(sens$influence[1] > 0)
+  expect_true(all(sens$influence[-1] < 1e-9))
 })
