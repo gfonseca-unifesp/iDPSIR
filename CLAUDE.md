@@ -1769,9 +1769,9 @@ ordem combinada com o usuário:
   dev local, ou `global.R` detectando e usando `renv::restore()` quando um
   `renv.lock` existir).
 
-**Fase 9 concluída** (`ROADMAP_FASE9_iDPSIR.md`, branch `fase-9-auto-regulacao`,
-ainda não mesclada em `main` — validar antes de integrar, mesmo padrão das fases
-anteriores), ordem combinada com o usuário:
+**Fase 9 concluída e mesclada em `main`** (`ROADMAP_FASE9_iDPSIR.md`, branch
+`fase-9-auto-regulacao`, fast-forward sem conflitos, `git push` confirmado),
+ordem combinada com o usuário:
 - [x] **9.2** — alcance de uma resposta (concluído, ver acima).
 - [x] **9.1** — auto-regulação por fator (concluído, ver acima — os quatro
   sub-passos 9.1.1-9.1.4 num único commit; verificação decisiva: exemplo de
@@ -1782,11 +1782,10 @@ anteriores), ordem combinada com o usuário:
 
 Fora do roadmap: fast-follow "gráficos editáveis/baixáveis" (download
 PNG/SVG + figuras no relatório pros gráficos de trajetória/sensibilidade,
-ver acima) também concluído nesta branch.
+ver acima) também concluído nesta branch, mesclado junto.
 
-Próximo passo: mesclar `fase-9-auto-regulacao` em `main` quando o usuário
-confirmar (branch tem 3 commits: 9.2, 9.1, e o fast-follow de gráficos —
-9.3/9.4 ainda não commitado nesta sessão).
+Checagem de sintaxe + suíte `testthat` completa (91 assertivas) re-rodadas
+em `main` depois do merge, ambas limpas, antes do push.
 
 Pedido pelo usuário mas ainda não definido: "estrela"/"rosa" como layouts
 adicionais — precisa de uma conversa pra fixar o que cada termo significa
