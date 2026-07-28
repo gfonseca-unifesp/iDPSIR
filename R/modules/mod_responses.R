@@ -112,6 +112,41 @@ plot_download_row <- function(ns, prefix) {
   )
 }
 
+# Revisao 1, Table 2: every Response node in the network evaluated ALONE at
+# FULL strength (100%) - regardless of whether its checkbox is active, and
+# regardless of whatever % its own slider happens to show - against the
+# same pressure scenario. Fixed at 100% deliberately, not each response's
+# current slider value: an untouched slider defaults to 50%, which would
+# make an inactive response look artificially weaker than an equally
+# capable one the user happened to check and drag to 100% - fixing the
+# strength makes this a clean "if this were fully applied on its own"
+# comparison, matching the review's own Table 2 and the values already
+# verified in tests/testthat/test-sufficiency.R (also computed at 100%).
+# Pure function (no Shiny reactives), so it's independently testable and
+# reusable from R/report.R later (Fase 3).
+build_confidence_matrix <- function(g, p_D, response_nodes_df, c, n_simulations = 300, spread = 0.5, seed = 42) {
+  if (nrow(response_nodes_df) == 0) {
+    return(data.frame(Response = character(), stringsAsFactors = FALSE))
+  }
+
+  per_response <- lapply(seq_len(nrow(response_nodes_df)), function(i) {
+    rid <- response_nodes_df$id[i]
+    p_r <- build_press_vector(g, rid, setNames(1, rid))
+    sufficiency_confidence(g, p_D, p_r, c = c, n_simulations = n_simulations, spread = spread, seed = seed)
+  })
+
+  if (nrow(per_response[[1]]) == 0) {
+    return(data.frame(Response = response_nodes_df$label, stringsAsFactors = FALSE))
+  }
+
+  impact_labels <- per_response[[1]]$node
+  mat <- do.call(rbind, lapply(per_response, function(sc) sc$neutralized_pct))
+  colnames(mat) <- impact_labels
+
+  df <- as.data.frame(mat, stringsAsFactors = FALSE)
+  cbind(Response = response_nodes_df$label, df, stringsAsFactors = FALSE)
+}
+
 mod_responses_ui <- function(id) {
   ns <- NS(id)
 
@@ -121,16 +156,44 @@ mod_responses_ui <- function(id) {
     status = "primary",
     solidHeader = TRUE,
 
-    p("Turn on the responses you want to test, set how strongly each is implemented, then apply the scenario to see its effect."),
+    # Revisao 1, Fase 2: two independent "pushes" the user builds - a
+    # pressure scenario (what's getting worse) and a response scenario
+    # (what's being done about it) - shown side by side with the
+    # sufficiency reading below. Deliberately additive: the older
+    # equilibrium-based reading (further down, unchanged) stays fully
+    # functional alongside this while the new engine is validated.
+    p("Build two scenarios: what's pushing the system to get worse, and how you're responding to it. Then see whether the response is enough."),
 
+    h5("Pressure scenario"),
+    p(class = "text-muted", "Optional. Turn on the Drivers/Pressures you expect to worsen, and how strongly."),
+    uiOutput(ns("pressure_controls")),
+
+    tags$hr(),
+    h5("Response scenario"),
+    p(class = "text-muted", "Turn on the responses you want to test, and how strongly each is implemented."),
     uiOutput(ns("response_controls")),
 
     tags$hr(),
+    sliderInput(
+      ns("effect_horizon"), "How far to trace the effect",
+      min = 0.2, max = 0.8, value = 0.5, step = 0.05
+    ),
+    p(
+      class = "text-muted",
+      "Lower values focus almost entirely on short, direct causal chains; higher values let longer, indirect chains",
+      "contribute more. \"Sensitivity to this setting\" below shows whether your conclusions change across this range."
+    ),
+
     fluidRow(
       column(width = 6, textInput(ns("scenario_name"), "Scenario name", value = "Scenario 1")),
       column(width = 6, br(), actionButton(ns("apply_scenario"), "Apply scenario", icon = icon("play"), class = "btn-success", width = "100%"))
     ),
 
+    uiOutput(ns("sufficiency_result")),
+
+    tags$hr(),
+    h5("Effect on each factor (older, equilibrium-based reading)"),
+    p(class = "text-muted", "Being replaced by the sufficiency reading above - kept here for now while it's validated."),
     uiOutput(ns("scenario_result")),
 
     tags$hr(),
@@ -169,6 +232,39 @@ mod_responses_server <- function(id, schema, nodes, edges, graph) {
         fluidRow(
           column(width = 6, checkboxInput(ns(paste0("active_", node_id)), rn$label[i], value = FALSE)),
           column(width = 6, sliderInput(ns(paste0("strength_", node_id)), NULL, min = 0, max = 100, value = 50, step = 5, post = "%"))
+        )
+      })
+
+      tagList(rows)
+    })
+
+    # Revisao 1: the "pressure" side of the two pushes - Drivers/Pressures
+    # the user expects to worsen. "Driver"/"Pressure" are literal category
+    # names here, same as "Impact" is already hardcoded in a few places in
+    # this codebase (e.g. R/sufficiency.R, R/metrics.R) rather than
+    # generalized through the schema's role system.
+    pressure_nodes <- reactive({
+      req(nodes())
+      n <- nodes()
+      n[n$dpsir_category %in% c("Driver", "Pressure"), , drop = FALSE]
+    })
+
+    output$pressure_controls <- renderUI({
+      req(graph())
+      pn <- pressure_nodes()
+
+      if (nrow(pn) == 0) {
+        return(tags$div(
+          class = "alert alert-warning",
+          "No Driver or Pressure nodes in this network yet."
+        ))
+      }
+
+      rows <- lapply(seq_len(nrow(pn)), function(i) {
+        node_id <- pn$id[i]
+        fluidRow(
+          column(width = 6, checkboxInput(ns(paste0("pressure_active_", node_id)), pn$label[i], value = FALSE)),
+          column(width = 6, sliderInput(ns(paste0("pressure_strength_", node_id)), NULL, min = 0, max = 100, value = 50, step = 5, post = "%"))
         )
       })
 
@@ -239,6 +335,26 @@ mod_responses_server <- function(id, schema, nodes, edges, graph) {
       sensitivity <- suppressWarnings(global_sensitivity(graph(), press))
       reach <- response_reach(graph(), active_ids)
 
+      # Revisao 1, Fase 2: the new sufficiency reading, computed alongside
+      # (not instead of) everything above. Pressure is optional - an
+      # inactive pressure scenario is just an all-zero press vector, which
+      # sufficiency() handles the same as any other (worsening = 0
+      # everywhere, so "neutralized" trivially holds wherever the response
+      # helps at all).
+      pn <- pressure_nodes()
+      pressure_active_ids <- pn$id[vapply(pn$id, function(node_id) isTRUE(input[[paste0("pressure_active_", node_id)]]), logical(1))]
+      pressure_strengths <- setNames(numeric(length(pressure_active_ids)), pressure_active_ids)
+      for (node_id in pressure_active_ids) {
+        pressure_strengths[[node_id]] <- input[[paste0("pressure_strength_", node_id)]]
+      }
+      p_D <- build_press_vector(graph(), pressure_active_ids, pressure_strengths / 100)
+      c_value <- input$effect_horizon
+
+      suff_df <- sufficiency(graph(), p_D, press, c = c_value)
+      suff_reach_over_c <- sufficiency_reach_over_c(graph(), p_D, press)
+
+      suff_confidence_matrix <- build_confidence_matrix(graph(), p_D, rn, c = c_value)
+
       current_scenario(list(
         name = input$scenario_name,
         active = active_ids,
@@ -247,8 +363,107 @@ mod_responses_server <- function(id, schema, nodes, edges, graph) {
         result = result,
         sign_confidence = sign_confidence,
         sensitivity = sensitivity,
-        reach = reach
+        reach = reach,
+        pressure_active = pressure_active_ids,
+        pressure_strengths = pressure_strengths,
+        p_D = p_D,
+        effect_horizon = c_value,
+        sufficiency_df = suff_df,
+        sufficiency_confidence_matrix = suff_confidence_matrix,
+        sufficiency_reach_over_c = suff_reach_over_c
       ))
+    })
+
+    # =================================================
+    # SUFFICIENCY MODEL (Revisao 1, Fase 2)
+    # =================================================
+
+    output$sufficiency_result <- renderUI({
+      req(current_scenario())
+
+      tagList(
+        h5("Is the response enough? (sufficiency)"),
+        p(
+          class = "text-muted",
+          "For each Impact: how much the pressure scenario worsens it, how much the response scenario mitigates it,",
+          "and whether the mitigation is enough to neutralize the worsening."
+        ),
+        DTOutput(ns("sufficiency_table")),
+        h5("How confident is that, response by response?"),
+        p(
+          class = "text-muted",
+          "Every response in the network, evaluated alone at the strength set above, against the same pressure",
+          "scenario: % of simulations - resampling every edge's weight within a range set by its confidence - in",
+          "which that response alone neutralizes each Impact."
+        ),
+        DTOutput(ns("confidence_matrix_table")),
+        h5("Does it hold up across how far the effect is traced?"),
+        p(
+          class = "text-muted",
+          "Recomputes the neutralization verdict at different settings of \"How far to trace the effect\" -",
+          "an Impact marked borderline has a verdict that changes somewhere in that range."
+        ),
+        DTOutput(ns("reach_over_c_table"))
+      )
+    })
+
+    output$sufficiency_table <- renderDT({
+      sc <- current_scenario()
+      req(sc)
+
+      df <- sc$sufficiency_df
+      single_response <- length(sc$active) == 1
+
+      strength_display <- if (single_response) {
+        active_strength_pct <- sc$strengths[[sc$active]]
+        ifelse(is.na(df$strength_to_neutralize), "-", sprintf("%.0f%%", df$strength_to_neutralize * active_strength_pct))
+      } else {
+        ifelse(is.na(df$strength_to_neutralize), "-", sprintf("x%.2f", df$strength_to_neutralize))
+      }
+
+      display <- data.frame(
+        Impact = df$node,
+        `Worsening (pressure)` = round(df$worsening, 3),
+        `Mitigation (response)` = round(df$mitigation, 3),
+        Net = round(df$net, 3),
+        `Neutralizes?` = ifelse(df$neutralized, "Yes", "No"),
+        `Strength needed` = strength_display,
+        check.names = FALSE,
+        stringsAsFactors = FALSE
+      )
+
+      datatable(display, rownames = FALSE, options = list(dom = "t", pageLength = 10))
+    })
+
+    output$confidence_matrix_table <- renderDT({
+      sc <- current_scenario()
+      req(sc)
+
+      df <- sc$sufficiency_confidence_matrix
+      numeric_cols <- setdiff(names(df), "Response")
+
+      dt <- datatable(df, rownames = FALSE, options = list(dom = "t", pageLength = 10))
+      if (length(numeric_cols) > 0) {
+        dt <- dt %>% formatRound(columns = numeric_cols, digits = 0)
+      }
+      dt
+    })
+
+    output$reach_over_c_table <- renderDT({
+      sc <- current_scenario()
+      req(sc)
+
+      df <- sc$sufficiency_reach_over_c
+      c_cols <- grep("^c_", names(df), value = TRUE)
+
+      display <- df[, c("node", c_cols, "flips"), drop = FALSE]
+      for (col in c_cols) {
+        display[[col]] <- ifelse(display[[col]], "Yes", "No")
+      }
+      display$flips <- ifelse(display$flips, "Borderline", "")
+      names(display) <- c("Impact", gsub("^c_", "c=", c_cols), "Verdict")
+
+      datatable(display, rownames = FALSE, options = list(dom = "t", pageLength = 10))
     })
 
     output$scenario_result <- renderUI({

@@ -412,6 +412,79 @@ Checagem rápida de sintaxe sem subir o app:
   se nunca tocado) — sem isso o relatório não teria como redesenhar a
   trajetória de um cenário salvo, já que o slider é um input único e
   global, não por cenário.
+
+  **Revisão 1, Fase 2 — leitura de suficiência adicionada ao lado da leitura
+  antiga (nada removido ainda, ver `R/sufficiency.R` acima).** Novo painel
+  "Pressure scenario" (espelha exatamente o padrão já existente do painel
+  de Resposta: um checkbox + slider 0-100% por nó Driver/Pressure,
+  `pressure_nodes`/`output$pressure_controls`) logo acima do painel
+  "Response scenario" (renomeado de "Responses" pra deixar claro que agora
+  são dois cenários independentes, não um só). Slider único novo "How far
+  to trace the effect" (`effect_horizon`, 0.2-0.8, default 0.5) mapeia o
+  `c` de `propagate()` — rótulo escolhido de propósito pra não colidir com
+  "Reach" (`response_reach()`), um recurso diferente e já existente na
+  mesma aba (alcance topológico, não tem nada a ver com o parâmetro `c`).
+  "Apply scenario" agora também constrói `p_D` (`build_press_vector()`
+  sobre os inputs do painel de pressão) e chama `sufficiency()`/
+  `sufficiency_reach_over_c()`/`build_confidence_matrix()` (helper novo,
+  não-reativo, no topo do arquivo — avalia cada Resposta da rede sozinha,
+  **sempre a 100%** de força, contra o mesmo `p_D`, nunca a força que o
+  slider daquela resposta happens to show) — as três tabelas da Seção 4 da
+  revisão ("Is the response enough?", "How confident is that, response by
+  response?", "Does it hold up across how far the effect is traced?"),
+  guardadas em `current_scenario()` ao lado (não no lugar) de tudo que já
+  existia. A seção antiga foi apenas rotulada "Effect on each factor
+  (older, equilibrium-based reading)" com uma nota "Being replaced by the
+  sufficiency reading above - kept here for now while it's validated" —
+  continua calculando e mostrando exatamente o que já mostrava.
+
+  **Dois bugs reais, encontrados só ao testar ao vivo no navegador contra a
+  rede de Mangi** (nenhum dos dois existia nos 29 testes standalone da
+  Fase 1, porque nenhum deles exercitava o caminho UI→DT):
+  - A tabela "Does it hold up..." (`reach_over_c_table`) sempre mostrava
+    "No matching records found", apesar dos cabeçalhos das colunas
+    aparecerem corretos. Depurado lendo a API do DataTables direto no
+    console do navegador (`dt.ajax.json()`), não assumido: o R real por
+    trás do JSON server-side retornava `"Error in if (!searchable[j]) next:
+    argumento tem comprimento zero"` — a última coluna da tabela (`flips`)
+    tinha o nome `""` (string vazia, escolhido pra não repetir "Verdict"
+    ao lado de "Borderline"/""), e o pacote DT quebra internamente ao
+    tentar casar esse nome vazio na lógica de busca por coluna, mesmo com
+    a busca desligada (`dom = "t"`). Corrigido dando um nome de verdade
+    ("Verdict") à coluna — `datatable()` não aceita nome de coluna vazio
+    de forma confiável nesta versão do pacote.
+  - A tabela "How confident is that..." mostrava números plausíveis mas
+    **diferentes** dos já verificados na Fase 1 (ex.: Gear restrictions
+    no Recife saindo 80% em vez dos 100% esperados) — não um erro, uma
+    escolha de design equivocada: `build_confidence_matrix()` original
+    avaliava cada Resposta na força **atual do seu próprio slider**
+    (`strengths_pct`), inclusive pras Respostas inativas, cujo slider fica
+    parado no default de 50% até o usuário tocar nele. Isso tornava a
+    comparação enganosa — uma Resposta tecnicamente tão eficaz quanto
+    outra parecia mais fraca só por ninguém ter arrastado o slider dela
+    ainda. Corrigido fixando a força em 100% pra toda Resposta nesta
+    tabela especificamente (`build_press_vector(g, rid, setNames(1, rid))`,
+    parâmetro `strengths_pct` removido da assinatura) — o que também é o
+    que a Fase 1 já tinha verificado contra a Tabela 2 da própria revisão
+    e contra `test-sufficiency.R`, então esse ajuste alinhou o comporta-
+    mento da UI ao que já estava provado correto, não o contrário.
+
+  Testado ponta a ponta rodando o app de verdade contra a rede de Mangi
+  (`data/mangi2007_*.csv`, importada via CSV — savepoint de exemplo ainda
+  não existe, isso é Fase 5): pressão D1+D3 a 100%, resposta R1 a 100%,
+  `c=0.5` (default) — as três tabelas novas batem número por número com
+  a Fase 1 (`worsening`/`mitigation`/`net` de 0.11/-0.166/-0.056 em Catch
+  decline, 0.03/-0.093/-0.063 no Recife, 0.05/-0.102/-0.053 em Food
+  insecurity, todos "Yes"/"Strength needed" 66%/32%/49%; confiança R1=100
+  nos três Impactos, R2/R3/R5=100 só no Recife; nenhuma linha "Borderline"
+  na tabela de `c`, todos "Yes" nos 5 valores de `c` testados). A seção
+  antiga (equilíbrio/estabilidade/Reach/robustez/"When will Impacts be
+  neutralized") continua funcionando sem nenhuma regressão nos números já
+  documentados nas fases anteriores — prova de que a Fase 2 foi
+  genuinamente aditiva. Sem erros no console do navegador nem do servidor
+  em nenhum passo, depois de corrigidos os dois achados acima. Suíte
+  `testthat` (91 assertivas) e checagem de sintaxe re-rodadas depois do
+  fix, ambas limpas.
 - `R/modules/mod_report.R` → aba "Report" (última do Explorar): checkboxes para
   métricas gerais/centralidades/descritores DPSIR/referências de aresta/item 6.4
   ("Reproducibility info"), seleção múltipla de imagens de
@@ -1884,8 +1957,10 @@ Mangi et al. 2007 sob o motor antigo). Substitui `press_perturbation()`
 leitura principal da aba Scenarios:
 - [x] **Fase 1** — motor matemático (`R/sufficiency.R`), aditivo, zero
   mudança visível (concluído, ver acima).
-- [ ] **Fase 2** — UI nova ("Pressure scenario" + controle de alcance + as
-  3 tabelas da Seção 4) ao lado da UI antiga, sem remover nada ainda.
+- [x] **Fase 2** — UI nova ("Pressure scenario" + controle de alcance + as
+  3 tabelas da Seção 4) ao lado da UI antiga, sem remover nada ainda
+  (concluído, ver acima — dois bugs reais de DT/design corrigidos ao
+  testar ao vivo contra a rede de Mangi).
 - [ ] **Fase 3** — relatório (3 tabelas novas) + persistência dos dois
   cenários + `c` no savepoint.
 - [ ] **Fase 4** — corte: remove UI/relatório do motor antigo, renomeia
