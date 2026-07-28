@@ -1686,6 +1686,56 @@ que já existia) — Figuras e Tabelas intercaladas na ordem certa do
 documento, não contadores separados. Sem erro no console do servidor em
 nenhum passo.
 
+**Itens 9.3/9.4 concluídos: tutorial e README.** Fecha a Fase 9 inteira
+(9.1, 9.2, 9.3, 9.4 — a ordem 9.2→9.1→9.3/9.4 combinada com o usuário no
+início da fase).
+
+**Achado real ao revisar, não ignorado**: o callout de aviso já existente em
+`docs/tutorial.html` ("Applying the response") dizia, em texto fixo, que "the
+underlying math structurally can't produce a strict 'yes, stable' verdict for
+a genuine loop" — verdade **antes** do item 9.1, mas **falsa** depois dele
+(a própria seção nova provava o contrário duas seções abaixo, mostrando
+`check_stability()` retornando `TRUE`). Corrigido pra "by default... without
+that [self-regulation], the math can't produce a 'yes, stable' verdict" —
+sem isso o tutorial teria uma contradição interna entre dois parágrafos a
+poucas telas de distância.
+
+`README.md`: `self_regulation` documentado em Data format (mesmo estilo dos
+demais atributos), árvore de arquivos ganhou `R/reach.R`/`R/scenario_plots.R`/
+`ROADMAP_FASE9_iDPSIR.md`, e o bullet de Scenarios em Workflow passou a citar
+que o efeito de equilíbrio/estabilidade é **condicional** à auto-regulação
+configurada (com a sensibilidade correspondente), o alcance (sempre
+calculável, independente disso), e que os gráficos de trajetória/sensibilidade
+agora têm download PNG/SVG e entram no relatório.
+
+`docs/tutorial.html`: nova sequência dentro do "Worked example" existente
+(mesmo savepoint de pescas já usado, sem introduzir uma segunda rede) —
+"Unlocking a genuine long-term effect: self-regulation" (marcar auto-
+regulação "high" nos 5 fatores, ver o aviso virar "stable", "Nodes affected"
+ir de 1.00/1.00 pra 2.00/**5.00**, neutralização de I1 em -0.121/8 passos —
+todos números já verificados nesta sessão, não inventados pro texto);
+"How much do you trust that? Sensitivity to self-regulation" (100% de
+concordância nos 5 fatores, mesmo já verificado); "Reach: the one thing that
+never needed any of this" (4 fatores/1 de 1 Impacto, sem mudança nenhuma
+antes/depois da auto-regulação — prova visual de que é independente).
+Comparação raiz-vs-fim-de-cadeia (pedida explicitamente pelo roadmap)
+**não** exigiu modificar o exemplo de pescas (que só tem uma Resposta,
+insuficiente pra comparar duas posições): uma tabela ilustrativa separada
+com números já testados em `test-reach.R` (resposta perto da raiz alcança 3
+fatores; resposta de fim-de-cadeia alcança 1) cobre o conceito sem pedir
+pro leitor construir nada. Seção "Reach" e "Show sensitivity to
+self-regulation" também adicionadas à lista de controles da aba Scenarios em
+"3 · Explore tabs" (que ainda não os mencionava); campo `self_regulation`
+adicionado às duas tabelas de campos de Nós (formato CSV de importação e a
+descrição do formulário do passo 3); "Sign confidence"/"Edge sensitivity" no
+Quick glossary ganharam vizinhos "Self-regulation"/"Reach".
+
+Verificado carregando o arquivo renderizado de verdade no navegador
+(`file://`, não só lendo o HTML) e extraindo o texto visível da página
+inteira: nenhuma seção quebrada, nenhum HTML malformado, fluxo de leitura
+coerente do início ao fim — incluindo a checagem específica de que o
+callout corrigido não contradiz mais a seção de auto-regulação logo abaixo.
+
 ## Próximo
 
 Fase 5 está completa (Marcos A-D). Todos os 4 itens da lista pós-Fase 5 (1:
@@ -1719,7 +1769,7 @@ ordem combinada com o usuário:
   dev local, ou `global.R` detectando e usando `renv::restore()` quando um
   `renv.lock` existir).
 
-**Fase 9 em andamento** (`ROADMAP_FASE9_iDPSIR.md`, branch `fase-9-auto-regulacao`,
+**Fase 9 concluída** (`ROADMAP_FASE9_iDPSIR.md`, branch `fase-9-auto-regulacao`,
 ainda não mesclada em `main` — validar antes de integrar, mesmo padrão das fases
 anteriores), ordem combinada com o usuário:
 - [x] **9.2** — alcance de uma resposta (concluído, ver acima).
@@ -1728,11 +1778,15 @@ anteriores), ordem combinada com o usuário:
   pescas com auto-regulação alta em todos os nós vira a primeira rede
   **estável** de todo o projeto, com efeito de equilíbrio totalmente
   definido).
-- [ ] **9.3**/**9.4** — tutorial e README, por último, agora que a UI de 9.1
-  estabilizou. Precisa cobrir: por que o efeito de longo prazo às vezes
-  falta, como a auto-regulação o destrava (com o mesmo exemplo de pescas
-  usado na verificação acima), como ler a sensibilidade à auto-regulação, e
-  como interpretar o alcance (raiz vs. fim-de-cadeia).
+- [x] **9.3**/**9.4** — tutorial e README (concluído, ver acima).
+
+Fora do roadmap: fast-follow "gráficos editáveis/baixáveis" (download
+PNG/SVG + figuras no relatório pros gráficos de trajetória/sensibilidade,
+ver acima) também concluído nesta branch.
+
+Próximo passo: mesclar `fase-9-auto-regulacao` em `main` quando o usuário
+confirmar (branch tem 3 commits: 9.2, 9.1, e o fast-follow de gráficos —
+9.3/9.4 ainda não commitado nesta sessão).
 
 Pedido pelo usuário mas ainda não definido: "estrela"/"rosa" como layouts
 adicionais — precisa de uma conversa pra fixar o que cada termo significa

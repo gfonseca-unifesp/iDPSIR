@@ -71,8 +71,10 @@ iDPSIR/
 │   ├── graph.R                # igraph builder, layered layout, network/community visuals
 │   ├── metrics.R              # centralities, general metrics, DPSIR descriptors
 │   ├── pathways.R             # schema-aware causal pathway analysis
-│   ├── loop_analysis.R        # loop analysis (Levins 1974): interaction matrix, stability, press perturbation, step-by-step trajectory (with an optional per-edge nonlinear threshold), robustness check, steps-to-neutralize-an-Impact
+│   ├── loop_analysis.R        # loop analysis (Levins 1974): interaction matrix (incl. optional per-node self-regulation), stability, press perturbation, step-by-step trajectory (with an optional per-edge nonlinear threshold), robustness check, sensitivity to self-regulation, steps-to-neutralize-an-Impact
 │   ├── responses.R            # get_feedback_categories/find_response_targets (still used); apply_response and the older scenario-comparison helpers are kept but no longer called, superseded by loop_analysis.R
+│   ├── reach.R                # response_reach(): how far a response's influence travels through the network, independent of loop_analysis.R's equilibrium math
+│   ├── scenario_plots.R       # shared trajectory/edge-sensitivity chart drawing, reused on screen, in PNG/SVG downloads, and in the report
 │   ├── report.R               # self-contained HTML report builder
 │   ├── io.R                   # CSV matrix import, .idpsir.json savepoint read/write, merge_savepoints()
 │   ├── core/                  # shared UI components
@@ -81,7 +83,7 @@ iDPSIR/
 │   │   ├── mod_data.R          # wizard steps: Start/Model/Nodes/Edges/Review (form-based editor)
 │   │   ├── mod_graph.R         # Graph tab: filters, display options, pathway highlighting, category/community coloring, save snapshots for the report
 │   │   ├── mod_communities.R   # earlier standalone Communities tab, kept for reference (not sourced; superseded by mod_graph.R's "Color nodes by")
-│   │   ├── mod_responses.R     # Scenarios tab: activate responses and run loop analysis (stability check, immediate vs. equilibrium effect, step-by-step trajectory, robustness check, steps to neutralize an Impact), save/compare scenarios
+│   │   ├── mod_responses.R     # Scenarios tab: activate responses and run loop analysis (stability check, immediate vs. equilibrium effect, step-by-step trajectory, robustness/self-regulation sensitivity checks, reach, steps to neutralize an Impact), save/compare scenarios
 │   │   ├── mod_report.R        # Report tab: pick metrics sections + saved graph snapshots + saved scenarios, download the HTML report (numbered figure/table captions, parametrization described)
 │   │   ├── mod_metrics.R       # Metrics tab: general / centralities / DPSIR descriptors
 │   │   └── mod_wizard.R        # wizard shell tying every step/tab together
@@ -94,6 +96,7 @@ iDPSIR/
 │   └── testthat/               # tests for the scientific core (loop_analysis, metrics, io, validate)
 ├── PLANO_iDPSIR.md            # restructuring plan and roadmap (in Portuguese)
 ├── ROADMAP_MELHORIAS_iDPSIR.md # roadmap towards a JOSS/SoftwareX submission (in Portuguese)
+├── ROADMAP_FASE9_iDPSIR.md    # roadmap for self-regulation and response reach (in Portuguese)
 └── README.md
 ```
 
@@ -101,7 +104,11 @@ iDPSIR/
 
 **Nodes** (`data/sample_nodes.csv`): `id`, `label`, `dpsir_category` (Driver, Pressure,
 State, Impact, Response), `subsystem`, `uncertainty` (low/medium/high),
-`controllability` (low/medium/high), `temporal_scale` (short/medium/long).
+`controllability` (low/medium/high), `temporal_scale` (short/medium/long),
+`self_regulation` (optional, none/low/medium/high, default none — whether the factor
+tends to return to its own baseline on its own once nothing is pushing it, e.g. a
+habitat that recovers, or a Driver kept in check by something outside the model; see
+Scenarios below for what this unlocks).
 
 **Edges** (`data/sample_edges.csv`): `from`, `to`, `weight`, `confidence` (0-1),
 `interaction_type` (positive/negative), `evidence_type`, `threshold` (optional,
@@ -143,8 +150,17 @@ has four tabs:
   step-by-step trajectory chart (respecting any per-edge nonlinear `threshold` set in
   the Edges step), an optional robustness check against how confident each edge's
   weight is, and an optional ranking of which edges' weight most affects the result
-  ("which edges matter most"). Save a scenario and compare multiple saved scenarios
-  side by side.
+  ("which edges matter most"). The trajectory and edge-ranking charts can each be
+  downloaded as PNG or SVG, and are included as figures in the report.
+  **The equilibrium/stability results are conditional on `self_regulation`**: a
+  network with no self-regulated factors has no long-term settling point at all (only
+  the immediate effect is meaningful then, and the app says so explicitly) — mark
+  self-regulation on factors where it applies (Nodes step) to unlock a genuine
+  equilibrium, and use the optional "sensitivity to self-regulation" check to see how
+  much the result depends on that assumption. Independent of all of this, **reach**
+  always shows how many factors — and how many Impacts — a response's influence can
+  touch through some causal path, whether or not the network settles. Save a scenario
+  and compare multiple saved scenarios side by side.
 - **Metrics** — general network metrics, centralities, and DPSIR descriptors (gaps
   such as Impacts without a Response, or Pressures not covered by one).
 - **Report** — pick which sections (saved graph snapshots, metrics, centralities,

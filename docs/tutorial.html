@@ -639,6 +639,7 @@ cd iDPSIR</pre>
                     <tr><td class="key">uncertainty</td><td>low / medium / high</td></tr>
                     <tr><td class="key">controllability</td><td>low / medium / high</td></tr>
                     <tr><td class="key">temporal_scale</td><td>short / medium / long</td></tr>
+                    <tr><td class="key">self_regulation</td><td>none / low / medium / high — optional, leave blank for most factors (see Scenarios below)</td></tr>
                   </table>
                 </div>
                 <pre>id,label,dpsir_category,subsystem,uncertainty,controllability,temporal_scale
@@ -715,6 +716,7 @@ P1,S1,3,0.85,negative,monitoring</pre>
                 <tr><td class="key">uncertainty</td><td>low / medium / high — how confident you are this node is described correctly. Thickens the node's border on the graph.</td></tr>
                 <tr><td class="key">controllability</td><td>low / medium / high — how much a manager can influence this factor directly.</td></tr>
                 <tr><td class="key">temporal_scale</td><td>short / medium / long — how quickly this factor changes. Also filterable on the Graph tab.</td></tr>
+                <tr><td class="key">self_regulation</td><td>none / low / medium / high — optional, default none. Whether this factor tends to return to its own baseline on its own once nothing is pushing it (e.g. a recovering habitat). Only affects the Scenarios tab's long-term (equilibrium) effect — see the worked example.</td></tr>
               </table>
             </div>
           </div>
@@ -842,7 +844,11 @@ P1,S1,3,0.85,negative,monitoring</pre>
             </div>
             <div class="control">
               <div class="label">Apply scenario<span class="widget">button</span></div>
-              <p>Runs the active response(s) through the network's feedback loops (see the worked example below) and shows "Effect on the network" — how many factors are affected and by how much, immediately vs. once the effect has fully propagated — plus "Effect on each factor": a plain <span class="chip improves">Improves</span> <span class="chip worsens">Worsens</span> <span class="chip stable">Stable</span> per node, alongside a <strong>Sign confidence (%)</strong> column (exact scores stay available in the CSV/Excel export). If the network's feedback loops aren't stable, a plain-language warning appears above these tables — see the worked example for what that means and why it's common, not a sign of a broken model.</p>
+              <p>Runs the active response(s) through the network's feedback loops (see the worked example below) and shows "Effect on the network" — how many factors are affected and by how much, immediately vs. once the effect has fully propagated — plus "Effect on each factor": a plain <span class="chip improves">Improves</span> <span class="chip worsens">Worsens</span> <span class="chip stable">Stable</span> per node, alongside a <strong>Sign confidence (%)</strong> column (exact scores stay available in the CSV/Excel export). If the network's feedback loops aren't stable, a plain-language warning appears above these tables, along with a note if the result also depends on a self-regulation assumption you set — see the worked example for what both mean.</p>
+            </div>
+            <div class="control">
+              <div class="label">Reach<span class="widget">table</span></div>
+              <p>How many factors — and how many Impacts — the active response(s) can touch by following the network's links. Unlike everything above, this never depends on self-regulation or stability: it's a plain count of what's reachable, always available.</p>
             </div>
             <div class="control">
               <div class="label">Sign confidence (%)<span class="widget">column</span></div>
@@ -854,15 +860,19 @@ P1,S1,3,0.85,negative,monitoring</pre>
             </div>
             <div class="control">
               <div class="label">Show how the effect evolves over time<span class="widget">optional, chart</span></div>
-              <p>A line per factor tracing the effect step by step instead of just the final immediate/equilibrium numbers — most useful exactly when the stability warning above is showing, since it lets you see whether the effect is settling down or still growing. If any edge has an optional <code>threshold</code> set (Edges step), this is also the only place it applies: that edge contributes nothing until the simulated change at its source factor crosses the threshold, instead of scaling proportionally from the start.</p>
+              <p>A line per factor tracing the effect step by step instead of just the final immediate/equilibrium numbers — most useful exactly when the stability warning above is showing, since it lets you see whether the effect is settling down or still growing. If any edge has an optional <code>threshold</code> set (Edges step), this is also the only place it applies: that edge contributes nothing until the simulated change at its source factor crosses the threshold, instead of scaling proportionally from the start. Downloadable as PNG or SVG, and included as a figure if this scenario is added to the report.</p>
             </div>
             <div class="control">
               <div class="label">Show robustness to uncertainty<span class="widget">optional, table</span></div>
               <p>The same check behind "Sign confidence (%)" above, but configurable — pick a different number of simulations and see the full table sorted from least to most reliable, instead of just the fixed 100-simulation score shown by default.</p>
             </div>
             <div class="control">
+              <div class="label">Show sensitivity to self-regulation<span class="widget">optional, table</span></div>
+              <p>Only appears once at least one factor has self-regulation set (Nodes step). Same idea as "Sign confidence," but nudges how strongly each factor self-regulates instead of edge weights — flags results that hinge on your self-regulation guess rather than the network's links. See the worked example for a full walkthrough.</p>
+            </div>
+            <div class="control">
               <div class="label">Show which edges matter most<span class="widget">optional, chart + table</span></div>
-              <p>Bumps each edge's weight up by 10%, one at a time, and measures how much this scenario's overall equilibrium effect moves — a bar chart plus a ranked table, useful for deciding which weight estimate is worth double-checking first if you're short on time to review every edge.</p>
+              <p>Bumps each edge's weight up by 10%, one at a time, and measures how much this scenario's overall equilibrium effect moves — a bar chart plus a ranked table (with a "Number of edges shown" slider), useful for deciding which weight estimate is worth double-checking first. Downloadable as PNG or SVG, and included as a figure if this scenario is added to the report.</p>
             </div>
             <div class="control">
               <div class="label">Save this scenario<span class="widget">button</span></div>
@@ -928,9 +938,11 @@ P1,S1,3,0.85,negative,monitoring</pre>
         <h2>Worked example: a fisheries feedback loop</h2>
         <p class="lead">Everything above is easier to follow with a real network in
           front of you. This is a small, five-node example you can load in under a
-          minute — it walks through applying a response and reading the results, plus
-          two things worth understanding about <em>any</em> network you build here,
-          not just this one.</p>
+          minute — it walks through applying a response, reading the results, and a
+          few things worth understanding about <em>any</em> network you build here,
+          not just this one: two caveats to check for yourself, how self-regulation
+          unlocks a genuine long-term effect, and a measure (reach) that needs none of
+          it.</p>
 
         <div class="code-cluster">
           <div class="code-card">
@@ -989,14 +1001,16 @@ P1,S1,3,0.85,negative,monitoring</pre>
 
         <div class="callout warn">
           <span class="dot"></span>
-          <div><strong>You'll see "not stable" almost every time — that's expected.</strong>
+          <div><strong>You'll see "not stable" by default — that's expected, and fixable.</strong>
           The warning above the tables ("this network's feedback loops are not stable")
-          shows up here too, and it will for almost any closed feedback loop you build:
-          Responses are the only category allowed to link back to an earlier one, and a
-          node can never link to itself, so the underlying math structurally can't
-          produce a strict "yes, stable" verdict for a genuine loop. It isn't telling you
-          the model is wrong — it's telling you to lean on the immediate effect (always
-          reliable) and treat the equilibrium number as a direction, not a promise.</div>
+          shows up because, by default, no factor is assumed to return to its own
+          baseline on its own — without that, the math can't produce a "yes, stable"
+          verdict for a genuine loop like this one (Responses are the only category
+          allowed to link back to an earlier stage, and a node can never link to
+          itself). It isn't telling you the model is wrong — it's telling you to lean
+          on the immediate effect (always reliable) and treat the equilibrium number as
+          a direction, not a promise, unless you mark some factors as self-regulating
+          (see below).</div>
         </div>
 
         <h3>Checking the two caveats yourself</h3>
@@ -1030,6 +1044,85 @@ P1,S1,3,0.85,negative,monitoring</pre>
               here would mean the direction itself is up for grabs, not just the timing.</p>
           </div>
         </div>
+
+        <h3>Unlocking a genuine long-term effect: self-regulation</h3>
+        <p>The "not stable" warning above isn't permanent — it reflects an assumption
+          you can change. <strong>Self-regulation</strong> is a factor's tendency to
+          return to its own baseline on its own once nothing is pushing it: a fish
+          stock that partially replenishes, or a driver kept in check by something
+          outside the model. By default every factor has none, which is exactly why a
+          genuine loop like this one can never come out "stable."</p>
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-body">
+            <h4>Mark self-regulation</h4>
+            <p>Go back to the <strong>Nodes</strong> step, edit each of the 5 factors,
+              and set <strong>Self-regulation</strong> to <em>high</em> (used here on
+              every factor just to make the effect obvious — in a real project you'd
+              only mark it where you actually believe it applies). Click
+              <strong>Build/Rebuild graph</strong>, then reapply the same scenario
+              (Fishing quota policy, 70%).</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-body">
+            <h4>Watch the warning flip</h4>
+            <p>The banner above the tables now reads <strong>"stable"</strong> instead
+              of "not stable" — same network, same response, only the self-regulation
+              assumption changed. "Nodes affected" under Effect on the network goes
+              from 1 (immediate) / 1 (equilibrium) to 2 / <strong>5</strong> — every
+              factor now has a defined equilibrium, not just Fisher income loss.
+              "When will Impacts be neutralized?" updates too: Fisher income loss
+              settles at <strong>-0.121</strong>, reached within <strong>8</strong>
+              steps — a real settling point this time, not just a projected direction.</p>
+          </div>
+        </div>
+        <div class="callout">
+          <span class="dot"></span>
+          <div><strong>This isn't free precision — it's an assumption made explicit.</strong>
+          Setting self-regulation doesn't discover new information about the system; it
+          tells the app what you already believe about how each factor behaves on its
+          own. The next section checks how much the result actually depends on that
+          belief.</div>
+        </div>
+
+        <h3>How much do you trust that? Sensitivity to self-regulation</h3>
+        <p>With at least one factor self-regulating, a fourth optional disclosure
+          appears: <strong>Show sensitivity to self-regulation</strong>. It works like
+          "Show robustness to uncertainty" above, but instead of nudging edge weights,
+          it nudges how <em>strongly</em> each factor self-regulates (by up to ±50%)
+          and checks whether the predicted direction still holds. Open it here: all 5
+          factors agree <strong>100%</strong> of the time — even generously varying how
+          much each factor self-regulates, the direction of the effect never flips. A
+          lower number would mean the self-regulation guess itself, not just the
+          network's links, is what's driving the answer — worth stating plainly in any
+          write-up that leans on it.</p>
+
+        <h3>Reach: the one thing that never needed any of this</h3>
+        <p><strong>Reach</strong>, right under "Effect on the network," was already
+          showing a real result before you touched self-regulation, and it hasn't
+          changed: the Fishing quota policy reaches <strong>4 factors, including 1 of 1
+          Impact</strong> — everything else in the network. That's because reach only
+          asks "what can this response's influence touch by following the network's
+          links" — no equilibrium, no stability, nothing to unlock.</p>
+        <p>Fishing quota policy reaches almost everything here because it happens to
+          close the loop back to the Driver (Quota policy → Tourism) — a response
+          positioned like that behaves like it's acting near the <strong>root</strong>
+          of the chain. A response placed at the very end instead — acting directly on
+          an Impact, with nothing left downstream for DPSIR to allow it to point to —
+          would reach far less. A simple illustration, without needing to build
+          anything:</p>
+        <div class="table-wrap">
+          <table class="fields">
+            <tr><th>Response position</th><th>Acts on</th><th>Reaches</th></tr>
+            <tr><td class="key">Near the root</td><td>a Pressure, two stages before the Impact</td><td>3 factors (the Pressure, the State, and the Impact)</td></tr>
+            <tr><td class="key">End of chain</td><td>the Impact directly</td><td>1 factor (just the Impact itself)</td></tr>
+          </table>
+        </div>
+        <p class="muted" style="font-size:14px; margin-top:10px">Same idea either way: a
+          response that acts early in the causal chain has more chain left in front of
+          it to influence than one that only treats the symptom.</p>
 
         <div class="callout">
           <span class="dot"></span>
@@ -1069,6 +1162,8 @@ P1,S1,3,0.85,negative,monitoring</pre>
           <div class="gloss-item"><dt>Community</dt><dd>A cluster of nodes more connected to each other than to the rest of the network.</dd></div>
           <div class="gloss-item"><dt>Sign confidence</dt><dd>How often a prediction's direction (Improves/Worsens/Stable) holds up across simulations that vary each edge's weight within its confidence range — low confidence means a more precise estimate of the network could flip the conclusion.</dd></div>
           <div class="gloss-item"><dt>Edge sensitivity</dt><dd>How much a scenario's result would move if one edge's weight were nudged up 10% — the edges ranked highest are the ones most worth double-checking.</dd></div>
+          <div class="gloss-item"><dt>Self-regulation</dt><dd>A factor's tendency to return to its own baseline on its own, once nothing is pushing it — e.g. a habitat that recovers. Needed for a genuine long-term (equilibrium) effect to exist at all.</dd></div>
+          <div class="gloss-item"><dt>Reach</dt><dd>How many factors — and how many Impacts — a response's influence can touch by following the network's links, regardless of whether a long-term effect is defined.</dd></div>
         </dl>
       </section>
 
