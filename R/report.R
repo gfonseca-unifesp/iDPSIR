@@ -183,6 +183,24 @@ build_full_report_html <- function(
       )
     }))
 
+    total_impacts <- count_impacts_in_graph(graph)
+    reach_row <- function(scenario_name, reach) {
+      reached_impacts_row <- reach$by_category[reach$by_category$category == "Impact", "count"]
+      reached_impacts <- if (length(reached_impacts_row) == 0) 0L else reached_impacts_row
+      data.frame(
+        Scenario = scenario_name,
+        `Factors reached` = reach$total,
+        `Impacts reached` = sprintf("%d of %d", reached_impacts, total_impacts),
+        check.names = FALSE,
+        stringsAsFactors = FALSE
+      )
+    }
+    baseline_reach_row <- reach_row("Baseline", list(total = 0L, by_category = data.frame(category = character(), count = integer())))
+    reach_df <- do.call(rbind, c(
+      list(baseline_reach_row),
+      lapply(selected_scenario_names, function(scenario_name) reach_row(scenario_name, saved_scenarios[[scenario_name]]$reach))
+    ))
+
     scenario_items <- lapply(selected_scenario_names, function(scenario_name) {
       sc <- saved_scenarios[[scenario_name]]
       responses_text <- paste(
@@ -207,6 +225,12 @@ build_full_report_html <- function(
       caption_tag(
         "Table", next_table_n(),
         "Percentage of 100 resampled simulations (varying each edge's weight within a range set by its confidence) that agreed with the equilibrium effect's direction shown above - low values flag a prediction that a more confident estimate of the network could easily flip."
+      ),
+      tags$h3("Reach per scenario"),
+      report_html_table(reach_df),
+      caption_tag(
+        "Table", next_table_n(),
+        "How many factors - and how many Impacts out of the total in the network - each scenario's active response(s) can influence via some causal path. Pure graph traversal, defined even when the equilibrium effect above is not."
       ),
       tags$h3("Summary per scenario"),
       report_html_table(summary_df),

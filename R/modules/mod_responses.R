@@ -69,6 +69,15 @@
 # 10% (one at a time) would move this scenario's equilibrium effect.
 # Computed eagerly in "Apply scenario" (like sign_confidence above) so a
 # saved scenario carries its own ranking into the report, not just on screen.
+#
+# Fase 9 item 9.2 ("response reach"): a "Reach" section, right under "Effect
+# on the network", shows how many factors - and how many Impacts out of the
+# total - the active response(s) can influence via SOME causal path
+# (response_reach(), R/reach.R). Pure directed-graph traversal, no matrix
+# involved - deliberately placed next to (not gated by) the stability
+# warning, since reach stays defined even when the equilibrium effect above
+# it doesn't. Computed eagerly in "Apply scenario", same as sign_confidence/
+# sensitivity, so saved scenarios carry it into the comparison table/report.
 
 mod_responses_ui <- function(id) {
   ns <- NS(id)
@@ -185,6 +194,7 @@ mod_responses_server <- function(id, schema, nodes, edges, graph) {
       result <- press_perturbation(interaction_matrix(), press)
       sign_confidence <- suppressWarnings(sign_determinacy(graph(), press, n_simulations = 100))
       sensitivity <- suppressWarnings(global_sensitivity(graph(), press))
+      reach <- response_reach(graph(), active_ids)
 
       current_scenario(list(
         name = input$scenario_name,
@@ -193,7 +203,8 @@ mod_responses_server <- function(id, schema, nodes, edges, graph) {
         press = press,
         result = result,
         sign_confidence = sign_confidence,
-        sensitivity = sensitivity
+        sensitivity = sensitivity,
+        reach = reach
       ))
     })
 
@@ -204,6 +215,15 @@ mod_responses_server <- function(id, schema, nodes, edges, graph) {
         uiOutput(ns("stability_note")),
         h5("Effect on the network"),
         DTOutput(ns("network_effect_table")),
+        h5("Reach"),
+        p(
+          class = "text-muted",
+          "How far this response's influence travels through the DPSIR chain - always",
+          "calculable, regardless of the stability warning above (which only applies to",
+          "the equilibrium effect)."
+        ),
+        uiOutput(ns("reach_summary")),
+        DTOutput(ns("reach_table")),
         h5("Effect on each factor"),
         DTOutput(ns("factor_effect_table")),
         uiOutput(ns("neutralization_section")),
@@ -365,6 +385,42 @@ mod_responses_server <- function(id, schema, nodes, edges, graph) {
         formatRound(columns = c("Immediate", "Equilibrium"), digits = 2)
     })
 
+    # Roadmap Fase 9 item 9.2: "reach" is pure graph traversal from what the
+    # active response(s) directly act on (R/reach.R) - always defined, unlike
+    # the equilibrium effect above, which depends on the network settling.
+    output$reach_summary <- renderUI({
+      sc <- current_scenario()
+      req(sc)
+
+      if (sc$reach$total == 0) {
+        return(tags$p("This response doesn't reach any other factor in the network."))
+      }
+
+      total_impacts <- count_impacts_in_graph(graph())
+      reached_impacts_row <- sc$reach$by_category[sc$reach$by_category$category == "Impact", "count"]
+      reached_impacts <- if (length(reached_impacts_row) == 0) 0 else reached_impacts_row
+
+      tags$p(
+        tags$strong(sprintf("%d factor%s reached", sc$reach$total, if (sc$reach$total == 1) "" else "s")),
+        sprintf(", including %d of %d Impact%s.", reached_impacts, total_impacts, if (total_impacts == 1) "" else "s")
+      )
+    })
+
+    output$reach_table <- renderDT({
+      sc <- current_scenario()
+      req(sc, sc$reach$total > 0)
+
+      g <- graph()
+      idx <- match(sc$reach$reached_ids, V(g)$name)
+      df <- data.frame(
+        Factor = V(g)$label[idx],
+        Category = V(g)$dpsir_category[idx],
+        stringsAsFactors = FALSE
+      )
+
+      datatable(df, rownames = FALSE, options = list(dom = "t", pageLength = 10))
+    })
+
     # Fase 5 fast-follow: not just "does this response help", but "how long
     # until it actually neutralizes the Impact" - the question that
     # motivated the request. Hidden entirely when the network has no Impact
@@ -508,6 +564,8 @@ mod_responses_server <- function(id, schema, nodes, edges, graph) {
           "that resampled every edge's weight within a range set by its confidence."
         ),
         DTOutput(ns("comparison_sign_confidence_table")),
+        h5("Reach per scenario"),
+        DTOutput(ns("comparison_reach_table")),
         h5("Summary per scenario"),
         DTOutput(ns("comparison_summary_table"))
       )
@@ -561,6 +619,31 @@ mod_responses_server <- function(id, schema, nodes, edges, graph) {
 
       datatable(df, rownames = FALSE, options = list(dom = "t")) %>%
         formatRound(columns = numeric_cols, digits = 0)
+    })
+
+    output$comparison_reach_table <- renderDT({
+      names_sel <- selected_scenario_names()
+      saved <- saved_scenarios$list
+      total_impacts <- count_impacts_in_graph(graph())
+
+      reach_row <- function(scenario_name, reach) {
+        reached_impacts_row <- reach$by_category[reach$by_category$category == "Impact", "count"]
+        reached_impacts <- if (length(reached_impacts_row) == 0) 0L else reached_impacts_row
+        data.frame(
+          Scenario = scenario_name,
+          `Factors reached` = reach$total,
+          `Impacts reached` = sprintf("%d of %d", reached_impacts, total_impacts),
+          check.names = FALSE,
+          stringsAsFactors = FALSE
+        )
+      }
+
+      # Baseline activates no response, so its reach is trivially empty -
+      # computed directly instead of calling response_reach() with no ids.
+      baseline_row <- reach_row("Baseline", list(total = 0L, by_category = data.frame(category = character(), count = integer())))
+      scenario_rows <- lapply(names_sel, function(scenario_name) reach_row(scenario_name, saved[[scenario_name]]$reach))
+
+      datatable(do.call(rbind, c(list(baseline_row), scenario_rows)), rownames = FALSE, options = list(dom = "t"))
     })
 
     output$comparison_summary_table <- renderDT({

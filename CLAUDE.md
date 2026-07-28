@@ -69,6 +69,13 @@ Checagem rápida de sintaxe sem subir o app:
   `summarize_response_impact`, `compare_states`, `compare_multiple_states` foram o
   motor da aba Scenarios até a Fase 5 Marco B — mantidas no arquivo mas não mais
   chamadas por nenhum módulo, substituídas por `R/loop_analysis.R` abaixo.
+- `R/reach.R` → item 9.2 do `ROADMAP_FASE9_iDPSIR.md`: `response_reach(g, active_ids)`
+  (até onde a influência de uma resposta chega na cadeia DPSIR — travessia pura do
+  grafo direcionado a partir do que a resposta afeta diretamente, sem nenhuma álgebra
+  linear; sempre calculável, ao contrário do efeito de equilíbrio de
+  `loop_analysis.R`, que depende da rede se assentar) e `count_impacts_in_graph(g)`
+  (denominador pro "Y de N Impactos" — deliberadamente fora de `response_reach()`,
+  que fica só sobre o que uma resposta específica alcança).
 - `R/loop_analysis.R` → análise de loop / matriz comunitária (Levins 1974).
   Marco A: `build_interaction_matrix(g)` (matriz `A[i,j]` = efeito de `j` sobre `i`,
   sinal de `interaction_type`/magnitude de `weight`), `check_stability(A)`
@@ -176,7 +183,10 @@ Checagem rápida de sintaxe sem subir o app:
   parâmetros das análises estocásticas (`n_simulations=100`, `spread=0.5`,
   `seed=42` pra confiança de sinal/robustez; `relative_change=0.1` pra
   sensibilidade — os mesmos defaults usados de fato em `mod_responses.R`,
-  não números inventados pro texto).
+  não números inventados pro texto). Item 9.2 do `ROADMAP_FASE9_iDPSIR.md`:
+  seção "Reach per scenario" na comparação de cenários (`response_reach()`,
+  `R/reach.R`), tabela Scenario × Factors reached × Impacts reached — sempre
+  calculável, mesmo quando o efeito de equilíbrio não é.
 - `R/modules/mod_data.R` → editor por formulário (passos Início/Modelo/Nós/Arestas/Revisar
   do wizard); estado em `reactiveValues`, não-reativo até "Construir/Reconstruir grafo".
   Formulário de aresta tem um campo opcional "Threshold" (em branco na maioria das
@@ -280,7 +290,17 @@ Checagem rápida de sintaxe sem subir o app:
   which edges matter most", com gráfico de barras horizontal (`barplot()`
   base R) + tabela ordenada de `global_sensitivity()` — calculado de forma
   eager em "Apply scenario" (igual `sign_confidence`) pra sobreviver em
-  cenários salvos e entrar no relatório.
+  cenários salvos e entrar no relatório. `ROADMAP_FASE9_iDPSIR.md` item 9.2
+  ("alcance de uma resposta"): seção "Reach" logo abaixo de "Effect on the
+  network" — "N factors reached, including Y of Z Impacts" mais uma tabela
+  dos fatores alcançados (`response_reach()`, `R/reach.R`), deliberadamente
+  posicionada ao lado do aviso de estabilidade em vez de escondida atrás
+  dele: alcance é travessia pura do grafo, não depende da rede se assentar,
+  então continua definido mesmo quando o efeito de equilíbrio não está.
+  Calculado de forma eager em "Apply scenario" (mesmo padrão de
+  `sign_confidence`/`sensitivity`), e a comparação de cenários ganhou uma
+  tabela "Reach per scenario" ao lado das demais (baseline sempre 0, já
+  que nenhuma resposta ativa não alcança nada).
 - `R/modules/mod_report.R` → aba "Report" (última do Explorar): checkboxes para
   métricas gerais/centralidades/descritores DPSIR/referências de aresta/item 6.4
   ("Reproducibility info"), seleção múltipla de imagens de
@@ -1415,6 +1435,67 @@ elemento errado numa primeira tentativa, corrigido clicando o elemento por
 cards; avançar pro passo Model funciona sem erro. Sem erro no console do
 servidor em nenhum passo.
 
+**Fase 9 iniciada, na branch `fase-9-auto-regulacao`** (roadmap externo
+trazido pelo usuário, `ROADMAP_FASE9_iDPSIR.md`, avaliado antes de aceitar —
+rastreado item por item contra o código real de `schema.R`/`validate.R`/
+`graph.R`/`io.R`/`mod_data.R`/`loop_analysis.R`, sem nenhum bloqueio técnico
+encontrado). Dois itens: **9.1** (auto-regulação por fator, atributo de nó
+que desbloqueia efeito de longo prazo/estabilidade — hoje `check_stability()`
+nunca pode retornar `TRUE` pra nenhuma rede construída pelo app, porque o
+schema proíbe self-loop e por isso a diagonal de `A` é sempre zero) e
+**9.2** (alcance de uma resposta, medida puramente topológica, sempre
+calculável independente do efeito de longo prazo). Ordem combinada com o
+usuário: **9.2 primeiro** (independente, mais simples, não mexe no núcleo
+numérico), depois 9.1, tutorial/README por último.
+
+**Item 9.2 concluído: alcance de uma resposta.** `response_reach(g,
+active_ids)` (`R/reach.R`, novo arquivo — deliberadamente separado de
+`loop_analysis.R`, já que é travessia pura de grafo direcionado via
+`igraph::subcomponent(mode="out")`, sem nenhuma álgebra linear envolvida):
+parte dos alvos diretos das respostas ativas (`neighbors(g, id,
+mode="out")`, não do(s) próprio(s) nó(s) de resposta) e coleta tudo
+alcançável a partir daí, excluindo as próprias respostas ativas do
+resultado (uma resposta "alcançar a si mesma" via um loop de feedback não é
+um fator novo atingido). `count_impacts_in_graph(g)` fica fora dessa
+função de propósito — é o denominador do "Y de N Impactos", uma
+propriedade da rede inteira, não do que uma resposta específica alcança.
+
+Verificado com quatro casos antes de virar teste permanente (nunca por
+suposição, script em `scratchpad/test_reach.R`): (1) o exemplo de pescas
+(ciclo fechado de 5 nós) — R1 alcança os outros 4 nós inteiros (o loop
+inteiro menos ele mesmo), demonstrando que num ciclo único uma resposta
+tende a alcançar quase tudo; (2) uma rede em árvore construída à mão com
+duas respostas — uma perto da raiz (age sobre a Pressão, alcança 3 fatores)
+e uma de fim-de-cadeia (age direto no Impacto, alcança só 1) — a
+comparação raiz-vs-fim-de-cadeia que motiva o item; (3) nenhuma resposta
+ativa e (4) uma resposta sem nenhuma aresta de saída — ambos retornam
+resultado vazio sem erro.
+
+Interface: seção "Reach" na aba Scenarios, logo abaixo de "Effect on the
+network" e explicitamente **ao lado** do aviso de estabilidade (não atrás
+dele) — o texto deixa claro que alcance vale mesmo quando o efeito de
+equilíbrio não está definido. Calculado de forma eager em "Apply scenario"
+(mesmo padrão de `sign_confidence`/`sensitivity` dos itens 7.1/7.2), então
+sobrevive em cenários salvos e entra tanto na comparação em tela quanto no
+relatório. Tabela "Reach per scenario" na comparação usa baseline fixo em
+zero (nenhuma resposta ativa não alcança nada, sem precisar chamar
+`response_reach()` com uma lista vazia — embora a função já trate esse
+caso corretamente também, testado explicitamente).
+
+Testado ponta a ponta rodando o app de verdade: savepoint de pescas
+carregado, R1 a 70% aplicado — "Reach" mostra "4 factors reached, including
+1 of 1 Impact" com a tabela listando D1/P1/S1/I1 por categoria, batendo
+exatamente com o script standalone; dois cenários salvos (R1 a 70%/40%,
+mesmo alcance nos dois já que alcance não depende da força, só de quais
+respostas estão ativas — confirmado que isso é o comportamento correto, não
+um bug) comparados mostrando "Reach per scenario" com Baseline=0/Scenario
+1=4/Scenario 2=4; relatório gerado com os dois cenários contém "Reach per
+scenario" numerada em sequência com as demais tabelas ("Table 4" nesse
+teste) com os mesmos números. Nenhuma seção anterior (Sign confidence,
+Which edges matter most, Equilibrium effect) regrediu. Sem erro no console
+do servidor em nenhum passo. Suíte `testthat` ganhou `tests/testthat/test-reach.R`
+(6 testes novos, 15 assertivas) — suíte completa roda limpa.
+
 ## Próximo
 
 Fase 5 está completa (Marcos A-D). Todos os 4 itens da lista pós-Fase 5 (1:
@@ -1447,6 +1528,19 @@ ordem combinada com o usuário:
   antes de implementar (ver opções levantadas com o usuário: renv só pra
   dev local, ou `global.R` detectando e usando `renv::restore()` quando um
   `renv.lock` existir).
+
+**Fase 9 em andamento** (`ROADMAP_FASE9_iDPSIR.md`, branch `fase-9-auto-regulacao`,
+ainda não mesclada em `main` — validar antes de integrar, mesmo padrão das fases
+anteriores), ordem combinada com o usuário:
+- [x] **9.2** — alcance de uma resposta (concluído, ver acima).
+- [ ] **9.1** — auto-regulação por fator (próximo). Sub-passos combinados: 9.1.1-9.1.3
+  (atributo `self_regulation` none/low/medium/high + cálculo na diagonal de `A` +
+  formulário de edição + persistência no savepoint) primeiro, depois 9.1.4 (nota
+  condicional + sensibilidade à auto-regulação, reaproveitando o padrão de
+  `robustness_check()` mas perturbando a magnitude da auto-regulação em vez do peso
+  das arestas — não jump discreto entre níveis, pra manter consistência com o
+  mecanismo já existente).
+- [ ] **9.3**/**9.4** — tutorial e README, por último, quando a UI de 9.1 estabilizar.
 
 Pedido pelo usuário mas ainda não definido: "estrela"/"rosa" como layouts
 adicionais — precisa de uma conversa pra fixar o que cada termo significa
