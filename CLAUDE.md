@@ -181,6 +181,32 @@ Checagem rápida de sintaxe sem subir o app:
   este item) em vez do peso das arestas; um nó "none" tem magnitude 0, e
   0×qualquer-coisa continua 0, então fica corretamente fora da perturbação
   sem nenhum caso especial no código.
+- `R/sufficiency.R` → Revisão 1 (`manuscrito/REVISAO_1_...md`, avaliada e
+  fasada em `.claude/plans/`): motor de **suficiência de resposta**, o novo
+  motor principal da aba Scenarios, substituindo `press_perturbation()`
+  como leitura primária (essa e as demais funções do regime dinâmico —
+  `check_stability`, `simulate_trajectory*`, `find_neutralization_step`,
+  `summarize_neutralization`, `self_regulation_*` — continuam definidas em
+  `loop_analysis.R` mas deixam de ser chamadas, mesmo padrão de código
+  superado já usado o projeto inteiro). `build_signed_matrix(g)` reaproveita
+  `build_interaction_matrix()` e zera a diagonal — isso sozinho já resolve
+  "ignorar `self_regulation` de savepoint antigo" sem nenhum código
+  condicional: mesmo que o atributo ainda exista no grafo, a diagonal
+  preenchida por ele é descartada de qualquer forma. `spectral_radius(W)`
+  usa `Mod(eigen(W)$values)` (módulo, não parte real — autovalor complexo é
+  rotina em rede com ciclo). `propagate(W, p, c=0.5)` calcula
+  `Φ(p) = (I - λW)⁻¹p - p` com `λ = c/ρ(W)` — como `λ·ρ(W) = c < 1` sempre,
+  a matriz nunca é singular pra nenhuma rede, eliminando de vez tanto a
+  exigência de estabilidade quanto a inversão de sinal que motivaram a
+  revisão (ver "Estado atual" abaixo pro caso real que provou isso).
+  `sufficiency(g, p_D, p_R, c)` — piora/mitigação/líquido/neutralizado/força
+  necessária por Impacto (`strength_to_neutralize` é uma razão
+  adimensional sobre `p_R`, não um valor absoluto — a tela multiplica pela
+  força planejada de uma resposta única na hora de exibir, já que somar
+  respostas combinadas não teria uma "força planejada" única pra
+  multiplicar). `sufficiency_confidence()` reaproveita a mesma reamostragem
+  de `robustness_check()`. `sufficiency_reach_over_c()` varre uma grade de
+  `c` e sinaliza veredito de fronteira.
 - `R/scenario_plots.R` → fast-follow "gráficos editáveis/baixáveis" (pedido do
   usuário ao revisar a aba Scenarios): `draw_trajectory_plot()`/
   `draw_sensitivity_plot()`, funções puras de desenho (base R
@@ -411,7 +437,11 @@ Checagem rápida de sintaxe sem subir o app:
   `ui_main.R` tem um link "Help" no `dashboardHeader(rightUi=...)`, abrindo
   `docs/tutorial.html` (servido pelo `addResourcePath("tutorial", "docs")` em
   `global.R`) numa aba nova — ver Estado atual.
-- `data/` → CSVs de exemplo.
+- `data/` → CSVs de exemplo. `mangi2007_nodes.csv`/`mangi2007_edges.csv`
+  (novos, Revisão 1) — rede real e citada (Mangi et al. 2007), promovida de
+  `manuscrito/` (mesmos dados, coluna `self_regulation` removida dos nós —
+  não existe mais no novo motor) — fixture principal de teste do novo
+  motor de suficiência, ver `R/sufficiency.R` acima.
 - `tests/testthat.R`, `tests/testthat/*.R` → testes automatizados do núcleo
   numérico (item 6.3 do roadmap de publicação) — ver Estado atual.
 - `.github/workflows/shinylive.yml` → CI que publica uma build WebAssembly do
@@ -1736,6 +1766,63 @@ inteira: nenhuma seção quebrada, nenhum HTML malformado, fluxo de leitura
 coerente do início ao fim — incluindo a checagem específica de que o
 callout corrigido não contradiz mais a seção de auto-regulação logo abaixo.
 
+**Revisão 1 iniciada, na branch `fase-10-suficiencia`** (documento externo
+trazido pelo usuário, avaliado tecnicamente antes de aceitar — a prova
+`λ·ρ(W) = c < 1 ⟹ (I - λW)` nunca singular foi conferida à mão antes de
+implementar, não só copiada do documento) — planejada com `EnterPlanMode`
+em 6 fases aditivas (motor → UI nova ao lado da antiga → relatório/
+persistência → corte do motor antigo → exemplo Mangi/tutorial/README →
+fechamento), pra nunca deixar o app quebrado no meio do caminho. Plano
+salvo em `.claude/plans/wondrous-cuddling-eclipse.md`.
+
+**Achado decisivo antes mesmo de implementar**: o usuário já tinha rodado a
+rede de Mangi et al. 2007 pelo motor antigo (pasta `manuscrito/`, não
+versionada) e exportado um relatório real
+(`manuscrito/idpsir_report_2026-07-28_GF.html`) — nele, o Cenário 2 (Gear
+restrictions a 100%) mostra equilíbrio **+0,81** ("worsening") em "Reef
+ecosystem degradation", quando restringir petrechos deveria intuitivamente
+*reduzir* a pressão sobre o recife. Uma inversão de sinal real, reproduzível,
+não hipotética — a mesma rede virou o fixture de validação principal do
+motor novo (`manuscrito/mangi2007_*.csv`, promovida pra `data/` sem a coluna
+`self_regulation`).
+
+**Fase 1 concluída: motor matemático (`R/sufficiency.R`), 100% aditivo —
+zero mudança visível no app.** `build_signed_matrix`, `spectral_radius`,
+`propagate`, `sufficiency`, `sufficiency_confidence`,
+`sufficiency_reach_over_c` — descritos no bullet de `R/sufficiency.R` acima.
+
+**Verificação, não suposição**: script standalone
+(`scratchpad/test_sufficiency.R`) rodado contra a rede de Mangi real:
+(1) o caso do bug — `sufficiency()` pra Gear restrictions (R2) sozinho dá
+mitigação **-0,069** em Reef ecosystem degradation (I2) — sinal correto,
+nega diretamente o +0,81 do motor antigo; (2) o exemplo completo da própria
+revisão (Seção 4, Tabela 1 — pressão D1+D3, resposta R1/AMP) bateu quase
+exatamente com os números computados aqui: Catch decline
+0,1096/-0,1660/-0,0564/Sim/0,660 (revisão: 0,110/-0,166/-0,056/Sim/0,66),
+Reef degradation 0,0301/-0,0929/-0,0629/Sim/0,324 (revisão:
+0,030/-0,093/-0,063/Sim/0,32), Food insecurity 0,0496/-0,1023/-0,0527/Sim/
+0,485 (revisão: 0,050/-0,102/-0,053/Sim/0,49) — uma implementação
+independente, escrita só a partir da formalização da Seção 2, reproduzindo
+os números que a própria revisão apresenta como exemplo — confiança alta de
+que a implementação bate com a intenção do autor; (3) `propagate()` nunca
+retorna `NA`, testado inclusive contra `data/sample_nodes.csv`/
+`sample_edges.csv`, já documentado desde a Fase 5 Marco A como produzindo
+matriz singular pro motor antigo; (4) réplica da Tabela 2 (confiança por
+Resposta × Impacto): R1→100/100/100, R2/R3/R5→0/100/0, R4→0/~20/0 — bate
+com o padrão da revisão (R4 "frágil" no recife, R1 única resposta ampla),
+a pequena diferença no percentual exato de R4 (20% vs 23% da revisão) é
+esperada — reamostragem estocástica com N=300, sem a revisão especificar a
+semente usada pro seu próprio número.
+
+`tests/testthat/test-sufficiency.R` novo — 12 testes/29 assertivas,
+incluindo o teste de regressão do bug real (R2→Reef com mitigação negativa),
+batida numérica contra a Tabela 1 da revisão (tolerância 1e-3 nos valores,
+1e-2 na força-pra-neutralizar), reprodutibilidade com semente fixa (mesmo
+padrão do item 6.4), e caso de borda (grafo sem nó Impacto). Suíte completa
+(`Rscript tests/testthat.R`) roda limpa. Checagem de sintaxe de todos os
+`R/` limpa. App não testado no navegador nesta fase de propósito — nada
+mudou na UI ainda, é exatamente o que a Fase 1 promete.
+
 ## Próximo
 
 Fase 5 está completa (Marcos A-D). Todos os 4 itens da lista pós-Fase 5 (1:
@@ -1786,6 +1873,27 @@ ver acima) também concluído nesta branch, mesclado junto.
 
 Checagem de sintaxe + suíte `testthat` completa (91 assertivas) re-rodadas
 em `main` depois do merge, ambas limpas, antes do push.
+
+**Revisão 1 em andamento — modelo de suficiência de resposta, na branch
+`fase-10-suficiencia`** (documento externo trazido pelo usuário, plano de
+6 fases em `.claude/plans/wondrous-cuddling-eclipse.md`, ver "Estado atual"
+acima pro achado que motivou a revisão — inversão de sinal real na rede de
+Mangi et al. 2007 sob o motor antigo). Substitui `press_perturbation()`
+(equilíbrio dinâmico, exige estabilidade) por `propagate()`
+(`R/sufficiency.R`, efeito propagado e descontado, sempre bem definido) como
+leitura principal da aba Scenarios:
+- [x] **Fase 1** — motor matemático (`R/sufficiency.R`), aditivo, zero
+  mudança visível (concluído, ver acima).
+- [ ] **Fase 2** — UI nova ("Pressure scenario" + controle de alcance + as
+  3 tabelas da Seção 4) ao lado da UI antiga, sem remover nada ainda.
+- [ ] **Fase 3** — relatório (3 tabelas novas) + persistência dos dois
+  cenários + `c` no savepoint.
+- [ ] **Fase 4** — corte: remove UI/relatório do motor antigo, renomeia
+  `mod_responses.R`→`mod_scenarios.R`, remove `self_regulation` de
+  `schema.R`/`validate.R`/`mod_data.R`.
+- [ ] **Fase 5** — promove exemplo de Mangi a `docs/`, reescreve tutorial e
+  README pra "os dois empurrões", decide o que fazer com testes órfãos.
+- [ ] **Fase 6** — verificação final, `CLAUDE.md`, commit/push/merge.
 
 Pedido pelo usuário mas ainda não definido: "estrela"/"rosa" como layouts
 adicionais — precisa de uma conversa pra fixar o que cada termo significa

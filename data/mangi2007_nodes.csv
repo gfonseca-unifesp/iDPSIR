@@ -1,0 +1,19 @@
+id,label,dpsir_category,subsystem,uncertainty,controllability,temporal_scale
+D1,Coastal population growth,Driver,Socioeconomic,medium,low,long
+D2,Poverty and low fisher income,Driver,Socioeconomic,medium,low,long
+D3,Market demand for reef fish,Driver,Economy,medium,low,medium
+D4,Lack of alternative livelihoods,Driver,Socioeconomic,medium,medium,long
+P1,Fishing effort,Pressure,Fisheries,medium,medium,short
+P2,Destructive and illegal gear use,Pressure,Fisheries,medium,medium,short
+S1,Coral degradation,State,Habitat,high,low,medium
+S2,Fish stock decline,State,Fisheries,high,low,medium
+S3,Loss of large high-trophic fish,State,Fisheries,high,low,medium
+S4,Biodiversity decline,State,Biodiversity,high,low,long
+I1,Catch decline (reduced CPUE),Impact,Fisheries,medium,medium,medium
+I2,Reef ecosystem degradation,Impact,Biodiversity,high,low,long
+I3,Food insecurity and income loss,Impact,Economy,medium,medium,medium
+R1,Marine protected areas (closures),Response,Governance,low,high,long
+R2,Gear restrictions,Response,Governance,low,high,medium
+R3,Enforcement and regulation,Response,Governance,medium,high,medium
+R4,Alternative livelihood programmes,Response,Socioeconomic,medium,high,long
+R5,Community co-management,Response,Governance,medium,high,long
