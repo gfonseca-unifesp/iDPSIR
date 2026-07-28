@@ -237,13 +237,53 @@ build_full_report_html <- function(
       caption_tag("Table", next_table_n(), "Count of nodes whose equilibrium effect improves, worsens, or stays stable under each scenario.")
     ))
 
+    # Roadmap-adjacent fast-follow ("charts editability/download"): the
+    # trajectory and sensitivity charts previously had no presence in the
+    # report at all (or, for sensitivity, only its underlying table, not
+    # the chart itself) - draw_trajectory_plot()/draw_sensitivity_plot()
+    # (R/scenario_plots.R) are the exact same functions mod_responses.R
+    # uses on screen and for its own PNG/SVG downloads, so the report
+    # figure can never drift from what the user saw live.
+    trajectory_sections <- lapply(selected_scenario_names, function(scenario_name) {
+      sc <- saved_scenarios[[scenario_name]]
+      steps <- sc$trajectory_steps %||% 20
+      traj <- simulate_trajectory_thresholded(
+        build_interaction_matrix(graph), sc$press, Th = build_threshold_matrix(graph), steps = steps
+      )
+      labels <- V(graph)$label[match(colnames(traj), V(graph)$name)]
+      img_uri <- plot_to_data_uri(function() draw_trajectory_plot(traj, labels))
+
+      tagList(
+        tags$h4(scenario_name),
+        tags$img(class = "report-graph-image", src = img_uri),
+        caption_tag(
+          "Figure", next_figure_n(),
+          sprintf(
+            "How \"%s\"'s effect evolves over %d simulated steps - useful mainly when the network's feedback loops aren't stable, since the equilibrium number alone is then only a directional estimate.",
+            scenario_name, steps
+          )
+        )
+      )
+    })
+
+    sections <- c(sections, list(
+      tags$h3("How the effect evolves over time"),
+      tagList(trajectory_sections)
+    ))
+
     sensitivity_sections <- lapply(selected_scenario_names, function(scenario_name) {
       sc <- saved_scenarios[[scenario_name]]
       top <- utils::head(sc$sensitivity[order(-sc$sensitivity$influence), c("link", "weight", "confidence", "influence")], 5)
       names(top) <- c("Link", "Weight", "Confidence", "Influence")
+      img_uri <- plot_to_data_uri(function() draw_sensitivity_plot(sc$sensitivity, top_n = 10))
 
       tagList(
         tags$h4(scenario_name),
+        tags$img(class = "report-graph-image", src = img_uri),
+        caption_tag(
+          "Figure", next_figure_n(),
+          sprintf("For \"%s\", which edges' weight would move its equilibrium effect the most if bumped up 10%% (top 10, ranked highest first).", scenario_name)
+        ),
         report_html_table(top),
         caption_tag(
           "Table", next_table_n(),

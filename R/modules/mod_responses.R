@@ -89,6 +89,28 @@
 # (self_regulation_sensitivity(), R/loop_analysis.R) - computed on demand
 # (like "robustness to uncertainty", not eagerly like sign_confidence),
 # since it's a deeper-dive diagnostic, not a headline number.
+#
+# Charts editability/download fast-follow (user request after reviewing the
+# tab): the trajectory and edge-sensitivity charts were static renderPlot()
+# images with no way to download them or configure them beyond what was
+# already there, and never appeared in the report at all - unlike the
+# network graph, which has its own capture-to-report pipeline. Both charts
+# are already plain base-R plots (matplot()/barplot()) drawn server-side,
+# so - unlike the graph, which is a live JS widget needing html2canvas -
+# they can be redrawn straight to a file with a standard Shiny
+# downloadHandler(), no browser-side capture needed. Drawing code moved to
+# R/scenario_plots.R (draw_trajectory_plot()/draw_sensitivity_plot()) so
+# the on-screen plot, the PNG/SVG download, and the report's embedded
+# image are all the exact same function call, not three implementations
+# that could drift apart. "Number of edges shown" is new (sensitivity
+# previously had zero configuration at all, fixed at top-10); trajectory's
+# "Number of steps" already existed.
+plot_download_row <- function(ns, prefix) {
+  fluidRow(
+    column(6, downloadButton(ns(paste0("download_", prefix, "_png")), "Download PNG", class = "btn-sm")),
+    column(6, downloadButton(ns(paste0("download_", prefix, "_svg")), "Download SVG", class = "btn-sm"))
+  )
+}
 
 mod_responses_ui <- function(id) {
   ns <- NS(id)
@@ -255,7 +277,8 @@ mod_responses_server <- function(id, schema, nodes, edges, graph) {
           condition = sprintf("input['%s']", ns("show_trajectory")),
           sliderInput(ns("trajectory_steps"), "Number of steps", min = 5, max = 60, value = 20, step = 5),
           uiOutput(ns("threshold_note")),
-          plotOutput(ns("trajectory_plot"), height = "320px")
+          plotOutput(ns("trajectory_plot"), height = "320px"),
+          plot_download_row(ns, "trajectory")
         ),
         tags$hr(),
         checkboxInput(ns("show_robustness"), "Show robustness to uncertainty (optional)", value = FALSE),
@@ -282,7 +305,9 @@ mod_responses_server <- function(id, schema, nodes, edges, graph) {
             "this scenario's overall equilibrium effect moves - the edges at the top",
             "are the ones most worth double-checking your weight estimate for."
           ),
+          sliderInput(ns("sensitivity_top_n"), "Number of edges shown", min = 3, max = 20, value = 10, step = 1),
           plotOutput(ns("sensitivity_plot"), height = "320px"),
+          plot_download_row(ns, "sensitivity"),
           DTOutput(ns("sensitivity_table"))
         ),
         uiOutput(ns("self_regulation_sensitivity_section")),
@@ -340,32 +365,40 @@ mod_responses_server <- function(id, schema, nodes, edges, graph) {
       )
     })
 
-    output$trajectory_plot <- renderPlot({
+    # Shared by the on-screen plot and both download handlers, so all three
+    # always show/export the exact same trajectory for the current live
+    # inputs (steps slider), not just the drawing code.
+    current_trajectory <- function(steps) {
       sc <- current_scenario()
-      req(sc, isTRUE(input$show_trajectory))
-
+      req(sc)
       traj <- simulate_trajectory_thresholded(
-        interaction_matrix(), sc$press, Th = threshold_matrix(), steps = input$trajectory_steps
+        interaction_matrix(), sc$press, Th = threshold_matrix(), steps = steps
       )
+      labels <- V(graph())$label[match(colnames(traj), V(graph())$name)]
+      list(traj = traj, labels = labels)
+    }
 
-      if (all(is.na(traj))) {
-        plot.new()
-        text(0.5, 0.5, "Trajectory could not be computed for this network.")
-        return(invisible())
-      }
-
-      node_ids <- colnames(traj)
-      labels <- V(graph())$label[match(node_ids, V(graph())$name)]
-      colors <- scales::hue_pal()(ncol(traj))
-
-      matplot(
-        seq_len(nrow(traj)), traj, type = "l", lty = 1, lwd = 2, col = colors,
-        xlab = "Steps", ylab = "Effect on each factor",
-        main = "How the effect changes as the response takes hold"
-      )
-      abline(h = 0, col = "grey70", lty = 2)
-      legend("topright", legend = labels, col = colors, lty = 1, lwd = 2, cex = 0.8, bty = "n")
+    output$trajectory_plot <- renderPlot({
+      req(isTRUE(input$show_trajectory))
+      tr <- current_trajectory(input$trajectory_steps)
+      draw_trajectory_plot(tr$traj, tr$labels)
     })
+
+    output$download_trajectory_png <- downloadHandler(
+      filename = function() paste0("trajectory_", Sys.Date(), ".png"),
+      content = function(file) {
+        tr <- current_trajectory(input$trajectory_steps)
+        render_plot_png(function() draw_trajectory_plot(tr$traj, tr$labels), file)
+      }
+    )
+
+    output$download_trajectory_svg <- downloadHandler(
+      filename = function() paste0("trajectory_", Sys.Date(), ".svg"),
+      content = function(file) {
+        tr <- current_trajectory(input$trajectory_steps)
+        render_plot_svg(function() draw_trajectory_plot(tr$traj, tr$labels), file)
+      }
+    )
 
     output$robustness_table <- renderDT({
       sc <- current_scenario()
@@ -386,22 +419,26 @@ mod_responses_server <- function(id, schema, nodes, edges, graph) {
     output$sensitivity_plot <- renderPlot({
       sc <- current_scenario()
       req(sc, isTRUE(input$show_sensitivity))
-
-      sens <- sc$sensitivity
-      if (all(sens$influence < 1e-9)) {
-        plot.new()
-        text(0.5, 0.5, "No single edge's weight noticeably changes this scenario's effect.")
-        return(invisible())
-      }
-
-      top <- head(sens[order(sens$influence), ], 10) # ascending so barplot draws highest on top
-      barplot(
-        top$influence, names.arg = top$link, horiz = TRUE, las = 1,
-        col = "#4E79A7", border = NA, cex.names = 0.8,
-        xlab = "Change in total equilibrium effect (+10% weight)",
-        main = "Which edges matter most for this scenario"
-      )
+      draw_sensitivity_plot(sc$sensitivity, top_n = input$sensitivity_top_n)
     })
+
+    output$download_sensitivity_png <- downloadHandler(
+      filename = function() paste0("edge_sensitivity_", Sys.Date(), ".png"),
+      content = function(file) {
+        sc <- current_scenario()
+        req(sc)
+        render_plot_png(function() draw_sensitivity_plot(sc$sensitivity, top_n = input$sensitivity_top_n), file)
+      }
+    )
+
+    output$download_sensitivity_svg <- downloadHandler(
+      filename = function() paste0("edge_sensitivity_", Sys.Date(), ".svg"),
+      content = function(file) {
+        sc <- current_scenario()
+        req(sc)
+        render_plot_svg(function() draw_sensitivity_plot(sc$sensitivity, top_n = input$sensitivity_top_n), file)
+      }
+    )
 
     output$sensitivity_table <- renderDT({
       sc <- current_scenario()
@@ -572,6 +609,13 @@ mod_responses_server <- function(id, schema, nodes, edges, graph) {
     observeEvent(input$save_scenario, {
       sc <- current_scenario()
       req(sc)
+
+      # Captured at save time (not apply time, when the trajectory slider
+      # may not exist yet on a first-ever "Apply scenario") so the report
+      # can redraw the same trajectory later without needing a live slider -
+      # same "what you configured is what gets saved" pattern already used
+      # for the response strengths themselves.
+      sc$trajectory_steps <- input$trajectory_steps %||% 20
 
       saved <- saved_scenarios$list
       saved[[sc$name]] <- sc

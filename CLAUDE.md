@@ -181,6 +181,20 @@ Checagem rápida de sintaxe sem subir o app:
   este item) em vez do peso das arestas; um nó "none" tem magnitude 0, e
   0×qualquer-coisa continua 0, então fica corretamente fora da perturbação
   sem nenhum caso especial no código.
+- `R/scenario_plots.R` → fast-follow "gráficos editáveis/baixáveis" (pedido do
+  usuário ao revisar a aba Scenarios): `draw_trajectory_plot()`/
+  `draw_sensitivity_plot()`, funções puras de desenho (base R
+  `matplot()`/`barplot()`, sem nenhuma dependência de Shiny/reativo) — a
+  mesma chamada produz o gráfico em tela (`mod_responses.R`'s
+  `renderPlot()`), o arquivo baixado (`downloadHandler()`) e a figura
+  embutida no relatório (`report.R`), em vez de três implementações que
+  pudessem divergir. `render_plot_png()`/`render_plot_svg()` escrevem num
+  arquivo via `grDevices::png()`/`grDevices::svg()`; `plot_to_data_uri()`
+  (usado só por `report.R`) renderiza num arquivo temporário e devolve um
+  data URI base64 via `jsonlite::base64_enc()` — sem pacote novo, já que
+  `jsonlite` já é dependência do app (usado com prefixo explícito em
+  `io.R` pelo mesmo motivo de sempre: mascarar `shiny::validate()` se
+  anexado).
 - `R/report.R` → montagem do relatório HTML autocontido (`build_full_report_html`,
   `report_html_table`, `format_report_cell`, `matrix_to_report_df`), usado só por
   `mod_report.R`. Seções (imagens de grafo salvas/métricas gerais/centralidades/
@@ -211,7 +225,16 @@ Checagem rápida de sintaxe sem subir o app:
   não números inventados pro texto). Item 9.2 do `ROADMAP_FASE9_iDPSIR.md`:
   seção "Reach per scenario" na comparação de cenários (`response_reach()`,
   `R/reach.R`), tabela Scenario × Factors reached × Impacts reached — sempre
-  calculável, mesmo quando o efeito de equilíbrio não é.
+  calculável, mesmo quando o efeito de equilíbrio não é. Fast-follow
+  "gráficos editáveis/baixáveis": novas seções "How the effect evolves over
+  time" e "Which edges matter most" ganharam a figura de verdade (não só a
+  tabela que "Which edges matter most" já tinha) via
+  `plot_to_data_uri()`/`draw_trajectory_plot()`/`draw_sensitivity_plot()`
+  (`R/scenario_plots.R`) — uma imagem por cenário selecionado, cada uma com
+  sua própria legenda numerada. Trajetória recalculada a partir de
+  `sc$trajectory_steps` (capturado no momento de "Save this scenario", ver
+  `mod_responses.R` abaixo) — não precisa de um slider ao vivo pra existir
+  no relatório.
 - `R/modules/mod_data.R` → editor por formulário (passos Início/Modelo/Nós/Arestas/Revisar
   do wizard); estado em `reactiveValues`, não-reativo até "Construir/Reconstruir grafo".
   Formulário de aresta tem um campo opcional "Threshold" (em branco na maioria das
@@ -342,7 +365,27 @@ Checagem rápida de sintaxe sem subir o app:
   Factor/Category/Effect/Agreement % de `self_regulation_sensitivity()` —
   calculado sob demanda (igual "Show robustness to uncertainty", não eager
   como `sign_confidence`), já que é um diagnóstico de aprofundamento, não
-  um número de primeira linha.
+  um número de primeira linha. Fast-follow "gráficos editáveis/baixáveis"
+  (pedido do usuário ao revisar a aba): os gráficos de trajetória e de
+  sensibilidade de arestas eram `renderPlot()` estáticos sem botão de
+  download nem presença no relatório — diferente do grafo de rede, que já
+  tinha todo um pipeline de captura via `html2canvas` porque é um widget
+  JS vivo, esses dois já eram gráficos base R (`matplot()`/`barplot()`)
+  desenhados no servidor, então dá pra reescrever direto num arquivo com
+  um `downloadHandler()` comum, sem captura nenhuma do navegador. Lógica
+  de desenho movida pra `R/scenario_plots.R` (`draw_trajectory_plot()`/
+  `draw_sensitivity_plot()`), reaproveitada por três lugares: o gráfico em
+  tela, os botões "Download PNG"/"Download SVG" (novos, um par por
+  gráfico) e a figura embutida no relatório (ver `R/report.R` acima) — a
+  mesma chamada de função em todos, nunca três desenhos que pudessem
+  divergir. Sensibilidade ganhou um slider "Number of edges shown" (min 3,
+  max 20, default 10) — antes o gráfico não tinha nenhuma configuração,
+  sempre fixo em top-10; trajetória já tinha "Number of steps". Ao salvar
+  um cenário (`observeEvent(input$save_scenario)`), o valor atual de
+  `input$trajectory_steps` é gravado em `sc$trajectory_steps` (padrão 20
+  se nunca tocado) — sem isso o relatório não teria como redesenhar a
+  trajetória de um cenário salvo, já que o slider é um input único e
+  global, não por cenário.
 - `R/modules/mod_report.R` → aba "Report" (última do Explorar): checkboxes para
   métricas gerais/centralidades/descritores DPSIR/referências de aresta/item 6.4
   ("Reproducibility info"), seleção múltipla de imagens de
@@ -1602,6 +1645,46 @@ passo. Suíte `testthat` ganhou 7 testes novos entre `test-loop_analysis.R`
 definido no exemplo de pescas, sensibilidade — incluindo teste de
 reprodutibilidade com semente fixa, mesmo padrão do item 6.4) — suíte
 completa roda limpa.
+
+**Fast-follow "gráficos editáveis/baixáveis" concluído** (fora do roadmap
+de publicação/Fase 9, pedido direto do usuário ao revisar a aba
+Scenarios: os gráficos de trajetória e de sensibilidade de arestas não
+tinham como ser baixados, configurados além do que já existia, nem
+apareciam no relatório). Descrito nos bullets de `R/scenario_plots.R`
+(novo arquivo)/`R/report.R`/`R/modules/mod_responses.R` acima.
+
+**Achado que simplificou a implementação, não assumido de antemão**:
+diferente do grafo de rede (um widget `vis.Network` vivo em JS, que
+precisou de todo um pipeline `html2canvas` pra virar imagem), os dois
+gráficos aqui já eram `matplot()`/`barplot()` — desenhos base R renderizados
+no **servidor**, não no navegador. Isso significa que um `downloadHandler()`
+comum do Shiny (abrir um dispositivo gráfico, redesenhar, fechar) já
+resolve o download sozinho, sem captura nenhuma do lado do navegador — bem
+mais simples que o mecanismo do grafo. A mesma lógica de desenho
+(`draw_trajectory_plot()`/`draw_sensitivity_plot()`, movida pra
+`R/scenario_plots.R`) é reaproveitada por três chamadores: o `renderPlot()`
+em tela, os `downloadHandler()`s de PNG/SVG, e `plot_to_data_uri()` do
+relatório — nunca reimplementada três vezes.
+
+Testado ponta a ponta rodando o app de verdade: savepoint de pescas
+carregado, R1 a 70% aplicado, ambos os disclosures abertos — botões
+"Download PNG"/"Download SVG" aparecem nos dois gráficos, e o slider
+"Number of edges shown" (novo) aparece só no de sensibilidade. Os 4
+downloads buscados via `fetch()` direto na URL do `downloadHandler`:
+`content-type` correto em todos (`image/png`/`image/svg+xml`) e tamanho
+não-zero, confirmando arquivo de verdade gerado, não um placeholder vazio.
+Mudar "Number of edges shown" de 10 pra 3 e rebaixar o PNG de novo mudou o
+tamanho do arquivo (5656→5061 bytes), confirmando que o controle realmente
+afeta o que é desenhado/baixado, não só a tela. Cenário salvo e relatório
+gerado com ele selecionado: seções novas "How the effect evolves over
+time" e "Which edges matter most" aparecem com imagem `<img>` de verdade
+(inspecionada como base64 PNG válido, não vazio) mais a legenda numerada —
+numeração sequencial confirmada varrendo o HTML inteiro por
+`<strong>Figure N.</strong>`/`<strong>Table N.</strong>`: Table 1-5, Figure 1
+(trajetória), Figure 2 (sensibilidade), Table 6 (tabela de sensibilidade
+que já existia) — Figuras e Tabelas intercaladas na ordem certa do
+documento, não contadores separados. Sem erro no console do servidor em
+nenhum passo.
 
 ## Próximo
 
