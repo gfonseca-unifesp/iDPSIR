@@ -85,6 +85,46 @@ test_that("build_interaction_matrix returns a zero matrix for a graph with no ed
   expect_true(all(A == 0))
 })
 
+test_that("build_interaction_matrix adds a diagonal term from self_regulation (roadmap item 9.1)", {
+  nodes <- data.frame(
+    id = c("A", "B", "C", "D"),
+    self_regulation = c("none", "low", "medium", "high"),
+    stringsAsFactors = FALSE
+  )
+  edges <- data.frame(from = character(), to = character(), stringsAsFactors = FALSE)
+  g <- graph_from_data_frame(edges, vertices = nodes, directed = TRUE)
+
+  A <- build_interaction_matrix(g)
+
+  expect_equal(unname(diag(A)), c(0, -0.5, -1, -2))
+})
+
+test_that("build_interaction_matrix treats a missing self_regulation attribute as none (backward compatibility)", {
+  nodes <- data.frame(id = c("A", "B"), stringsAsFactors = FALSE) # no self_regulation column at all
+  edges <- data.frame(from = "A", to = "B", weight = 1, interaction_type = "positive", stringsAsFactors = FALSE)
+  g <- graph_from_data_frame(edges, vertices = nodes, directed = TRUE)
+
+  A <- build_interaction_matrix(g)
+
+  expect_equal(unname(diag(A)), c(0, 0))
+})
+
+test_that("strong self-regulation on every node can make an otherwise-unstable network stable, with a fully defined equilibrium", {
+  sp <- read_savepoint("../../docs/example_fisheries.idpsir.json")
+  nodes_self_regulated <- sp$nodes
+  nodes_self_regulated$self_regulation <- "high"
+  nodes_self_regulated <- normalize_dpsir_nodes(nodes_self_regulated)
+  g <- build_igraph(nodes_self_regulated, sp$edges, get_default_dpsir_schema())
+
+  A <- build_interaction_matrix(g)
+  stab <- check_stability(A)
+  expect_true(stab$stable)
+
+  press <- build_press_vector(g, active_ids = "R1", strengths = c(R1 = 0.7))
+  result <- press_perturbation(A, press)
+  expect_false(any(is.na(result$equilibrium)))
+})
+
 test_that("check_stability recognizes the classic stable trophic chain", {
   stab <- check_stability(stable_chain_matrix())
 
@@ -182,6 +222,49 @@ test_that("robustness_check on the fisheries example matches the previously veri
   robustness_df <- robustness_check(g, press, n_simulations = 100, spread = 0.5)
 
   expect_true(all(robustness_df$agreement_pct == 100))
+})
+
+test_that("self_regulation_sensitivity is a no-op (trivially 100% agreement) when no node has self-regulation", {
+  # base_diag is all zero, so `base_diag * multiplier` is exactly zero every
+  # simulation regardless of the resampled multiplier - A_sim is literally
+  # identical to A_base every time, so every simulated result must match the
+  # baseline exactly.
+  g <- fisheries_graph()
+  press <- build_press_vector(g, active_ids = "R1", strengths = c(R1 = 0.7))
+
+  sens_df <- self_regulation_sensitivity(g, press, n_simulations = 20)
+
+  expect_true(all(sens_df$agreement_pct == 100))
+})
+
+test_that("self_regulation_sensitivity on a strongly self-regulated fisheries network matches robustness_check's shape and doesn't error", {
+  sp <- read_savepoint("../../docs/example_fisheries.idpsir.json")
+  nodes_self_regulated <- sp$nodes
+  nodes_self_regulated$self_regulation <- "high"
+  nodes_self_regulated <- normalize_dpsir_nodes(nodes_self_regulated)
+  g <- build_igraph(nodes_self_regulated, sp$edges, get_default_dpsir_schema())
+  press <- build_press_vector(g, active_ids = "R1", strengths = c(R1 = 0.7))
+
+  sens_df <- self_regulation_sensitivity(g, press, n_simulations = 50, spread = 0.5)
+
+  expect_equal(nrow(sens_df), 5)
+  expect_true(all(sens_df$agreement_pct >= 0 & sens_df$agreement_pct <= 100))
+})
+
+test_that("self_regulation_sensitivity with the default seed is reproducible across repeated calls", {
+  sp <- read_savepoint("../../docs/example_fisheries.idpsir.json")
+  nodes_self_regulated <- sp$nodes
+  nodes_self_regulated$self_regulation <- "medium"
+  nodes_self_regulated <- normalize_dpsir_nodes(nodes_self_regulated)
+  g <- build_igraph(nodes_self_regulated, sp$edges, get_default_dpsir_schema())
+  press <- build_press_vector(g, active_ids = "R1", strengths = c(R1 = 0.7))
+
+  set.seed(999)
+  a <- self_regulation_sensitivity(g, press, n_simulations = 30)
+  set.seed(1)
+  b <- self_regulation_sensitivity(g, press, n_simulations = 30)
+
+  expect_identical(a, b)
 })
 
 test_that("find_neutralization_step matches the previously verified step count on the fisheries example", {

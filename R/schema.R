@@ -197,6 +197,12 @@ get_uncertainty_levels <- function() c("low", "medium", "high")
 
 get_controllability_levels <- function() c("low", "medium", "high")
 
+# Roadmap Fase 9 item 9.1: whether a factor tends to return to its own
+# baseline on its own once nothing is pushing it (see R/loop_analysis.R for
+# how this becomes a diagonal term in the interaction matrix). "none" is the
+# default - same behavior as before this field existed.
+get_self_regulation_levels <- function() c("none", "low", "medium", "high")
+
 get_temporal_scales <- function() c("short", "medium", "long")
 
 get_interaction_types <- function() {

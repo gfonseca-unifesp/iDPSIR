@@ -15,6 +15,31 @@
 # `apply_response()` (R/responses.R) fica preservada no disco mas deixa de
 # ser o motor principal da aba Scenarios.
 
+# Roadmap Fase 9 item 9.1: none=0 -> unchanged from before this field
+# existed. The rest is a deliberately simple, documented-here-only mapping
+# (never shown to the user as a number - see mod_data.R's tooltip) from a
+# qualitative level to how strongly a factor pulls itself back toward its
+# own baseline. Magnitudes chosen to sit in the same range as typical edge
+# weights in this app (see docs/example_fisheries.idpsir.json: 0.5-3), so a
+# node's self-regulation can meaningfully compete with what its incoming
+# edges are pushing, without one mechanism structurally dominating the other.
+self_regulation_magnitudes <- function() c(none = 0, low = -0.5, medium = -1, high = -2)
+
+# Per-node self-regulation as a plain named vector - shared by
+# build_interaction_matrix() and, later, the sensitivity-to-self-regulation
+# routine (item 9.1.4), so both read the same mapping.
+self_regulation_diagonal <- function(g) {
+  node_names <- V(g)$name
+  self_reg <- V(g)$self_regulation
+  if (is.null(self_reg)) {
+    self_reg <- rep("none", length(node_names))
+  }
+  magnitudes <- self_regulation_magnitudes()
+  values <- unname(magnitudes[self_reg])
+  values[is.na(values)] <- 0
+  setNames(values, node_names)
+}
+
 build_interaction_matrix <- function(g) {
   stopifnot(inherits(g, "igraph"))
 
@@ -22,19 +47,23 @@ build_interaction_matrix <- function(g) {
   n <- length(node_names)
   A <- matrix(0, nrow = n, ncol = n, dimnames = list(node_names, node_names))
 
-  if (ecount(g) == 0) {
-    return(A)
+  if (ecount(g) > 0) {
+    edge_ends <- ends(g, E(g), names = TRUE)
+    weight <- E(g)$weight
+    sign <- ifelse(E(g)$interaction_type == "negative", -1, 1)
+
+    for (k in seq_len(nrow(edge_ends))) {
+      from_node <- edge_ends[k, 1]
+      to_node <- edge_ends[k, 2]
+      A[to_node, from_node] <- A[to_node, from_node] + sign[k] * weight[k]
+    }
   }
 
-  edge_ends <- ends(g, E(g), names = TRUE)
-  weight <- E(g)$weight
-  sign <- ifelse(E(g)$interaction_type == "negative", -1, 1)
-
-  for (k in seq_len(nrow(edge_ends))) {
-    from_node <- edge_ends[k, 1]
-    to_node <- edge_ends[k, 2]
-    A[to_node, from_node] <- A[to_node, from_node] + sign[k] * weight[k]
-  }
+  # Self-regulation is a node attribute, not an edge - applied to the
+  # diagonal regardless of edge count, so it works even on a graph with no
+  # edges at all (unlike the loop above, which used to be the only thing
+  # this function did, hence the early return this replaces).
+  diag(A) <- diag(A) + self_regulation_diagonal(g)
 
   A
 }
@@ -354,6 +383,69 @@ robustness_check <- function(g, press, n_simulations = 100, spread = 0.5, thresh
     E(g_sim)$weight <- base_weight * multiplier
 
     result_sim <- suppressWarnings(press_perturbation(build_interaction_matrix(g_sim), press))
+    effect_sim <- result_sim$equilibrium
+
+    if (all(is.na(effect_sim))) {
+      any_singular <- TRUE
+      effect_sim <- result_sim$immediate
+    }
+
+    matches[sim, ] <- as.integer(classify_effect_sign(effect_sim, threshold) == baseline_sign)
+  }
+
+  if (any_singular) {
+    warning("Some simulations used the immediate effect instead of equilibrium (singular interaction matrix).", call. = FALSE)
+  }
+
+  data.frame(
+    id = node_names,
+    node = if (!is.null(V(g)$label)) V(g)$label else node_names,
+    category = if (!is.null(V(g)$dpsir_category)) V(g)$dpsir_category else rep("", length(node_names)),
+    agreement_pct = unname(colMeans(matches)[node_names]) * 100,
+    stringsAsFactors = FALSE
+  )
+}
+
+# =====================================================
+# SENSITIVITY TO SELF-REGULATION (roadmap Fase 9 item 9.1.4)
+# =====================================================
+#
+# Same resampling philosophy as robustness_check() above (Marco D, Fase 5) -
+# but perturbs each node's self-regulation MAGNITUDE instead of each edge's
+# weight, and leaves edge weights untouched entirely (that uncertainty is
+# what robustness_check()/sign_determinacy() already cover; this is
+# specifically about how much the result depends on the self-regulation
+# assumption). Continuous magnitude resampling (`magnitude * runif(1-spread,
+# 1+spread)`), not discrete jumps between none/low/medium/high levels -
+# keeps this consistent with the one resampling mechanism already used
+# everywhere else in this file, rather than inventing a second kind of
+# randomness. A node marked "none" has magnitude 0, and 0 times anything is
+# still 0, so it's correctly excluded from the perturbation with no
+# special-casing needed.
+self_regulation_sensitivity <- function(g, press, n_simulations = 100, spread = 0.5, threshold = 1e-9, seed = 42) {
+  stopifnot(inherits(g, "igraph"))
+  stopifnot(n_simulations >= 1)
+
+  node_names <- V(g)$name
+  base_diag <- self_regulation_diagonal(g)
+
+  A_base <- build_interaction_matrix(g)
+  baseline_result <- suppressWarnings(press_perturbation(A_base, press))
+  baseline_effect <- baseline_result$equilibrium
+  used_immediate <- all(is.na(baseline_effect))
+  if (used_immediate) baseline_effect <- baseline_result$immediate
+  baseline_sign <- classify_effect_sign(baseline_effect, threshold)
+
+  matches <- matrix(0L, nrow = n_simulations, ncol = length(node_names), dimnames = list(NULL, node_names))
+  A_sim <- A_base
+  any_singular <- used_immediate
+
+  set.seed(seed)
+  for (sim in seq_len(n_simulations)) {
+    multiplier <- runif(length(base_diag), 1 - spread, 1 + spread)
+    diag(A_sim) <- base_diag * multiplier
+
+    result_sim <- suppressWarnings(press_perturbation(A_sim, press))
     effect_sim <- result_sim$equilibrium
 
     if (all(is.na(effect_sim))) {

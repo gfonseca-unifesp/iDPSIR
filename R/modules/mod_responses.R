@@ -78,6 +78,17 @@
 # warning, since reach stays defined even when the equilibrium effect above
 # it doesn't. Computed eagerly in "Apply scenario", same as sign_confidence/
 # sensitivity, so saved scenarios carry it into the comparison table/report.
+#
+# Fase 9 item 9.1.4 ("self-regulation is a modeling assumption"): a note
+# next to the stability warning, hidden unless at least one node has
+# self-regulation set, reminding the user that the equilibrium/stability
+# result rests on that choice. A fourth optional disclosure, "Show
+# sensitivity to self-regulation" (also hidden unless the network uses the
+# feature at all), reuses the robustness-check pattern but perturbs each
+# self-regulated factor's own strength instead of edge weights
+# (self_regulation_sensitivity(), R/loop_analysis.R) - computed on demand
+# (like "robustness to uncertainty", not eagerly like sign_confidence),
+# since it's a deeper-dive diagnostic, not a headline number.
 
 mod_responses_ui <- function(id) {
   ns <- NS(id)
@@ -172,6 +183,16 @@ mod_responses_server <- function(id, schema, nodes, edges, graph) {
       any(!is.na(threshold_matrix()))
     })
 
+    # Roadmap Fase 9 item 9.1.4: whether the equilibrium/stability results
+    # below rest on a self-regulation assumption at all - drives both the
+    # conditional note and whether the sensitivity-to-self-regulation
+    # disclosure is shown (hidden entirely when nobody's using the feature).
+    has_self_regulation <- reactive({
+      req(graph())
+      sr <- V(graph())$self_regulation
+      !is.null(sr) && any(sr != "none")
+    })
+
     current_scenario <- reactiveVal(NULL)
 
     observeEvent(input$apply_scenario, {
@@ -213,6 +234,7 @@ mod_responses_server <- function(id, schema, nodes, edges, graph) {
 
       tagList(
         uiOutput(ns("stability_note")),
+        uiOutput(ns("self_regulation_note")),
         h5("Effect on the network"),
         DTOutput(ns("network_effect_table")),
         h5("Reach"),
@@ -263,6 +285,7 @@ mod_responses_server <- function(id, schema, nodes, edges, graph) {
           plotOutput(ns("sensitivity_plot"), height = "320px"),
           DTOutput(ns("sensitivity_table"))
         ),
+        uiOutput(ns("self_regulation_sensitivity_section")),
         tags$hr(),
         actionButton(ns("save_scenario"), "Save this scenario", icon = icon("save"), class = "btn-outline-primary")
       )
@@ -285,6 +308,23 @@ mod_responses_server <- function(id, schema, nodes, edges, graph) {
           " This network's feedback loops are not stable: treat the equilibrium effect below as a directional estimate, not a guaranteed outcome. The immediate (one-step) effect is still reliable."
         )
       }
+    })
+
+    # Roadmap Fase 9 item 9.1.4: self-regulation is a modeling assumption,
+    # not an observed edge property - shown regardless of whether the
+    # network came out stable or not, since either way the result rests on
+    # the self-regulation levels the user chose. Hidden entirely when no
+    # node has any (today's default, and the common case until the feature
+    # is actually used).
+    output$self_regulation_note <- renderUI({
+      req(isTRUE(has_self_regulation()))
+
+      tags$p(
+        class = "text-muted",
+        icon("circle-info"),
+        " This result assumes the self-regulation you set for the factors (Nodes step).",
+        "See how much it depends on that choice in \"Show sensitivity to self-regulation\" below."
+      )
     })
 
     output$threshold_note <- renderUI({
@@ -372,6 +412,42 @@ mod_responses_server <- function(id, schema, nodes, edges, graph) {
 
       datatable(df, rownames = FALSE, options = list(dom = "t", pageLength = 10)) %>%
         formatRound(columns = c("Influence"), digits = 3)
+    })
+
+    output$self_regulation_sensitivity_section <- renderUI({
+      req(isTRUE(has_self_regulation()))
+
+      tagList(
+        tags$hr(),
+        checkboxInput(ns("show_self_regulation_sensitivity"), "Show sensitivity to self-regulation (optional)", value = FALSE),
+        conditionalPanel(
+          condition = sprintf("input['%s']", ns("show_self_regulation_sensitivity")),
+          p(
+            class = "text-muted",
+            "Nudges each self-regulated factor's strength up or down (not the edges - that's",
+            "\"robustness to uncertainty\" above) and measures how often the predicted",
+            "direction holds - a low percentage means the result depends heavily on the",
+            "self-regulation you assumed for that factor, not just on the network's links."
+          ),
+          DTOutput(ns("self_regulation_sensitivity_table"))
+        )
+      )
+    })
+
+    output$self_regulation_sensitivity_table <- renderDT({
+      sc <- current_scenario()
+      req(sc, isTRUE(input$show_self_regulation_sensitivity))
+
+      sens_df <- suppressWarnings(self_regulation_sensitivity(graph(), sc$press, n_simulations = 100))
+      effect_df <- summarize_scenario_effect(graph(), sc$result)
+
+      sens_df$direction <- effect_df$direction[match(sens_df$id, effect_df$id)]
+      sens_df <- sens_df[order(sens_df$agreement_pct), ]
+      sens_df <- sens_df[, c("node", "category", "direction", "agreement_pct")]
+      names(sens_df) <- c("Factor", "Category", "Effect", "Agreement (%)")
+
+      datatable(sens_df, rownames = FALSE, options = list(dom = "t", pageLength = 10)) %>%
+        formatRound(columns = "Agreement (%)", digits = 0)
     })
 
     output$network_effect_table <- renderDT({

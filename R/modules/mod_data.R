@@ -19,6 +19,7 @@ create_empty_nodes_table <- function() {
     uncertainty = character(),
     controllability = character(),
     temporal_scale = character(),
+    self_regulation = character(),
     stringsAsFactors = FALSE
   )
 }
@@ -376,7 +377,8 @@ mod_data_server <- function(id, seed = NULL) {
         id = "", label = "", dpsir_category = schema_categories(rv$schema)[1],
         subsystem = "", uncertainty = get_uncertainty_levels()[1],
         controllability = get_controllability_levels()[1],
-        temporal_scale = get_temporal_scales()[1]
+        temporal_scale = get_temporal_scales()[1],
+        self_regulation = get_self_regulation_levels()[1]
       )
 
       modalDialog(
@@ -388,6 +390,16 @@ mod_data_server <- function(id, seed = NULL) {
         selectInput(ns("nm_uncertainty"), "Uncertainty", choices = get_uncertainty_levels(), selected = d$uncertainty),
         selectInput(ns("nm_controllability"), "Controllability", choices = get_controllability_levels(), selected = d$controllability),
         selectInput(ns("nm_temporal"), "Temporal scale", choices = get_temporal_scales(), selected = d$temporal_scale),
+        selectInput(
+          ns("nm_self_regulation"), "Self-regulation",
+          choices = get_self_regulation_levels(), selected = d$self_regulation %||% get_self_regulation_levels()[1]
+        ),
+        tags$p(
+          class = "text-muted", style = "font-size: 12px;",
+          "Does this factor tend to return to its own baseline on its own once nothing is",
+          "pushing it? E.g. a habitat that recovers, or a factor controlled by something",
+          "outside the model. Leave \"none\" if it only changes because of the network's links."
+        ),
         footer = tagList(
           modalButton("Cancel"),
           actionButton(ns("confirm_node"), "Save", class = "btn-primary")
@@ -448,6 +460,7 @@ mod_data_server <- function(id, seed = NULL) {
         uncertainty = input$nm_uncertainty,
         controllability = input$nm_controllability,
         temporal_scale = input$nm_temporal,
+        self_regulation = input$nm_self_regulation,
         stringsAsFactors = FALSE
       )
 

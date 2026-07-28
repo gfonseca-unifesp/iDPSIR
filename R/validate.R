@@ -15,6 +15,21 @@ normalize_dpsir_nodes <- function(nodes) {
   nodes$id <- trimws(as.character(nodes$id))
   nodes$label <- as.character(nodes$label)
   nodes$dpsir_category <- trimws(as.character(nodes$dpsir_category))
+
+  # Optional, defaults to "none" - same lenient pattern as uncertainty/
+  # controllability (no vocabulary validation here either, just the form's
+  # dropdown constrains it structurally); missing entirely from
+  # older savepoints/CSVs is the normal case, reproducing today's behavior
+  # (no self-regulation) rather than being an error. See R/schema.R's
+  # get_self_regulation_levels() and R/loop_analysis.R's use in
+  # build_interaction_matrix().
+  if (!"self_regulation" %in% names(nodes)) {
+    nodes$self_regulation <- "none"
+  } else {
+    nodes$self_regulation[is.na(nodes$self_regulation)] <- "none"
+    nodes$self_regulation <- trimws(as.character(nodes$self_regulation))
+  }
+
   nodes
 }
 

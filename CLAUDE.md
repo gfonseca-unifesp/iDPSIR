@@ -38,8 +38,14 @@ Checagem rápida de sintaxe sem subir o app:
 - `global.R` → auto-instala pacotes faltantes, pacotes, opções e `source()` de todos
   os fontes (ordem importa).
 - `R/schema.R` → esquema DPSIR configurável (níveis, conexões derivadas da ordem, paletas,
-  vocabulários controlados de nós/arestas, legenda).
-- `R/validate.R` → validação de nós/arestas contra o schema.
+  vocabulários controlados de nós/arestas, legenda). Item 9.1 do
+  `ROADMAP_FASE9_iDPSIR.md`: `get_self_regulation_levels() <- c("none","low","medium","high")`,
+  mesmo padrão de `get_uncertainty_levels()`/`get_controllability_levels()`.
+- `R/validate.R` → validação de nós/arestas contra o schema. `normalize_dpsir_nodes()`
+  ganhou o mesmo tratamento opcional-com-default já usado em `threshold`/`reference`
+  (edges): `self_regulation` ausente vira `"none"` — sem validação de vocabulário
+  contra a lista (mesma lógica leniente de `uncertainty`/`controllability`, que
+  também nunca foram validados, só restringidos pelo dropdown do formulário).
 - `R/graph.R` → `build_igraph`, mapeamento visual por schema, layout em camadas
   (`compute_layered_layout`) ou circular (`compute_circular_layout`, todos os nós
   igualmente espaçados num anel — `compute_graph_layout` despacha entre os dois por
@@ -155,7 +161,26 @@ Checagem rápida de sintaxe sem subir o app:
   diferente a cada vez, só pelo sorteio dos pesos; com a semente fixa a
   mesma chamada sempre devolve o mesmo resultado, não importa o estado do
   RNG antes de chamar. `global_sensitivity()` não precisou de mudança — já
-  é determinístico (OAT sem amostragem aleatória).
+  é determinístico (OAT sem amostragem aleatória). Fase 9 item 9.1
+  ("auto-regulação por fator"): `self_regulation_magnitudes()` (mapeamento
+  fixo `none=0, low=-0.5, medium=-1, high=-2`, deliberadamente não exposto
+  ao usuário — faixa escolhida pra competir de verdade com o peso típico
+  das arestas do app, ver `data/`/`docs/example_fisheries.idpsir.json`) e
+  `self_regulation_diagonal(g)` (lê `V(g)$self_regulation`, com fallback
+  pra `"none"` se o atributo nem existir — grafos antigos/savepoints sem o
+  campo continuam batendo byte a byte com o comportamento de antes).
+  `build_interaction_matrix()` deixou de ter retorno antecipado em
+  `ecount(g)==0` — a diagonal precisa ser preenchida mesmo sem arestas, já
+  que auto-regulação é atributo de nó, não de aresta (o schema continua
+  proibindo aresta de um nó pra ele mesmo, intocado). Fase 9 item 9.1.4
+  ("sensibilidade à auto-regulação"): `self_regulation_sensitivity()`,
+  literalmente a mesma reamostragem de `robustness_check()` só que
+  perturbando a magnitude da auto-regulação de cada nó (multiplicador
+  contínuo, não salto discreto entre níveis — decisão tomada antes de
+  implementar, pra não inventar um segundo tipo de aleatoriedade só pra
+  este item) em vez do peso das arestas; um nó "none" tem magnitude 0, e
+  0×qualquer-coisa continua 0, então fica corretamente fora da perturbação
+  sem nenhum caso especial no código.
 - `R/report.R` → montagem do relatório HTML autocontido (`build_full_report_html`,
   `report_html_table`, `format_report_cell`, `matrix_to_report_df`), usado só por
   `mod_report.R`. Seções (imagens de grafo salvas/métricas gerais/centralidades/
@@ -206,6 +231,14 @@ Checagem rápida de sintaxe sem subir o app:
   "New project" era só um botão solto ao lado de 3 colunas com inputs de
   arquivo acima, o que deixava a coluna "New project" com aparência
   inacabada/desalinhada. Mockup revisado com o usuário antes de implementar.
+  Fase 9 item 9.1: formulário de nó ganhou `selectInput` "Self-regulation"
+  (`get_self_regulation_levels()`, default `"none"`, mesmo padrão de
+  Uncertainty/Controllability) com um texto de ajuda em linguagem simples
+  (sem "diagonal"/"autovalor" — regra de linguagem do roadmap: termos
+  matemáticos só nos comentários de código, nunca na tela) explicando o
+  conceito com exemplos concretos (habitat que se recupera, driver
+  controlado por algo fora do modelo). `create_empty_nodes_table()` ganhou
+  a coluna correspondente.
 - `R/modules/mod_graph.R` → painel de exploração do grafo. Controles em caixas
   colapsáveis (`bs4Dash::box(collapsible = TRUE)`) empilhadas numa coluna à esquerda,
   agrupadas por tema (Display, Node & edge emphasis, Layout & spacing, Pathway
@@ -300,7 +333,16 @@ Checagem rápida de sintaxe sem subir o app:
   Calculado de forma eager em "Apply scenario" (mesmo padrão de
   `sign_confidence`/`sensitivity`), e a comparação de cenários ganhou uma
   tabela "Reach per scenario" ao lado das demais (baseline sempre 0, já
-  que nenhuma resposta ativa não alcança nada).
+  que nenhuma resposta ativa não alcança nada). Item 9.1.4: nota em
+  linguagem simples ao lado do aviso de estabilidade (`self_regulation_note`,
+  escondida por completo se nenhum nó tiver auto-regulação — a maioria dos
+  savepoints existentes) avisando que o resultado assume a auto-regulação
+  configurada; quarto disclosure opcional "Show sensitivity to
+  self-regulation" (também escondido nas mesmas condições), tabela
+  Factor/Category/Effect/Agreement % de `self_regulation_sensitivity()` —
+  calculado sob demanda (igual "Show robustness to uncertainty", não eager
+  como `sign_confidence`), já que é um diagnóstico de aprofundamento, não
+  um número de primeira linha.
 - `R/modules/mod_report.R` → aba "Report" (última do Explorar): checkboxes para
   métricas gerais/centralidades/descritores DPSIR/referências de aresta/item 6.4
   ("Reproducibility info"), seleção múltipla de imagens de
@@ -1496,6 +1538,71 @@ Which edges matter most, Equilibrium effect) regrediu. Sem erro no console
 do servidor em nenhum passo. Suíte `testthat` ganhou `tests/testthat/test-reach.R`
 (6 testes novos, 15 assertivas) — suíte completa roda limpa.
 
+**Item 9.1 concluído: auto-regulação por fator.** Os quatro sub-passos do
+roadmap (9.1.1 atributo/vocabulário, 9.1.2 uso no cálculo, 9.1.3 interface
+de edição/persistência, 9.1.4 nota condicional + sensibilidade) — descritos
+nos bullets de `schema.R`/`validate.R`/`loop_analysis.R`/`mod_data.R`/
+`mod_responses.R` acima. Esse item resolve uma limitação estrutural
+documentada repetidamente ao longo de toda a Fase 5: como o schema proíbe
+aresta de um nó pra ele mesmo, a diagonal de `A` era **sempre** zero pra
+qualquer rede construída pelo app, e por isso `trace(A)` (soma dos
+autovalores) também era sempre zero — o que torna `check_stability()`
+matematicamente incapaz de retornar `TRUE`, não importa a rede. Auto-
+regulação, sendo atributo de **nó** (não aresta), preenche a diagonal sem
+reabrir essa proibição.
+
+**Verificação decisiva, não assumida**: rodando o exemplo de pescas (ciclo
+de 5 nós, sempre instável até agora) com todos os nós marcados
+`self_regulation="high"`, `check_stability()` retornou `TRUE` — a
+**primeira vez em todo o projeto** que essa mensagem aparece. Autovalores
+todos com parte real negativa (`-3.62, -2.50, -2.50, -0.69, -0.69`), e
+`press_perturbation()` devolveu um efeito de equilíbrio **totalmente
+definido** (sem `NA`) pros 5 nós — antes disso, todo cenário nessa rede só
+tinha o efeito imediato como confiável. Testado também: (a) baseline sem
+auto-regulação continua idêntico byte a byte ao comportamento anterior
+(retrocompatibilidade — savepoints antigos sem a coluna carregam com
+`"none"`, sem mudar nenhum número já verificado nesta sessão); (b) níveis
+mistos (`low/none/medium/none/none`) preenchem a diagonal corretamente mas
+não necessariamente estabilizam a rede — nem toda combinação estabiliza,
+comportamento correto, não um bug.
+
+`self_regulation_sensitivity()` testado contra o mesmo exemplo com todos os
+nós em "high": 100% de concordância de sinal em todos os 5 fatores variando
+a magnitude da auto-regulação em ±50% — a rede se mostrou **determinada em
+sinal** também pra essa perturbação (mesmo padrão de achado já documentado
+pra `robustness_check()` no Marco D da Fase 5: nem toda rede tem um
+resultado delicado o bastante pra ser derrubado por variação de magnitude,
+isso é uma propriedade real da topologia, não falta de teste). Um segundo
+caso sanidade — rede sem nenhuma auto-regulação — dá 100% trivialmente
+(magnitude sempre zero, `A_sim` idêntica a `A_base` em toda simulação, sem
+variação nenhuma pra testar), confirmando que a função não quebra nesse
+caso degenerado.
+
+Testado ponta a ponta rodando o app de verdade: savepoint de pescas
+carregado, os 5 nós editados um a um pelo formulário (via
+`el.selectize.setValue('high')` — descoberto que o `<select>` nativo por
+trás de um `selectInput` do Shiny só expõe a opção **atualmente
+selecionada** como filho DOM quando `selectize=TRUE` (o padrão), não a
+lista inteira; confirmado que isso já era assim pro `nm_uncertainty`
+pré-existente também, não é bug novo — só corrigi a forma de setar o valor
+via JS pra usar a API do selectize em vez de mexer no `<select>` bruto),
+grafo reconstruído, cenário R1 a 70% aplicado: aviso de estabilidade mudou
+de "not stable" (vermelho) pra **"stable" (verde)**, "Nodes affected" foi
+de 1.00→2.00 imediato e 1.00→**5.00** de equilíbrio, a nota de auto-
+regulação apareceu corretamente acima das tabelas, e "Show sensitivity to
+self-regulation" apareceu na lista de disclosures (ausente antes de marcar
+qualquer nó) mostrando a tabela com 100% em todos os fatores — todos os
+números batendo exatamente com o script standalone. Recarregado o mesmo
+savepoint de pescas **sem** auto-regulação (arquivo em disco não
+modificado por este teste): nota e disclosure corretamente ausentes,
+aviso volta a "not stable", nenhuma regressão nos números já verificados
+(0.35/0.47/100%/8 passos). Sem erro no console do servidor em nenhum
+passo. Suíte `testthat` ganhou 7 testes novos entre `test-loop_analysis.R`
+(diagonal de auto-regulação, retrocompatibilidade, estabilização/equilíbrio
+definido no exemplo de pescas, sensibilidade — incluindo teste de
+reprodutibilidade com semente fixa, mesmo padrão do item 6.4) — suíte
+completa roda limpa.
+
 ## Próximo
 
 Fase 5 está completa (Marcos A-D). Todos os 4 itens da lista pós-Fase 5 (1:
@@ -1533,14 +1640,16 @@ ordem combinada com o usuário:
 ainda não mesclada em `main` — validar antes de integrar, mesmo padrão das fases
 anteriores), ordem combinada com o usuário:
 - [x] **9.2** — alcance de uma resposta (concluído, ver acima).
-- [ ] **9.1** — auto-regulação por fator (próximo). Sub-passos combinados: 9.1.1-9.1.3
-  (atributo `self_regulation` none/low/medium/high + cálculo na diagonal de `A` +
-  formulário de edição + persistência no savepoint) primeiro, depois 9.1.4 (nota
-  condicional + sensibilidade à auto-regulação, reaproveitando o padrão de
-  `robustness_check()` mas perturbando a magnitude da auto-regulação em vez do peso
-  das arestas — não jump discreto entre níveis, pra manter consistência com o
-  mecanismo já existente).
-- [ ] **9.3**/**9.4** — tutorial e README, por último, quando a UI de 9.1 estabilizar.
+- [x] **9.1** — auto-regulação por fator (concluído, ver acima — os quatro
+  sub-passos 9.1.1-9.1.4 num único commit; verificação decisiva: exemplo de
+  pescas com auto-regulação alta em todos os nós vira a primeira rede
+  **estável** de todo o projeto, com efeito de equilíbrio totalmente
+  definido).
+- [ ] **9.3**/**9.4** — tutorial e README, por último, agora que a UI de 9.1
+  estabilizou. Precisa cobrir: por que o efeito de longo prazo às vezes
+  falta, como a auto-regulação o destrava (com o mesmo exemplo de pescas
+  usado na verificação acima), como ler a sensibilidade à auto-regulação, e
+  como interpretar o alcance (raiz vs. fim-de-cadeia).
 
 Pedido pelo usuário mas ainda não definido: "estrela"/"rosa" como layouts
 adicionais — precisa de uma conversa pra fixar o que cada termo significa
