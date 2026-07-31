@@ -26,7 +26,7 @@ import_matrices <- function(nodes_path, edges_path = NULL) {
 # CONSTRUIR SAVEPOINT
 # =====================================================
 
-build_savepoint <- function(schema, nodes, edges, positions = NULL, metadata = list()) {
+build_savepoint <- function(schema, nodes, edges, positions = NULL, metadata = list(), scenario_state = NULL) {
   validate_schema(schema)
 
   now <- as.character(Sys.time())
@@ -41,13 +41,43 @@ build_savepoint <- function(schema, nodes, edges, positions = NULL, metadata = l
   metadata <- utils::modifyList(default_metadata, metadata)
   metadata$updated_at <- now
 
+  # Revisao 1, Fase 3: `scenario_state` arrives as
+  # list(pressure_active=<chr>, pressure_strengths=<named num>,
+  # response_active=<chr>, response_strengths=<named num>, effect_horizon=)
+  # (mod_responses.R's shape) but is stored here as id/strength ROWS - a
+  # length-1 *named* numeric vector like c(D1 = 60) gets silently unboxed
+  # by jsonlite's auto_unbox to a bare `60` (losing the "D1" key entirely,
+  # confirmed empirically) - a data.frame of rows never does, the same
+  # reason `positions` already uses one instead of named x/y vectors.
+  scenario_state_json <- if (is.null(scenario_state)) {
+    NULL
+  } else {
+    list(
+      pressure = data.frame(
+        id = scenario_state$pressure_active,
+        strength = unname(scenario_state$pressure_strengths),
+        stringsAsFactors = FALSE
+      ),
+      response = data.frame(
+        id = scenario_state$response_active,
+        strength = unname(scenario_state$response_strengths),
+        stringsAsFactors = FALSE
+      ),
+      effect_horizon = if (is.null(scenario_state$effect_horizon)) 0.5 else scenario_state$effect_horizon
+    )
+  }
+
   list(
     format_version = CURRENT_SAVEPOINT_VERSION,
     metadata = metadata,
     schema = schema,
     nodes = nodes,
     edges = edges,
-    positions = positions
+    positions = positions,
+    # Same optional-key-added-to-an-existing-format pattern as `positions`
+    # (Fase 5 fast-follow) - an old savepoint simply has no "scenario_state"
+    # key, read back as NULL below, no version bump or migration needed.
+    scenario_state = scenario_state_json
   )
 }
 
@@ -160,12 +190,38 @@ read_savepoint <- function(path) {
     as.data.frame(raw$positions, stringsAsFactors = FALSE)
   }
 
+  # Revisao 1, Fase 3 - absent on any savepoint written before this
+  # revision, read back as NULL exactly like `positions` above (same
+  # `length(...) == 0` guard, not just is.null(): an R-side NULL passed to
+  # build_savepoint() serializes to JSON as "{}", not "null", so a plain
+  # is.null() check alone would miss it - confirmed empirically, same trap
+  # `positions` already accounts for). mod_data.R treats a NULL
+  # scenario_state as "nothing to restore", same as it already does for
+  # NULL positions.
+  scenario_state <- if (is.null(raw$scenario_state) || length(raw$scenario_state) == 0) {
+    NULL
+  } else {
+    ss <- raw$scenario_state
+    empty_rows <- data.frame(id = character(), strength = numeric(), stringsAsFactors = FALSE)
+    pressure_df <- if (is.null(ss$pressure) || length(ss$pressure) == 0) empty_rows else as.data.frame(ss$pressure, stringsAsFactors = FALSE)
+    response_df <- if (is.null(ss$response) || length(ss$response) == 0) empty_rows else as.data.frame(ss$response, stringsAsFactors = FALSE)
+
+    list(
+      response_active = as.character(response_df$id),
+      response_strengths = setNames(as.numeric(response_df$strength), response_df$id),
+      pressure_active = as.character(pressure_df$id),
+      pressure_strengths = setNames(as.numeric(pressure_df$strength), pressure_df$id),
+      effect_horizon = if (is.null(ss$effect_horizon)) 0.5 else as.numeric(ss$effect_horizon)
+    )
+  }
+
   list(
     format_version = raw$format_version,
     metadata = raw$metadata,
     schema = schema,
     nodes = nodes,
     edges = edges,
-    positions = positions
+    positions = positions,
+    scenario_state = scenario_state
   )
 }

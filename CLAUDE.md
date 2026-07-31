@@ -62,7 +62,26 @@ Checagem rápida de sintaxe sem subir o app:
   transições, Impactos sem Resposta, Pressões não cobertas, médias de incerteza/controlabilidade).
 - `R/io.R` → importar matrizes CSV (`import_matrices`) e savepoint `.idpsir.json`
   (`build_savepoint`/`write_savepoint`/`read_savepoint`, com checagem de `format_version`;
-  `merge_savepoints`, ver Fase 4 abaixo).
+  `merge_savepoints`, ver Fase 4 abaixo). Revisão 1, Fase 3: `build_savepoint()`
+  ganhou `scenario_state` opcional (default `NULL`) — o cenário de
+  pressão/resposta configurado na aba Scenarios (ver `mod_responses.R`
+  abaixo), pra sobreviver a salvar/recarregar o savepoint, mesmo padrão
+  aditivo já usado por `positions` (Fase 5). Guardado como **linhas**
+  `data.frame(id, strength)` para pressão e resposta separadamente, não como
+  vetor nomeado — `jsonlite::write_json(auto_unbox=TRUE)` desmancha
+  silenciosamente um vetor nomeado de tamanho 1 num escalar solto (perdendo
+  o nome/id inteiro), confirmado ao vivo; um data.frame de linhas nunca sofre
+  esse "unboxing" não importa o número de linhas, o mesmo motivo que já fez
+  `positions` usar linhas em vez de vetores x/y nomeados. `read_savepoint()`
+  devolve `scenario_state` de volta no formato "vetor nomeado" que
+  `mod_responses.R` espera (`response_active`/`response_strengths`/
+  `pressure_active`/`pressure_strengths`/`effect_horizon`) — a conversão
+  savepoint-JSON-amigável vs. R-amigável fica só dentro de `io.R`, nenhum
+  outro arquivo precisa saber dela. `NULL` em `scenario_state` (savepoint
+  sem cenário nenhum, ou salvo antes desta revisão) serializa como `"{}"`,
+  não `"null"` — `read_savepoint()` usa o mesmo guard duplo
+  `is.null(...) || length(...) == 0` que `positions` já usava por esse
+  motivo exato.
 - `R/pathways.R` → análise de caminhos causais schema-aware (`find_dpsir_paths`,
   `compute_critical_pathways`, `score_pathway`), adaptado de `R/dpsir/core_dpsir_pathways.R`.
 - `R/core/core_ui_components.R` → toggles/inputs compartilhados (usados no painel de métricas).
@@ -206,7 +225,12 @@ Checagem rápida de sintaxe sem subir o app:
   respostas combinadas não teria uma "força planejada" única pra
   multiplicar). `sufficiency_confidence()` reaproveita a mesma reamostragem
   de `robustness_check()`. `sufficiency_reach_over_c()` varre uma grade de
-  `c` e sinaliza veredito de fronteira.
+  `c` e sinaliza veredito de fronteira. Revisão 1, Fase 3:
+  `format_sufficiency_table()`/`format_reach_over_c_table()` — formatação de
+  exibição compartilhada entre os renderers em tela de `mod_responses.R` e a
+  seção "Response sufficiency" do relatório (`R/report.R`), pra um número
+  nunca poder divergir entre tela e relatório exportado (mesmo raciocínio já
+  usado por `R/scenario_plots.R` pros gráficos de trajetória/sensibilidade).
 - `R/scenario_plots.R` → fast-follow "gráficos editáveis/baixáveis" (pedido do
   usuário ao revisar a aba Scenarios): `draw_trajectory_plot()`/
   `draw_sensitivity_plot()`, funções puras de desenho (base R
@@ -261,6 +285,20 @@ Checagem rápida de sintaxe sem subir o app:
   `sc$trajectory_steps` (capturado no momento de "Save this scenario", ver
   `mod_responses.R` abaixo) — não precisa de um slider ao vivo pra existir
   no relatório.
+
+  **Revisão 1, Fase 3**: nova seção "Response sufficiency", uma subseção por
+  cenário salvo selecionado, inserida **antes** de "Scenarios compared"
+  (agora rotulada "(older, equilibrium-based reading)", mesmo texto de aviso
+  já usado em `mod_responses.R`) — mesma ordem da UI, onde a leitura nova
+  também vem antes da antiga. Reaproveita `format_sufficiency_table()`/
+  `format_reach_over_c_table()` (novos, `R/sufficiency.R` — ver abaixo) pras
+  duas tabelas cuja formatação tinha lógica própria; a matriz de confiança
+  (`sc$sufficiency_confidence_matrix`) já vem pronta de `R/sufficiency.R`
+  sem formatação extra. Cada subseção mostra o cenário de pressão/resposta
+  em texto (`"D1 at 100%, D3 at 100%"` etc.) e o valor de `c` usado, seguido
+  das 3 tabelas com legenda numerada própria — nenhuma seção nova depende de
+  checkbox novo em `mod_report.R`, reaproveita a mesma seleção de cenários
+  que já alimenta "Scenarios compared".
 - `R/modules/mod_data.R` → editor por formulário (passos Início/Modelo/Nós/Arestas/Revisar
   do wizard); estado em `reactiveValues`, não-reativo até "Construir/Reconstruir grafo".
   Formulário de aresta tem um campo opcional "Threshold" (em branco na maioria das
@@ -485,6 +523,41 @@ Checagem rápida de sintaxe sem subir o app:
   em nenhum passo, depois de corrigidos os dois achados acima. Suíte
   `testthat` (91 assertivas) e checagem de sintaxe re-rodadas depois do
   fix, ambas limpas.
+
+  **Revisão 1, Fase 3 — persistência do cenário no savepoint.** Novo
+  parâmetro `restore_state` em `mod_responses_server()` (a `scenario_state`
+  restaurada de um savepoint, `NULL` em qualquer outro modo de início —
+  exposta por `mod_data.R`/passada por `mod_wizard.R`, mesmo padrão já
+  usado por `positions`). Lido só na hora de desenhar os controles
+  (`output$pressure_controls`/`output$response_controls`/
+  `output$effect_horizon_ui`, este último convertido de `sliderInput`
+  estático pra `uiOutput` só pra poder receber um valor inicial vindo do
+  savepoint) — nunca escrito de volta, então editar manualmente depois de
+  carregar nunca é revertido por este mecanismo. Nova reactive
+  `current_scenario_state` (lida direto de `input$...`, não de
+  `current_scenario()`) devolvida no retorno do módulo — captura o que
+  estiver configurado na tela **no momento de baixar o savepoint**, esteja
+  ou não com "Apply scenario" já clicado.
+
+  **Bug real, encontrado só ao testar o carregamento de um savepoint com
+  cenário salvo (não aparecia em nenhum teste standalone nem nos 91 do
+  Fase 1/2, porque nenhum deles restaurava savepoint com nó *parcialmente*
+  ativo)**: a app quebrava com "índice fora de limites" ao entrar na aba
+  Scenarios depois de carregar um savepoint que só tinha D1/D3/R1 ativos —
+  qualquer outro nó (D2, D4, R2...) travava o painel inteiro. Causa: a
+  primeira versão de `restored_strength()` usava `strengths[[node_id]]`
+  pra buscar a força salva de cada nó — `strengths` é um **vetor atômico**
+  nomeado (não uma lista), e `[[` num vetor atômico **lança erro** pra um
+  nome ausente (`"subscript out of bounds"`), ao contrário de uma lista,
+  onde `[[` devolve `NULL` silenciosamente. Corrigido checando
+  `node_id %in% names(strengths)` explicitamente antes de indexar, sem
+  depender do comportamento de `[[` variar por tipo. Verificado carregando
+  de volta o savepoint de teste (D1/D3 a 100%, R1 a 100%, `c=0.5`): os
+  nós ausentes do cenário salvo (D2, D4, R2-R5) aparecem corretamente
+  desmarcados a 50% (o default), os presentes exatamente na força salva,
+  e aplicar o cenário restaurado reproduz número por número o já
+  verificado na Fase 2 (0.11/-0.166/-0.056/66% em Catch decline, etc.) —
+  sem erro no console do servidor.
 - `R/modules/mod_report.R` → aba "Report" (última do Explorar): checkboxes para
   métricas gerais/centralidades/descritores DPSIR/referências de aresta/item 6.4
   ("Reproducibility info"), seleção múltipla de imagens de
@@ -1947,6 +2020,48 @@ ver acima) também concluído nesta branch, mesclado junto.
 Checagem de sintaxe + suíte `testthat` completa (91 assertivas) re-rodadas
 em `main` depois do merge, ambas limpas, antes do push.
 
+**Revisão 1, Fase 3 concluída: relatório + persistência do cenário no
+savepoint.** `format_sufficiency_table()`/`format_reach_over_c_table()`
+(`R/sufficiency.R`), seção "Response sufficiency" no relatório
+(`R/report.R`), `scenario_state` no savepoint (`R/io.R`,
+`mod_responses.R`, `mod_data.R`, `mod_wizard.R`) — descritos nos bullets
+acima.
+
+**Bug real de `[[` em vetor atômico, encontrado só ao testar o
+carregamento de um savepoint com cenário parcialmente ativo** (nenhum dos
+29 testes de suficiência nem os 19 de io.R exercitava esse caminho, porque
+nenhum deles restaurava um savepoint dentro do app de verdade e depois
+navegava até a aba Scenarios): a app quebrava com "índice fora de limites"
+assim que a aba Scenarios era aberta após carregar um savepoint salvo com
+D1/D3/R1 ativos — descrito em detalhe no bullet de `mod_responses.R`
+acima. Corrigido trocando `strengths[[node_id]]` por um check explícito
+`node_id %in% names(strengths)` antes de indexar.
+
+Testado ponta a ponta rodando o app de verdade contra a rede de Mangi: (1)
+cenário D1+D3 (pressão) + R1 (resposta) a 100%, `c=0.5`, aplicado e salvo;
+relatório gerado com esse cenário selecionado contém a seção "Response
+sufficiency" com as 3 tabelas batendo número por número com a tela
+("Table 2"/"Table 3"/"Table 4" nesse teste, incluindo o texto "Pressure:
+D1 at 100%, D3 at 100%" / "Response: R1 at 100%" / "How far the effect was
+traced (c): 0.5"), e a seção antiga "Scenarios compared (older,
+equilibrium-based reading)" logo em seguida, sem nenhuma regressão. (2)
+Savepoint baixado nesse estado inspecionado diretamente via `fetch()`:
+`scenario_state` presente com `pressure: [{id:"D1",strength:100},
+{id:"D3",strength:100}]`, `response: [{id:"R1",strength:100}]`,
+`effect_horizon: 0.5` — confirmando que o formato de linhas evita o
+"unboxing" que um vetor nomeado de tamanho 1 sofreria. (3) Esse savepoint
+recarregado do zero (nova sessão, sem nenhum estado prévio): depois do
+bug acima corrigido, a aba Scenarios abre sem erro, D1/D3/R1 aparecem
+corretamente marcados a 100% e os demais nós desmarcados a 50% (o
+default), `effect_horizon` volta a 0.5, e "Apply scenario" reproduz
+exatamente os mesmos números já verificados — prova de que o round-trip
+completo (tela → savepoint → JSON → disco → recarregar → tela) preserva o
+cenário configurado. Sem erros no console do navegador nem do servidor em
+nenhum passo, depois do fix. Suíte `testthat` ganhou um teste de
+round-trip de `scenario_state` em `test-io.R` e dois testes das novas
+funções de formatação em `test-sufficiency.R` (98 assertivas no total);
+checagem de sintaxe limpa.
+
 **Revisão 1 em andamento — modelo de suficiência de resposta, na branch
 `fase-10-suficiencia`** (documento externo trazido pelo usuário, plano de
 6 fases em `.claude/plans/wondrous-cuddling-eclipse.md`, ver "Estado atual"
@@ -1961,8 +2076,10 @@ leitura principal da aba Scenarios:
   3 tabelas da Seção 4) ao lado da UI antiga, sem remover nada ainda
   (concluído, ver acima — dois bugs reais de DT/design corrigidos ao
   testar ao vivo contra a rede de Mangi).
-- [ ] **Fase 3** — relatório (3 tabelas novas) + persistência dos dois
-  cenários + `c` no savepoint.
+- [x] **Fase 3** — relatório (3 tabelas novas) + persistência dos dois
+  cenários + `c` no savepoint (concluído, ver acima — um bug real de `[[`
+  em vetor atômico corrigido ao testar o carregamento de um savepoint com
+  cenário salvo).
 - [ ] **Fase 4** — corte: remove UI/relatório do motor antigo, renomeia
   `mod_responses.R`→`mod_scenarios.R`, remove `self_regulation` de
   `schema.R`/`validate.R`/`mod_data.R`.

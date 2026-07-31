@@ -182,3 +182,33 @@ test_that("sufficiency and sufficiency_confidence return an empty data.frame, no
   expect_equal(nrow(sufficiency(g, press, press)), 0)
   expect_equal(nrow(sufficiency_confidence(g, press, press, n_simulations = 5)), 0)
 })
+
+test_that("format_sufficiency_table shows an absolute strength for a single response, a ratio for a combined one", {
+  g <- mangi_graph()
+  p_D <- build_press_vector(g, active_ids = c("D1", "D3"), strengths = c(D1 = 1, D3 = 1))
+  p_R1 <- build_press_vector(g, active_ids = "R1", strengths = c(R1 = 1))
+  suff <- sufficiency(g, p_D, p_R1, c = 0.5)
+
+  single <- format_sufficiency_table(suff, "R1", c(R1 = 66))
+  i1_row <- single[single$Impact == "Catch decline (reduced CPUE)", ]
+  # strength_to_neutralize (Table 1 of the review, ~0.660) * 66% strength ~= 44%
+  expect_match(i1_row[["Strength needed"]], "^\\d+%$")
+
+  combined <- format_sufficiency_table(suff, c("R1", "R2"), c(R1 = 66, R2 = 40))
+  i1_row_combined <- combined[combined$Impact == "Catch decline (reduced CPUE)", ]
+  expect_match(i1_row_combined[["Strength needed"]], "^x[0-9.]+$")
+})
+
+test_that("format_reach_over_c_table never produces an empty column name (the real DT crash found live)", {
+  g <- mangi_graph()
+  p_D <- build_press_vector(g, active_ids = c("D1", "D3"), strengths = c(D1 = 1, D3 = 1))
+  p_R1 <- build_press_vector(g, active_ids = "R1", strengths = c(R1 = 1))
+  src <- sufficiency_reach_over_c(g, p_D, p_R1)
+
+  display <- format_reach_over_c_table(src)
+
+  expect_true(all(nzchar(names(display))))
+  expect_equal(names(display)[1], "Impact")
+  expect_equal(names(display)[length(names(display))], "Verdict")
+  expect_equal(nrow(display), nrow(src))
+})

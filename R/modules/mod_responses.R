@@ -174,10 +174,7 @@ mod_responses_ui <- function(id) {
     uiOutput(ns("response_controls")),
 
     tags$hr(),
-    sliderInput(
-      ns("effect_horizon"), "How far to trace the effect",
-      min = 0.2, max = 0.8, value = 0.5, step = 0.05
-    ),
+    uiOutput(ns("effect_horizon_ui")),
     p(
       class = "text-muted",
       "Lower values focus almost entirely on short, direct causal chains; higher values let longer, indirect chains",
@@ -205,9 +202,33 @@ mod_responses_ui <- function(id) {
   )
 }
 
-mod_responses_server <- function(id, schema, nodes, edges, graph) {
+mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state = NULL) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
+
+    # Revisao 1, Fase 3: `restore_state` is the scenario_state loaded from a
+    # savepoint (NULL for New project/Import CSV/Combine savepoints - see
+    # mod_data.R's rv$scenario_state, same reset-on-Start/restore-on-Load
+    # pattern already used for graph node positions). Only ever read here,
+    # to seed the *initial* value of a checkbox/slider when it's (re)drawn -
+    # never written back into it, so a user's later manual changes are never
+    # silently reverted by this module.
+    restored <- function() if (is.null(restore_state)) NULL else restore_state()
+    # `strengths` is a named atomic numeric vector (from read_savepoint()),
+    # not a list - `[[` on an atomic vector throws "subscript out of
+    # bounds" for a name that isn't present (unlike a list, where it
+    # returns NULL), confirmed live: restoring a savepoint whose scenario
+    # only activated some nodes crashed both control panels with exactly
+    # that error the moment a not-yet-active node's strength was looked
+    # up. `%in% names(...)` guards it explicitly instead of relying on
+    # `[[`'s list-like behavior.
+    restored_strength <- function(strengths, node_id) {
+      if (is.null(strengths) || !(node_id %in% names(strengths))) {
+        return(50)
+      }
+      val <- strengths[[node_id]]
+      if (is.na(val)) 50 else val
+    }
 
     response_nodes <- reactive({
       req(nodes(), schema())
@@ -227,11 +248,17 @@ mod_responses_server <- function(id, schema, nodes, edges, graph) {
         ))
       }
 
+      rs <- restored()
+
       rows <- lapply(seq_len(nrow(rn)), function(i) {
         node_id <- rn$id[i]
+        is_active <- !is.null(rs) && node_id %in% rs$response_active
         fluidRow(
-          column(width = 6, checkboxInput(ns(paste0("active_", node_id)), rn$label[i], value = FALSE)),
-          column(width = 6, sliderInput(ns(paste0("strength_", node_id)), NULL, min = 0, max = 100, value = 50, step = 5, post = "%"))
+          column(width = 6, checkboxInput(ns(paste0("active_", node_id)), rn$label[i], value = is_active)),
+          column(width = 6, sliderInput(
+            ns(paste0("strength_", node_id)), NULL, min = 0, max = 100, step = 5, post = "%",
+            value = if (is.null(rs)) 50 else restored_strength(rs$response_strengths, node_id)
+          ))
         )
       })
 
@@ -260,15 +287,31 @@ mod_responses_server <- function(id, schema, nodes, edges, graph) {
         ))
       }
 
+      rs <- restored()
+
       rows <- lapply(seq_len(nrow(pn)), function(i) {
         node_id <- pn$id[i]
+        is_active <- !is.null(rs) && node_id %in% rs$pressure_active
         fluidRow(
-          column(width = 6, checkboxInput(ns(paste0("pressure_active_", node_id)), pn$label[i], value = FALSE)),
-          column(width = 6, sliderInput(ns(paste0("pressure_strength_", node_id)), NULL, min = 0, max = 100, value = 50, step = 5, post = "%"))
+          column(width = 6, checkboxInput(ns(paste0("pressure_active_", node_id)), pn$label[i], value = is_active)),
+          column(width = 6, sliderInput(
+            ns(paste0("pressure_strength_", node_id)), NULL, min = 0, max = 100, step = 5, post = "%",
+            value = if (is.null(rs)) 50 else restored_strength(rs$pressure_strengths, node_id)
+          ))
         )
       })
 
       tagList(rows)
+    })
+
+    output$effect_horizon_ui <- renderUI({
+      req(graph())
+      rs <- restored()
+      sliderInput(
+        ns("effect_horizon"), "How far to trace the effect",
+        min = 0.2, max = 0.8, step = 0.05,
+        value = if (is.null(rs) || is.null(rs$effect_horizon)) 0.5 else rs$effect_horizon
+      )
     })
 
     # =================================================
@@ -411,27 +454,7 @@ mod_responses_server <- function(id, schema, nodes, edges, graph) {
       sc <- current_scenario()
       req(sc)
 
-      df <- sc$sufficiency_df
-      single_response <- length(sc$active) == 1
-
-      strength_display <- if (single_response) {
-        active_strength_pct <- sc$strengths[[sc$active]]
-        ifelse(is.na(df$strength_to_neutralize), "-", sprintf("%.0f%%", df$strength_to_neutralize * active_strength_pct))
-      } else {
-        ifelse(is.na(df$strength_to_neutralize), "-", sprintf("x%.2f", df$strength_to_neutralize))
-      }
-
-      display <- data.frame(
-        Impact = df$node,
-        `Worsening (pressure)` = round(df$worsening, 3),
-        `Mitigation (response)` = round(df$mitigation, 3),
-        Net = round(df$net, 3),
-        `Neutralizes?` = ifelse(df$neutralized, "Yes", "No"),
-        `Strength needed` = strength_display,
-        check.names = FALSE,
-        stringsAsFactors = FALSE
-      )
-
+      display <- format_sufficiency_table(sc$sufficiency_df, sc$active, sc$strengths)
       datatable(display, rownames = FALSE, options = list(dom = "t", pageLength = 10))
     })
 
@@ -453,16 +476,7 @@ mod_responses_server <- function(id, schema, nodes, edges, graph) {
       sc <- current_scenario()
       req(sc)
 
-      df <- sc$sufficiency_reach_over_c
-      c_cols <- grep("^c_", names(df), value = TRUE)
-
-      display <- df[, c("node", c_cols, "flips"), drop = FALSE]
-      for (col in c_cols) {
-        display[[col]] <- ifelse(display[[col]], "Yes", "No")
-      }
-      display$flips <- ifelse(display$flips, "Borderline", "")
-      names(display) <- c("Impact", gsub("^c_", "c=", c_cols), "Verdict")
-
+      display <- format_reach_over_c_table(sc$sufficiency_reach_over_c)
       datatable(display, rownames = FALSE, options = list(dom = "t", pageLength = 10))
     })
 
@@ -999,10 +1013,41 @@ mod_responses_server <- function(id, schema, nodes, edges, graph) {
       datatable(do.call(rbind, rows), rownames = FALSE, options = list(dom = "t"))
     })
 
+    # Revisao 1, Fase 3: the *live* scenario builder state - read straight
+    # off the current inputs, not off current_scenario() (which only
+    # updates on "Apply scenario") - so a savepoint captures whatever the
+    # user has configured on screen right now, applied or not. Read by
+    # mod_wizard.R's download handler; never written to by this module.
+    current_scenario_state <- reactive({
+      rn <- response_nodes()
+      pn <- pressure_nodes()
+
+      response_active <- rn$id[vapply(rn$id, function(id) isTRUE(input[[paste0("active_", id)]]), logical(1))]
+      response_strengths <- setNames(
+        vapply(response_active, function(id) input[[paste0("strength_", id)]] %||% 50, numeric(1)),
+        response_active
+      )
+
+      pressure_active <- pn$id[vapply(pn$id, function(id) isTRUE(input[[paste0("pressure_active_", id)]]), logical(1))]
+      pressure_strengths <- setNames(
+        vapply(pressure_active, function(id) input[[paste0("pressure_strength_", id)]] %||% 50, numeric(1)),
+        pressure_active
+      )
+
+      list(
+        response_active = response_active,
+        response_strengths = response_strengths,
+        pressure_active = pressure_active,
+        pressure_strengths = pressure_strengths,
+        effect_horizon = input$effect_horizon %||% 0.5
+      )
+    })
+
     list(
       current_scenario = current_scenario,
       response_nodes = response_nodes,
-      saved_scenarios = reactive(saved_scenarios$list)
+      saved_scenarios = reactive(saved_scenarios$list),
+      scenario_state = current_scenario_state
     )
   })
 }

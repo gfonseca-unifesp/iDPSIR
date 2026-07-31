@@ -30,6 +30,48 @@ test_that("build_savepoint / write_savepoint / read_savepoint round-trip nodes, 
   expect_equal(reloaded$edges$weight, 2)
 })
 
+test_that("build_savepoint / read_savepoint round-trip scenario_state, and old savepoints without it read back as NULL", {
+  schema <- get_default_dpsir_schema()
+  nodes <- data.frame(
+    id = c("D1", "R1"), label = c("Driver test", "Response test"),
+    dpsir_category = c("Driver", "Response"), subsystem = "",
+    uncertainty = "medium", controllability = "medium", temporal_scale = "medium",
+    stringsAsFactors = FALSE
+  )
+  edges <- create_empty_graph_edges()
+
+  scenario_state <- list(
+    response_active = "R1",
+    response_strengths = c(R1 = 80),
+    pressure_active = "D1",
+    pressure_strengths = c(D1 = 60),
+    effect_horizon = 0.35
+  )
+
+  savepoint <- build_savepoint(schema, nodes, edges, scenario_state = scenario_state)
+
+  tmp <- tempfile(fileext = ".idpsir.json")
+  on.exit(unlink(tmp))
+  write_savepoint(savepoint, tmp)
+
+  reloaded <- read_savepoint(tmp)
+  expect_equal(reloaded$scenario_state$response_active, "R1")
+  expect_equal(unname(reloaded$scenario_state$response_strengths["R1"]), 80)
+  expect_equal(reloaded$scenario_state$pressure_active, "D1")
+  expect_equal(unname(reloaded$scenario_state$pressure_strengths["D1"]), 60)
+  expect_equal(reloaded$scenario_state$effect_horizon, 0.35)
+
+  # A savepoint built without scenario_state (the pre-Revisao-1 shape) -
+  # read back as NULL, not an error, same pattern already used for
+  # `positions` on a savepoint from before that field existed.
+  old_savepoint <- build_savepoint(schema, nodes, edges)
+  tmp2 <- tempfile(fileext = ".idpsir.json")
+  on.exit(unlink(tmp2), add = TRUE)
+  write_savepoint(old_savepoint, tmp2)
+  reloaded2 <- read_savepoint(tmp2)
+  expect_null(reloaded2$scenario_state)
+})
+
 test_that("read_savepoint rejects an incompatible format_version", {
   tmp <- tempfile(fileext = ".idpsir.json")
   on.exit(unlink(tmp))

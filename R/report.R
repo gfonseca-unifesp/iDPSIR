@@ -147,6 +147,81 @@ build_full_report_html <- function(
     ))
   }
 
+  # Revisao 1, Fase 3: the sufficiency reading (R/sufficiency.R), one
+  # subsection per selected scenario - placed before "Scenarios compared"
+  # (the older equilibrium-based reading below) to match the on-screen
+  # ordering in mod_responses.R, where the new reading is shown first.
+  # format_sufficiency_table()/format_reach_over_c_table() are the exact
+  # same functions the Scenarios tab uses for its own tables, so a number
+  # here can never drift from what the user saw live.
+  if (length(selected_scenario_names) > 0 && length(saved_scenarios) > 0) {
+    sufficiency_scenario_sections <- lapply(selected_scenario_names, function(scenario_name) {
+      sc <- saved_scenarios[[scenario_name]]
+      # A scenario saved before Fase 2 (same session only, since saved
+      # scenarios aren't persisted to the savepoint) has no sufficiency_df -
+      # skip it rather than error, same defensive style as the rest of
+      # this file's optional sections.
+      if (is.null(sc$sufficiency_df)) {
+        return(NULL)
+      }
+
+      pressure_text <- if (length(sc$pressure_active) == 0) {
+        "none (no pressure scenario)"
+      } else {
+        paste(sprintf("%s at %d%%", sc$pressure_active, round(sc$pressure_strengths[sc$pressure_active])), collapse = ", ")
+      }
+      response_text <- paste(sprintf("%s at %d%%", sc$active, round(sc$strengths[sc$active])), collapse = ", ")
+
+      suff_table <- format_sufficiency_table(sc$sufficiency_df, sc$active, sc$strengths)
+      reach_table <- format_reach_over_c_table(sc$sufficiency_reach_over_c)
+
+      tagList(
+        tags$h4(scenario_name),
+        tags$p(
+          tags$strong("Pressure: "), pressure_text, tags$br(),
+          tags$strong("Response: "), response_text, tags$br(),
+          tags$strong("How far the effect was traced (c): "), sc$effect_horizon %||% 0.5
+        ),
+        report_html_table(suff_table),
+        caption_tag(
+          "Table", next_table_n(),
+          sprintf(
+            "For \"%s\": how much the pressure scenario worsens each Impact, how much the response scenario mitigates it, and whether that mitigation is enough to neutralize the worsening.",
+            scenario_name
+          )
+        ),
+        report_html_table(sc$sufficiency_confidence_matrix),
+        caption_tag(
+          "Table", next_table_n(),
+          sprintf(
+            "For \"%s\"'s pressure scenario: every response in the network evaluated alone at full strength - percentage of simulations (resampling each edge's weight within a range set by its confidence) in which that response alone neutralizes each Impact.",
+            scenario_name
+          )
+        ),
+        report_html_table(reach_table),
+        caption_tag(
+          "Table", next_table_n(),
+          sprintf(
+            "For \"%s\": whether the neutralization verdict for each Impact holds up across different settings of how far the effect is traced (c) - a scenario marked Borderline has a verdict that flips somewhere in that range.",
+            scenario_name
+          )
+        )
+      )
+    })
+    sufficiency_scenario_sections <- Filter(Negate(is.null), sufficiency_scenario_sections)
+
+    if (length(sufficiency_scenario_sections) > 0) {
+      sections <- c(sections, list(
+        tags$h2("Response sufficiency"),
+        tags$p(
+          "For each selected scenario: whether the response is strong enough to neutralize the pressure's",
+          "worsening on each Impact, how confident that verdict is, and whether it holds up across different reach settings."
+        ),
+        tagList(sufficiency_scenario_sections)
+      ))
+    }
+  }
+
   if (length(selected_scenario_names) > 0 && length(saved_scenarios) > 0) {
     scenario_results <- lapply(selected_scenario_names, function(scenario_name) saved_scenarios[[scenario_name]]$result)
     names(scenario_results) <- selected_scenario_names
@@ -211,7 +286,8 @@ build_full_report_html <- function(
     })
 
     sections <- c(sections, list(
-      tags$h2("Scenarios compared"),
+      tags$h2("Scenarios compared (older, equilibrium-based reading)"),
+      tags$p("Being replaced by the sufficiency reading above - kept here for now while it's validated."),
       tags$p("Baseline: no response applied."),
       tags$ul(scenario_items),
       tags$h3("Equilibrium effect per factor"),

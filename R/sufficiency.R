@@ -240,3 +240,60 @@ sufficiency_reach_over_c <- function(g, p_D, p_R, cs = c(0.2, 0.35, 0.5, 0.65, 0
   df$flips <- apply(verdicts, 1, function(row) length(unique(row)) > 1)
   df
 }
+
+# =====================================================
+# DISPLAY FORMATTING (Revisao 1, Fase 3)
+# =====================================================
+#
+# Shared between mod_responses.R's on-screen renderers and R/report.R's
+# exported HTML, so a scenario's numbers can never drift between what the
+# user saw live and what ends up in the downloaded report - same reasoning
+# that already keeps R/scenario_plots.R's draw_*_plot() functions shared
+# across screen/download/report for the trajectory and sensitivity charts.
+
+# `strength_to_neutralize` is a ratio (see sufficiency() above) - only
+# converted to an absolute "X% would be enough" when the response scenario
+# is a single response (multiplying a ratio by "the" current strength only
+# makes sense when there's one number to multiply by); a combined scenario
+# shows the ratio itself as a multiplier instead.
+format_sufficiency_table <- function(suff_df, active_ids, strengths_pct) {
+  single_response <- length(active_ids) == 1
+
+  strength_display <- if (single_response && nrow(suff_df) > 0) {
+    active_strength_pct <- strengths_pct[[active_ids]]
+    ifelse(
+      is.na(suff_df$strength_to_neutralize), "-",
+      sprintf("%.0f%%", suff_df$strength_to_neutralize * active_strength_pct)
+    )
+  } else if (nrow(suff_df) > 0) {
+    ifelse(is.na(suff_df$strength_to_neutralize), "-", sprintf("x%.2f", suff_df$strength_to_neutralize))
+  } else {
+    character()
+  }
+
+  data.frame(
+    Impact = suff_df$node,
+    `Worsening (pressure)` = round(suff_df$worsening, 3),
+    `Mitigation (response)` = round(suff_df$mitigation, 3),
+    Net = round(suff_df$net, 3),
+    `Neutralizes?` = ifelse(suff_df$neutralized, "Yes", "No"),
+    `Strength needed` = strength_display,
+    check.names = FALSE,
+    stringsAsFactors = FALSE
+  )
+}
+
+format_reach_over_c_table <- function(reach_df) {
+  c_cols <- grep("^c_", names(reach_df), value = TRUE)
+
+  display <- reach_df[, c("node", c_cols, "flips"), drop = FALSE]
+  for (col in c_cols) {
+    display[[col]] <- ifelse(display[[col]], "Yes", "No")
+  }
+  display$flips <- ifelse(display$flips, "Borderline", "")
+  # DT's server-side processing errors on an empty-string column name
+  # (confirmed live - "argumento tem comprimento zero" - see mod_responses.R
+  # Fase 2 notes in CLAUDE.md), so this stays a real header, not "".
+  names(display) <- c("Impact", gsub("^c_", "c=", c_cols), "Verdict")
+  display
+}

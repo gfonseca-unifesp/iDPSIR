@@ -67,6 +67,7 @@ mod_data_server <- function(id, seed = NULL) {
       nodes = if (is.null(seed)) create_empty_nodes_table() else seed$nodes,
       edges = if (is.null(seed)) create_empty_edges_table() else seed$edges,
       positions = NULL,
+      scenario_state = NULL,
       loaded = !is.null(seed),
       start_message = "",
       graph = NULL,
@@ -158,6 +159,7 @@ mod_data_server <- function(id, seed = NULL) {
       rv$nodes <- create_empty_nodes_table()
       rv$edges <- create_empty_edges_table()
       rv$positions <- NULL
+      rv$scenario_state <- NULL
       rv$graph <- NULL
       rv$loaded <- TRUE
       rv$start_message <- "New project started with the default DPSIR schema."
@@ -177,6 +179,7 @@ mod_data_server <- function(id, seed = NULL) {
           rv$nodes <- imported$nodes
           rv$edges <- imported$edges
           rv$positions <- NULL
+          rv$scenario_state <- NULL
           rv$graph <- NULL
           rv$loaded <- TRUE
           rv$start_message <- paste0(
@@ -201,6 +204,7 @@ mod_data_server <- function(id, seed = NULL) {
           rv$nodes <- restored$nodes
           rv$edges <- restored$edges
           rv$positions <- restored$positions
+          rv$scenario_state <- restored$scenario_state
           rv$graph <- NULL
           rv$loaded <- TRUE
           rv$start_message <- paste0(
@@ -232,6 +236,7 @@ mod_data_server <- function(id, seed = NULL) {
           rv$nodes <- merged$nodes
           rv$edges <- merged$edges
           rv$positions <- NULL
+          rv$scenario_state <- NULL
           rv$graph <- NULL
           rv$loaded <- TRUE
 
@@ -694,6 +699,7 @@ mod_data_server <- function(id, seed = NULL) {
       edges = reactive(rv$edges),
       positions = reactive(rv$positions),
       set_positions = function(pos) { rv$positions <- pos },
+      scenario_state = reactive(rv$scenario_state),
       graph = reactive(rv$graph),
       loaded = reactive(rv$loaded)
     )
