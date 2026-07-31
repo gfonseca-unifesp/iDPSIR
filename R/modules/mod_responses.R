@@ -476,7 +476,16 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
       df$id <- NULL
       names(df) <- c("Impact", "Window", "Baseline", "Scenario", "Verdict")
 
-      datatable(df, rownames = FALSE, options = list(dom = "t", pageLength = 15)) %>%
+      # Real bug, found live testing the Gnanapragasam example (Fase 9, 5
+      # Impact nodes): row count here is windows x Impacts, genuinely
+      # unbounded (up to 15 windows), unlike every other table in this app
+      # that uses dom = "t" (no pagination UI) because it's always small
+      # enough to fit on one screen. Without "p" (pagination controls), DT
+      # still silently caps rendering at pageLength rows with no way to see
+      # the rest - confirmed live: with 5 Impacts, pageLength = 15 hid every
+      # window past window 2, even though the simulation itself (checked via
+      # the storyboard's own panel count) had correctly computed all of them.
+      datatable(df, rownames = FALSE, options = list(dom = "tp", pageLength = 15)) %>%
         formatRound(columns = c("Baseline", "Scenario"), digits = 3)
     })
 

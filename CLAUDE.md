@@ -218,6 +218,15 @@ Checagem rápida de sintaxe sem subir o app:
   a matriz nunca é singular pra nenhuma rede, eliminando de vez tanto a
   exigência de estabilidade quanto a inversão de sinal que motivaram a
   revisão (ver "Estado atual" abaixo pro caso real que provou isso).
+  Fase 9: bug real corrigido — `ρ(W) = 0` acontece tanto pra `W`
+  genuinamente vazio quanto pra `W` nilpotente (qualquer rede acíclica,
+  sem ciclo nenhum — os autovalores de um DAG são sempre zero), e o código
+  tratava os dois casos como "nada a propagar", zerando um efeito real e
+  bem definido em toda rede sem ciclo. `all(W==0)` continua zerando;
+  `ρ(W)==0` com `W` não-vazio agora usa `λ <- c` direto (sem dividir por
+  `ρ`, já que `(I-λW)` é invertível pra qualquer `λ` quando `W` é
+  nilpotente) — ver "Estado atual" pra rede real (Gnanapragasam) e teste
+  de regressão que provaram o bug antes de corrigir.
   `sufficiency(g, p_D, p_R, c)` — piora/mitigação/líquido/neutralizado/força
   necessária por Impacto (`strength_to_neutralize` é uma razão
   adimensional sobre `p_R`, não um valor absoluto — a tela multiplica pela
@@ -659,7 +668,11 @@ Checagem rápida de sintaxe sem subir o app:
   (novos, Revisão 1) — rede real e citada (Mangi et al. 2007), promovida de
   `manuscrito/` (mesmos dados, coluna `self_regulation` removida dos nós —
   não existe mais no novo motor) — fixture principal de teste do novo
-  motor de suficiência, ver `R/sufficiency.R` acima.
+  motor de suficiência, ver `R/sufficiency.R` acima. Revisão 1, Fase 9:
+  `gnanapragasam2026_nodes.csv`/`_edges.csv` — rede de 13 nós adaptada de
+  Gnanapragasam et al. 2026 (Marine Policy), gera
+  `docs/example_gnanapragasam.idpsir.json` e substitui a rede de pescas
+  (5 nós) como exemplo principal do tutorial — ver "Estado atual".
 - `tests/testthat.R`, `tests/testthat/*.R` → testes automatizados do núcleo
   numérico (item 6.3 do roadmap de publicação) — ver Estado atual.
 - `.github/workflows/shinylive.yml` → CI que publica uma build WebAssembly do
@@ -2468,8 +2481,143 @@ motor temporal.
   passo. Suíte `testthat` completa (171 assertivas, nenhuma mudança —
   `R/loop_analysis.R` em si não foi tocado) e checagem de sintaxe seguem
   limpas.
-- [ ] **Fase 9** — exemplo Gnanapragasam (`data/`, `docs/`, savepoint,
-  tutorial, README) no lugar do Mangi.
+- [x] **Fase 9 concluída** — exemplo Gnanapragasam et al. 2026 (Marine
+  Policy), substituindo o de pescas (5 nós) como exemplo principal do
+  tutorial. `data/gnanapragasam2026_nodes.csv`/`_edges.csv` (13 nós: D1
+  crescimento populacional, D2 crescimento da demanda por pescado, D3
+  número de pescadores/embarcações, P1 esforço de pesca, S1 estoque de
+  peixe/CPUE, S2 motorização da frota, I1-I5 Impactos — queda de captura,
+  perda de renda, conflito com pescadores indianos, declínio da pesca
+  tradicional, perda de cultura tradicional —, R1 auxílio pós-tsunami, R2
+  auxílio pós-guerra) + `docs/example_gnanapragasam.idpsir.json` (gerado
+  via `build_savepoint()`/`write_savepoint()` de verdade, não editado à
+  mão, mesmo padrão do exemplo anterior).
+
+  **Dois conflitos reais entre o plano e as regras do schema, encontrados
+  só ao tentar validar a rede** (nenhum dos dois óbvio de antemão — o
+  plano original desenhou a rede em conversa, antes desta fase realmente
+  tentar construí-la): `schema_allowed_connections()` só permite cada
+  categoria avançar para o **próximo** nível (nunca pular, nunca
+  permanecer no mesmo) — duas arestas do desenho original violavam isso.
+  (1) `D3→I3` (Driver→Impact, pulando Pressure e State) — corrigida para
+  `S1→I3` (State→Impact, um passo válido): narrativamente melhor também,
+  já que é a **escassez do estoque** que empurra pescadores pra águas
+  disputadas, não o número de embarcações diretamente. (2) `I4→I5`
+  (Impact→Impact, mesmo nível) — corrigida removendo o encadeamento e
+  ligando `S2→I5` diretamente (motorização da frota causa tanto o
+  declínio da pesca tradicional quanto a perda de cultura, cada um
+  direto, sem depender um do outro). Nenhuma mudança na história
+  pretendida (resposta virando nova pressão via `R→D3→P1→S1→Impactos`,
+  mais o ramo `R→S2→Impactos` sem loop) — só a forma de conectar dois
+  nós específicos.
+
+  **Bug real e mais sério: `sufficiency()`/`propagate()` (`R/sufficiency.R`,
+  motor principal desde a Fase 1) retornava zero pra QUALQUER rede
+  acíclica, não só pra uma rede sem aresta nenhuma.** Descoberto ao rodar
+  a leitura de suficiência estática nesta rede pela primeira vez: tanto
+  `worsening` quanto `mitigation` saíam **zero para todos os 5 Impactos**,
+  mesmo com pressão e resposta ativas — porque, seguindo o próprio plano
+  ("`I2→R1`/`I2→R2` não entram como aresta simulada"), esta rede não tem
+  **nenhum** ciclo (nenhuma aresta de Impacto de volta pra Resposta), e
+  `propagate()` tratava `rho(W) == 0` (o caso de uma matriz nilpotente —
+  sempre verdadeiro pra qualquer DAG, já que os autovalores de uma matriz
+  sem ciclo são sempre exatamente zero) do mesmo jeito que tratava `W`
+  genuinamente vazio (sem aresta nenhuma) — um curto-circuito que
+  descartava um efeito real e bem definido pra toda rede acíclica.
+  Confirmado matematicamente antes de corrigir: `(I - lambda*W)` é
+  invertível pra **qualquer** lambda quando `W` é nilpotente (autovalores
+  todos exatamente 1 nesse caso, não dependem de lambda), então a série de
+  Neumann `lambda*W*p + lambda²*W²*p + ...` só termina mais cedo (no
+  comprimento do maior caminho do DAG) — nunca precisa da garantia
+  `lambda*rho(W) = c < 1` que motivou a fórmula original. Verificado à mão
+  contra uma cadeia A→B→C de 3 nós construída à parte
+  (`scratchpad/verify_propagate_fix.R`) antes de corrigir: com `c=0.5`, o
+  efeito esperado é A=0/B=0,5/C=0,25 — o código antigo devolvia zero nos
+  três. Corrigido separando os dois casos explicitamente: `all(W==0)`
+  (matriz genuinamente vazia) continua retornando zero; `rho(W)==0` com
+  `W` não-vazio agora usa `lambda <- c` diretamente em vez de `c/rho`
+  (indefinido). Novo teste de regressão em `test-sufficiency.R` (a mesma
+  cadeia A→B→C, valores exatos) — suíte completa (192 assertivas) segue
+  limpa, nenhuma rede cíclica já testada (Mangi, pescas) muda de
+  comportamento, já que a correção só altera o ramo antes inatingível
+  para elas.
+
+  Com a correção, a rede de Gnanapragasam mostra exatamente o efeito
+  pretendido: `mitigation` sai **positivo** (não negativo) pros 5
+  Impactos quando só a resposta (R1+R2) é ativada — a resposta não só
+  falha em ajudar, ela ativamente piora tudo, já que seu único caminho
+  causal no modelo passa pela mesma pressão que causou o dano. Verificado
+  com um cenário combinado (pressão D1+D2 a 100%, resposta R1+R2 a 100%,
+  `c=0,5`): net positivo e "Neutralizes? No" nos 5 Impactos; confiança de
+  neutralização 0% pra R1 e R2 avaliadas sozinhas (300 simulações);
+  "Does it hold up" mostra "No" em todo `c` de 0,2 a 0,8, nenhum
+  Borderline; Reach = 9 fatores incluindo 5 de 5 Impactos (idêntico pra
+  R1/R2 sozinhas ou combinadas, já que ambas atingem exatamente os mesmos
+  dois nós). Simulação temporal (pressão permanente D1+D2, resposta
+  impulso R1+R2, 10 janelas): todos os 5 Impactos mostram a coluna
+  cenário sempre maior que a baseline, com a diferença crescendo a cada
+  janela (D3 quase não se auto-regula, então o impulso vira ratchet em
+  vez de esmaecer); Declínio da pesca tradicional e Perda de cultura
+  tradicional mostram baseline **exatamente zero em toda janela** — esses
+  dois Impactos só existem por causa da resposta, nada na pressão os
+  alcança.
+
+  **Segundo bug real, encontrado só ao testar a própria tabela temporal
+  ao vivo com esta rede de 5 Impactos** (nenhum teste anterior — inclusive
+  o da Fase 6/7 — usava mais de 1 Impacto, então nunca exercitava esta
+  combinação): a tabela "How each Impact changes, window by window"
+  (`mod_responses.R`) usava `dom = "t"` (sem controles de paginação) com
+  `pageLength = 15` — como o número de linhas é `janelas × Impactos`
+  (genuinamente sem limite, ao contrário de toda outra tabela do app, que
+  sempre cabe numa tela), com 5 Impactos isso preenche uma página inteira
+  em só 3 janelas (0, 1, 2) — qualquer janela além da 2ª ficava **
+  permanentemente inacessível na tela**, sem nenhum controle pra passar de
+  página. Confirmado que o cálculo em si estava correto (checando as
+  dimensões do PNG da prancha, que usa a mesma contagem de janelas e não
+  depende do DataTables) antes de procurar o bug na tabela. Corrigido
+  trocando `dom = "t"` para `dom = "tp"` (adiciona Previous/Next, mesmo
+  padrão já usado nas tabelas de Nodes/Edges do wizard). Verificado ao
+  vivo: com 10 janelas, a tabela agora mostra 4 páginas (Previous1234Next)
+  e navegar até elas expõe as janelas 5 e 10 corretamente — os números
+  batem exatamente com o script standalone (ex.: Catch decline
+  janela 10: baseline 1744,91 / cenário 4594,08).
+
+  **`docs/tutorial.html` e `README.md` reescritos** — não só trocar o
+  savepoint linkado, mas toda a narrativa que descrevia o motor antigo
+  (equilíbrio/estabilidade/sign confidence/robustez/sensibilidade a
+  auto-regulação/trajetória), removido na Fase 8. Tutorial: tabelas de
+  campos de Nós/Arestas atualizadas (sem `temporal_scale`, `self_regulation`
+  numérico, `growth_rate`/`reference_value` novos, `threshold` relativo e
+  restrito a State); seção da aba Scenarios reescrita do zero pra
+  descrever a UI atual (dois painéis de cenário, suficiência, Reach,
+  disclosure temporal); seção "Worked example" inteira reescrita com a
+  história de Gnanapragasam e os números acima, todos verificados ao vivo
+  rodando o app de verdade (não só o script standalone) antes de
+  escrever; glossário atualizado (remove Sign confidence/Edge sensitivity,
+  adiciona Sufficiency/Neutralized/Temporal simulation, Self-regulation
+  redescrito). README: parágrafo de abertura, árvore de arquivos
+  (`sufficiency.R`/`temporal.R` descritos, `loop_analysis.R` marcado como
+  "definido mas não mais chamado"), seção Data format (`self_regulation`
+  numérico, `growth_rate`/`reference_value`, `threshold` relativo),
+  Workflow (Scenarios reescrito pra suficiência + temporal + Reach).
+  `docs/example_fisheries.idpsir.json` **não foi removido** — continua
+  sendo fixture real de `tests/testthat/test-loop_analysis.R`/
+  `test-reach.R`/`test-metrics.R` (`read_savepoint()` direto), só parou
+  de ser o exemplo linkado no tutorial.
+
+  Testado ponta a ponta rodando o app de verdade contra o savepoint
+  gerado: carregado via injeção de arquivo, "Everything is valid" nos 13
+  nós/13 arestas (confirma o fix dos dois conflitos de schema), grafo
+  construído, cenário aplicado reproduzindo **exatamente** os números
+  documentados acima (incluindo após reiniciar o servidor pra pegar o fix
+  do `propagate()`) — nenhuma discrepância entre o script standalone e a
+  tela. Página do tutorial renderizada de verdade (`/tutorial/tutorial.html`,
+  não só o arquivo cru): link de download do savepoint responde 200 com
+  `content-type: application/json`; seção "Worked example" com 6 `<h3>`,
+  4 tabelas, 3 callouts, sem HTML malformado; glossário com os termos
+  corretos. Sem erro no console do navegador nem do servidor em nenhum
+  passo, depois dos dois fixes. Suíte `testthat` completa (192 assertivas)
+  e checagem de sintaxe seguem limpas.
 - [ ] **Fase 10** — verificação final, `CLAUDE.md`, commit/push/merge.
 
 Trilha operacional separada (independente, registrada no plano, encaixa

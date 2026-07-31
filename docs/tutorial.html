@@ -638,14 +638,15 @@ cd iDPSIR</pre>
                     <tr><td class="key">subsystem</td><td>Optional grouping</td></tr>
                     <tr><td class="key">uncertainty</td><td>low / medium / high</td></tr>
                     <tr><td class="key">controllability</td><td>low / medium / high</td></tr>
-                    <tr><td class="key">temporal_scale</td><td>short / medium / long</td></tr>
-                    <tr><td class="key">self_regulation</td><td>none / low / medium / high — optional, leave blank for most factors (see Scenarios below)</td></tr>
+                    <tr><td class="key">self_regulation</td><td>Optional number in [0, 1), default 0 — only used by the optional temporal simulation (see Scenarios below)</td></tr>
+                    <tr><td class="key">growth_rate</td><td>Optional number, default 0 — a factor's own exogenous trend per time window, independent of any edge</td></tr>
+                    <tr><td class="key">reference_value</td><td>Optional number, default 1 — the scale a factor's change is measured against by an outgoing edge's threshold (see Edges below)</td></tr>
                   </table>
                 </div>
-                <pre>id,label,dpsir_category,subsystem,uncertainty,controllability,temporal_scale
-D1,Urban growth,Driver,Water,medium,low,long
-P1,Wastewater discharge,Pressure,Water,medium,low,long
-S1,Water quality decline,State,Water,medium,low,long</pre>
+                <pre>id,label,dpsir_category,subsystem,uncertainty,controllability
+D1,Urban growth,Driver,Water,medium,low
+P1,Wastewater discharge,Pressure,Water,medium,low
+S1,Water quality decline,State,Water,medium,low</pre>
               </div>
               <div class="code-card">
                 <h4>Edges CSV (optional)</h4>
@@ -659,7 +660,7 @@ S1,Water quality decline,State,Water,medium,low,long</pre>
                     <tr><td class="key">confidence</td><td>0–1</td></tr>
                     <tr><td class="key">interaction_type</td><td>positive / negative</td></tr>
                     <tr><td class="key">evidence_type</td><td>e.g. observational, monitoring</td></tr>
-                    <tr><td class="key">threshold</td><td>Optional, leave blank for most edges (see Scenarios below)</td></tr>
+                    <tr><td class="key">threshold</td><td>Optional, leave blank for most edges — only allowed when "from" is a State factor (see Scenarios below)</td></tr>
                     <tr><td class="key">reference</td><td>Optional citation (DOI, URL, or plain text) backing this link</td></tr>
                   </table>
                 </div>
@@ -715,8 +716,9 @@ P1,S1,3,0.85,negative,monitoring</pre>
                 <tr><td class="key">subsystem</td><td>Optional grouping (e.g. "Fisheries", "Water") — lets you filter the Graph tab down to one part of the network.</td></tr>
                 <tr><td class="key">uncertainty</td><td>low / medium / high — how confident you are this node is described correctly. Thickens the node's border on the graph.</td></tr>
                 <tr><td class="key">controllability</td><td>low / medium / high — how much a manager can influence this factor directly.</td></tr>
-                <tr><td class="key">temporal_scale</td><td>short / medium / long — how quickly this factor changes. Also filterable on the Graph tab.</td></tr>
-                <tr><td class="key">self_regulation</td><td>none / low / medium / high — optional, default none. Whether this factor tends to return to its own baseline on its own once nothing is pushing it (e.g. a recovering habitat). Only affects the Scenarios tab's long-term (equilibrium) effect — see the worked example.</td></tr>
+                <tr><td class="key">self_regulation</td><td>Optional number in [0, 1), default 0. The fraction of this factor's simulated deviation that reverts each time window (e.g. a recovering habitat) — only used by the Scenarios tab's optional temporal simulation, see the worked example.</td></tr>
+                <tr><td class="key">growth_rate</td><td>Optional number, default 0. This factor's own exogenous trend per time window (e.g. population growth), independent of any edge — also only used by the temporal simulation.</td></tr>
+                <tr><td class="key">reference_value</td><td>Optional number, default 1. The scale this factor's simulated change is measured against when one of its outgoing edges has a threshold set (Edges step).</td></tr>
               </table>
             </div>
           </div>
@@ -737,7 +739,7 @@ P1,S1,3,0.85,negative,monitoring</pre>
                 <tr><td class="key">confidence</td><td>0–1, how sure you are this link is real. Below the Graph tab's threshold, the line is drawn dashed.</td></tr>
                 <tr><td class="key">interaction_type</td><td><code>positive</code> (the link increases its target) or <code>negative</code> (it decreases/mitigates it) — colors the edge red or green and appears in its tooltip.</td></tr>
                 <tr><td class="key">evidence_type</td><td>e.g. observational, expert_assessment, monitoring — where the link comes from, shown on hover.</td></tr>
-                <tr><td class="key">threshold</td><td>Optional — leave blank for most edges. Only affects the Scenarios tab's trajectory chart: this edge contributes nothing until the simulated change at its source factor crosses this value, instead of always scaling proportionally. Everything else (the equilibrium/robustness numbers, the graph itself) ignores it.</td></tr>
+                <tr><td class="key">threshold</td><td>Optional — leave blank for most edges. Only allowed when "from" is a State factor: a fraction 0–1 of that factor's <code>reference_value</code> (Nodes step) it has to move, in a given scenario, before this edge switches on — instead of always contributing proportionally from the start. Only affects the Scenarios tab's optional temporal simulation; the sufficiency reading and the graph itself ignore it.</td></tr>
                 <tr><td class="key">reference</td><td>Optional — a DOI, URL, or plain citation backing this specific link. Shown on hover and, if you check "Edge references" on the Report tab, listed in a References section so a reader can trace any prediction back to its evidence.</td></tr>
               </table>
             </div>
@@ -832,47 +834,45 @@ P1,S1,3,0.85,negative,monitoring</pre>
         <!-- SCENARIOS -->
         <h3 id="t-scenarios">Scenarios</h3>
         <p>Tests "what if we implemented this response, and how hard?" — without
-          touching your saved network.</p>
+          touching your saved network. Two independent "pushes" you build side by
+          side: what's pushing the system to get worse, and how you're responding
+          to it.</p>
         <div class="tabmock">
           <div class="tabmock-bar">
             <span>Graph</span><span class="active">Scenarios</span><span>Metrics</span><span>Report</span>
           </div>
           <div class="tabmock-body">
             <div class="control">
-              <div class="label">Response checklist<span class="widget">checkbox + slider each</span></div>
-              <p>One row per Response node in the network. Turn on any combination and set each one's implementation strength from 0–100%.</p>
+              <div class="label">Pressure scenario<span class="widget">checkbox + slider each</span></div>
+              <p>Optional. One row per Driver/Pressure node — turn on any combination you expect to worsen, and how strongly.</p>
+            </div>
+            <div class="control">
+              <div class="label">Response scenario<span class="widget">checkbox + slider each</span></div>
+              <p>One row per Response node — turn on any combination you want to test, and how strongly each is implemented.</p>
+            </div>
+            <div class="control">
+              <div class="label">How far to trace the effect<span class="widget">slider</span></div>
+              <p>Lower values focus almost entirely on short, direct causal chains; higher values let longer, indirect chains contribute more. "Does it hold up across how far the effect is traced?" below shows whether your conclusions change across this range.</p>
             </div>
             <div class="control">
               <div class="label">Apply scenario<span class="widget">button</span></div>
-              <p>Runs the active response(s) through the network's feedback loops (see the worked example below) and shows "Effect on the network" — how many factors are affected and by how much, immediately vs. once the effect has fully propagated — plus "Effect on each factor": a plain <span class="chip improves">Improves</span> <span class="chip worsens">Worsens</span> <span class="chip stable">Stable</span> per node, alongside a <strong>Sign confidence (%)</strong> column (exact scores stay available in the CSV/Excel export). If the network's feedback loops aren't stable, a plain-language warning appears above these tables, along with a note if the result also depends on a self-regulation assumption you set — see the worked example for what both mean.</p>
+              <p>Runs both scenarios and shows <strong>"Is the response enough? (sufficiency)"</strong> — for each Impact, how much the pressure scenario worsens it, how much the response scenario mitigates (or, sometimes, worsens) it, whether that's enough to neutralize the worsening, and how strong the response would need to be if not. This reading is always well-defined — no stability requirement, no possibility of a silently inverted sign (see the worked example for why that mattered).</p>
+            </div>
+            <div class="control">
+              <div class="label">How confident is that, response by response?<span class="widget">table</span></div>
+              <p>Every response in the network, evaluated alone at full strength against the same pressure scenario: the percentage of simulations — resampling every edge's weight within a range set by its confidence — in which that response alone neutralizes each Impact.</p>
+            </div>
+            <div class="control">
+              <div class="label">Does it hold up across how far the effect is traced?<span class="widget">table</span></div>
+              <p>Recomputes the neutralization verdict at several settings of "How far to trace the effect" — an Impact marked Borderline has a verdict that changes somewhere in that range, worth a second look before trusting it at just one setting.</p>
             </div>
             <div class="control">
               <div class="label">Reach<span class="widget">table</span></div>
-              <p>How many factors — and how many Impacts — the active response(s) can touch by following the network's links. Unlike everything above, this never depends on self-regulation or stability: it's a plain count of what's reachable, always available.</p>
+              <p>How many factors — and how many Impacts — the active response(s) can touch by following the network's links. Independent of the sufficiency reading above: it's a plain count of what's reachable, always available.</p>
             </div>
             <div class="control">
-              <div class="label">Sign confidence (%)<span class="widget">column</span></div>
-              <p>How often 100 simulations — each one nudging every edge's weight within a range set by its confidence — agreed with the predicted direction (Improves/Worsens/Stable) shown next to it. A low number flags a prediction that's a coin flip once you account for how uncertain the underlying edges are, even if the equilibrium number itself looks decisive.</p>
-            </div>
-            <div class="control">
-              <div class="label">When will Impacts be neutralized?<span class="widget">table</span></div>
-              <p>For each Impact node, how many steps it takes for the response's effect to first reach 90% of the equilibrium value shown above — the same directional-estimate caveat applies (see the worked example).</p>
-            </div>
-            <div class="control">
-              <div class="label">Show how the effect evolves over time<span class="widget">optional, chart</span></div>
-              <p>A line per factor tracing the effect step by step instead of just the final immediate/equilibrium numbers — most useful exactly when the stability warning above is showing, since it lets you see whether the effect is settling down or still growing. If any edge has an optional <code>threshold</code> set (Edges step), this is also the only place it applies: that edge contributes nothing until the simulated change at its source factor crosses the threshold, instead of scaling proportionally from the start. Downloadable as PNG or SVG, and included as a figure if this scenario is added to the report.</p>
-            </div>
-            <div class="control">
-              <div class="label">Show robustness to uncertainty<span class="widget">optional, table</span></div>
-              <p>The same check behind "Sign confidence (%)" above, but configurable — pick a different number of simulations and see the full table sorted from least to most reliable, instead of just the fixed 100-simulation score shown by default.</p>
-            </div>
-            <div class="control">
-              <div class="label">Show sensitivity to self-regulation<span class="widget">optional, table</span></div>
-              <p>Only appears once at least one factor has self-regulation set (Nodes step). Same idea as "Sign confidence," but nudges how strongly each factor self-regulates instead of edge weights — flags results that hinge on your self-regulation guess rather than the network's links. See the worked example for a full walkthrough.</p>
-            </div>
-            <div class="control">
-              <div class="label">Show which edges matter most<span class="widget">optional, chart + table</span></div>
-              <p>Bumps each edge's weight up by 10%, one at a time, and measures how much this scenario's overall equilibrium effect moves — a bar chart plus a ranked table (with a "Number of edges shown" slider), useful for deciding which weight estimate is worth double-checking first. Downloadable as PNG or SVG, and included as a figure if this scenario is added to the report.</p>
+              <div class="label">Show temporal simulation across discrete time windows<span class="widget">optional</span></div>
+              <p>Runs the same two scenarios forward window by window instead of reading a single instant — useful when a response might, windows later, become a new pressure itself (see the worked example). Set the number of windows and whether each scenario is a one-time impulse or an ongoing/permanent push; a progress indicator shows "Window X of N" while it computes. Shows a table of how each Impact changes window by window, and a "storyboard" — one small graph per window, same layout throughout, node color/size showing how much that factor has moved from zero — downloadable as PNG or SVG and included as a figure if this scenario is added to the report.</p>
             </div>
             <div class="control">
               <div class="label">Save this scenario<span class="widget">button</span></div>
@@ -880,7 +880,7 @@ P1,S1,3,0.85,negative,monitoring</pre>
             </div>
             <div class="control">
               <div class="label">Compare selected scenarios<span class="widget">multi-select table</span></div>
-              <p>Pick two or more saved scenarios; the baseline (no response applied) is always included as the reference column.</p>
+              <p>Pick two or more saved scenarios; shows "Reach per scenario" side by side, with the baseline (no response applied, reach always 0) as the reference row.</p>
             </div>
           </div>
         </div>
@@ -912,11 +912,11 @@ P1,S1,3,0.85,negative,monitoring</pre>
           <div class="tabmock-body">
             <div class="control">
               <div class="label">Sections<span class="widget">checkboxes</span></div>
-              <p>Network graph image, general metrics, centralities, DPSIR descriptors, edge references, reproducibility info — check whichever apply. "Edge references" adds a References section listing every edge that has one (Edges step), so a reader can trace a prediction back to its evidence. "Reproducibility info" adds the R and package versions used to generate the report, plus the exact parameters behind the sign confidence/robustness/sensitivity figures (including the fixed random seed) — regenerating the report from the same savepoint reproduces the same numbers.</p>
+              <p>Network graph image, general metrics, centralities, DPSIR descriptors, edge references, reproducibility info — check whichever apply. "Edge references" adds a References section listing every edge that has one (Edges step), so a reader can trace a prediction back to its evidence. "Reproducibility info" adds the R and package versions used to generate the report, plus the exact parameters behind the "how confident is that" figures (including the fixed random seed) — regenerating the report from the same savepoint reproduces the same numbers.</p>
             </div>
             <div class="control">
-              <div class="label">Scenarios<span class="widget">multi-select table</span></div>
-              <p>Any saved scenarios from the Scenarios tab — the baseline is added automatically once you pick at least one.</p>
+              <div class="label">Scenarios<span class="widget">multi-select table + checkbox</span></div>
+              <p>Any saved scenarios from the Scenarios tab — the baseline is added automatically once you pick at least one. "Include temporal simulation" adds each selected scenario's window-by-window table and storyboard to the report; off by default (it makes the file noticeably larger).</p>
             </div>
             <div class="control">
               <div class="label">Download report (HTML)<span class="widget">button</span></div>
@@ -935,14 +935,13 @@ P1,S1,3,0.85,negative,monitoring</pre>
       <!-- ============ WORKED EXAMPLE ============ -->
       <section class="block" id="worked-example">
         <div class="kicker">See it in action</div>
-        <h2>Worked example: a fisheries feedback loop</h2>
+        <h2>Worked example: when the response becomes the pressure</h2>
         <p class="lead">Everything above is easier to follow with a real network in
-          front of you. This is a small, five-node example you can load in under a
-          minute — it walks through applying a response, reading the results, and a
-          few things worth understanding about <em>any</em> network you build here,
-          not just this one: two caveats to check for yourself, how self-regulation
-          unlocks a genuine long-term effect, and a measure (reach) that needs none of
-          it.</p>
+          front of you. This one is adapted from a real paper — Gnanapragasam et al.
+          2026, Marine Policy, on artisanal fisheries in northern Sri Lanka — and walks
+          through both readings: the static <strong>sufficiency</strong> check, and the
+          optional <strong>temporal simulation</strong> that shows a well-intentioned
+          response quietly turning into a new pressure over time.</p>
 
         <div class="code-cluster">
           <div class="code-card">
@@ -950,169 +949,101 @@ P1,S1,3,0.85,negative,monitoring</pre>
             <p class="muted">A ready-to-load savepoint — no need to type anything in.
               On the wizard's <strong>Start</strong> step, choose
               <strong>Load savepoint</strong> and pick this file.</p>
-            <pre><a href="example_fisheries.idpsir.json" download>example_fisheries.idpsir.json</a></pre>
+            <pre><a href="example_gnanapragasam.idpsir.json" download>example_gnanapragasam.idpsir.json</a></pre>
           </div>
         </div>
 
         <h3>The story</h3>
-        <p>Growing <strong>coastal tourism</strong> (Driver) raises demand for
-          wild-caught fish, driving <strong>overfishing</strong> (Pressure), which
-          depletes the <strong>fish stock</strong> (State), which cuts into
-          <strong>fisher income</strong> (Impact). In response, a
-          <strong>fishing quota policy</strong> is introduced — paired with an
-          awareness campaign that's expected to modestly cool tourism-driven demand,
-          which is what closes the loop back to the Driver.</p>
+        <p>After the 2004 tsunami and, later, the end of a long civil war, aid programs
+          replaced fishing boats and gear lost by coastal communities in northern Sri
+          Lanka. That aid targeted a real Impact — <strong>fisher income loss</strong> —
+          but it did so by giving people more (and more often motorized) boats, not by
+          addressing the fish stock itself. This network traces what happens next:
+          growing coastal population and fish demand, plus more fishers and boats
+          returning to the water, raise fishing effort, which depletes the fish stock,
+          which cuts catch and income and pushes some fishers into contested waters
+          shared with Indian fishermen. The aid (<strong>Response</strong>) helps
+          replace what was lost — but by increasing the number of boats and how many are
+          motorized, it feeds directly back into the same pressure that caused the
+          damage in the first place, while also accelerating the decline of traditional
+          (non-motorized) fishing and the culture built around it.</p>
         <div class="table-wrap">
           <table class="fields">
             <tr><th>Link</th><th>Effect</th><th>Confidence</th></tr>
-            <tr><td class="key">Tourism → Overfishing</td><td>positive</td><td>0.70</td></tr>
-            <tr><td class="key">Overfishing → Stock decline</td><td>positive</td><td>0.85</td></tr>
-            <tr><td class="key">Stock decline → Income loss</td><td>positive</td><td>0.80</td></tr>
-            <tr><td class="key">Income loss → Quota policy</td><td>positive</td><td>0.60</td></tr>
-            <tr><td class="key">Quota policy → Tourism</td><td>negative</td><td>0.40</td></tr>
+            <tr><td class="key">Population growth → Fishing effort</td><td>positive</td><td>0.70</td></tr>
+            <tr><td class="key">Fish demand growth → Fishing effort</td><td>positive</td><td>0.70</td></tr>
+            <tr><td class="key">Fishers/boats → Fishing effort</td><td>positive</td><td>0.85</td></tr>
+            <tr><td class="key">Fishing effort → Fish stock</td><td>negative</td><td>0.80</td></tr>
+            <tr><td class="key">Fish stock → Catch decline</td><td>negative</td><td>0.75</td></tr>
+            <tr><td class="key">Fish stock → Fisher income loss</td><td>negative</td><td>0.65</td></tr>
+            <tr><td class="key">Fish stock → Conflict with Indian fishermen</td><td>negative</td><td>0.50</td></tr>
+            <tr><td class="key">Fleet motorization → Traditional fishing decline</td><td>positive</td><td>0.60</td></tr>
+            <tr><td class="key">Fleet motorization → Loss of traditional culture</td><td>positive</td><td>0.50</td></tr>
+            <tr><td class="key">Aid (either program) → Fishers/boats</td><td>positive</td><td>0.60</td></tr>
+            <tr><td class="key">Aid (either program) → Fleet motorization</td><td>positive</td><td>0.50</td></tr>
           </table>
         </div>
-        <p class="muted" style="font-size:14px; margin-top:10px">The last two links are
-          deliberately the softest: whether visible income loss actually moves policy,
-          and whether the campaign really dents demand, are both more assumption than
-          hard data — reflected in their lower confidence, not left out because they're
-          uncertain.</p>
+        <p class="muted" style="font-size:14px; margin-top:10px">Both aid programs
+          (post-tsunami and post-war) link to the same two factors — more fishers/boats
+          and more motorization — with the post-war program weighted slightly stronger,
+          reflecting it being the larger of the two efforts. Neither aid program has a
+          link back to the fish stock itself: in this model, replacing lost boats is the
+          entire mechanism, which is exactly what the rest of this example is about.</p>
 
-        <h3>Applying the response</h3>
-        <p>In <strong>Scenarios</strong>, turn on <strong>Fishing quota policy</strong>,
-          set it to 70%, and click <strong>Apply scenario</strong>. Two things happen at
-          once, and they don't point at the same place:</p>
+        <h3>Is the response enough?</h3>
+        <p>In <strong>Scenarios</strong>, build a <strong>pressure scenario</strong> —
+          turn on both <strong>Coastal population growth</strong> and <strong>Fish
+          demand and consumption growth</strong> at 100% — and a <strong>response
+          scenario</strong> with both <strong>Post-tsunami aid</strong> and
+          <strong>Post-war aid</strong> at 100%. Leave "How far to trace the effect" at
+          its default, and click <strong>Apply scenario</strong>.</p>
         <div class="table-wrap">
           <table class="fields">
-            <tr><th>Metric</th><th>Immediate</th><th>Equilibrium</th></tr>
-            <tr><td class="key">Nodes affected</td><td>1</td><td>1</td></tr>
-            <tr><td class="key">Total effect magnitude</td><td>0.35</td><td>0.47</td></tr>
+            <tr><th>Impact</th><th>Worsening</th><th>Mitigation</th><th>Net</th><th>Neutralizes?</th></tr>
+            <tr><td class="key">Catch decline</td><td>1.500</td><td>2.188</td><td>3.688</td><td>No</td></tr>
+            <tr><td class="key">Fisher income loss</td><td>1.125</td><td>1.641</td><td>2.766</td><td>No</td></tr>
+            <tr><td class="key">Conflict with Indian fishermen</td><td>0.750</td><td>1.094</td><td>1.844</td><td>No</td></tr>
+            <tr><td class="key">Traditional fishing decline</td><td>0.000</td><td>1.250</td><td>1.250</td><td>No</td></tr>
+            <tr><td class="key">Loss of traditional culture</td><td>0.000</td><td>0.938</td><td>0.938</td><td>No</td></tr>
           </table>
         </div>
-        <p>The <strong>immediate</strong> effect only shows up on <strong>Coastal
-          tourism growth</strong> — the one node the policy has a direct link to.
-          The <strong>equilibrium</strong> effect — the result once the change has
-          rippled all the way around the loop — instead shows up entirely on
-          <strong>Fisher income loss</strong> (<span class="chip improves">Improves</span>),
-          with tourism itself settling back to no change at all. Immediate and
-          equilibrium aren't two views of the same number — they can land on
-          completely different factors, which is exactly why the app always shows
-          both instead of picking one.</p>
+        <p>Every single row reads <strong>No</strong> — and notice the sign of
+          <strong>Mitigation</strong>: it's <em>positive</em> everywhere, not negative. A
+          positive mitigation means the response itself pushes the Impact the wrong
+          way — it doesn't just fail to help, it actively adds to the problem. That's
+          the whole point of this example: the aid was designed around a real need
+          (replace lost boats and income), but the only causal path it has in this model
+          runs straight through the same pressure that caused the damage.</p>
 
-        <div class="callout warn">
-          <span class="dot"></span>
-          <div><strong>You'll see "not stable" by default — that's expected, and fixable.</strong>
-          The warning above the tables ("this network's feedback loops are not stable")
-          shows up because, by default, no factor is assumed to return to its own
-          baseline on its own — without that, the math can't produce a "yes, stable"
-          verdict for a genuine loop like this one (Responses are the only category
-          allowed to link back to an earlier stage, and a node can never link to
-          itself). It isn't telling you the model is wrong — it's telling you to lean
-          on the immediate effect (always reliable) and treat the equilibrium number as
-          a direction, not a promise, unless you mark some factors as self-regulating
-          (see below).</div>
-        </div>
-
-        <h3>Checking the two caveats yourself</h3>
-        <p>"Effect on each factor" already shows a <strong>Sign confidence (%)</strong>
-          column next to Fisher income loss's <span class="chip improves">Improves</span> —
-          100%, in this example — without opening anything. The two optional disclosures
-          below the tables make that number (and the separate stability question) concrete
-          instead of abstract:</p>
-        <div class="step">
-          <div class="step-num">1</div>
-          <div class="step-body">
-            <h4>Show how the effect evolves over time</h4>
-            <p>Ten steps in, the lines are still shooting away from zero rather than
-              leveling off — this network's loop doesn't actually settle at the
-              equilibrium number quoted above, it was only ever a mathematical
-              projection of <em>which direction</em> things are headed. When a network
-              <em>is</em> stable, this same chart is what confirms the lines really do
-              flatten out, instead of taking the equilibrium table on faith.</p>
-          </div>
-        </div>
-        <div class="step">
-          <div class="step-num">2</div>
-          <div class="step-body">
-            <h4>Show robustness to uncertainty</h4>
-            <p>Despite the loop closing through its two least-certain links, 100
-              simulations (each nudging every edge's weight within its confidence
-              range) agree <strong>100% of the time</strong> that Fisher income loss
-              improves. So while <em>whether</em> this system settles down is genuinely
-              unclear (caveat 1), <em>which direction</em> it's being pushed is not — a
-              distinct, and more answerable, question. A lower agreement percentage
-              here would mean the direction itself is up for grabs, not just the timing.</p>
-          </div>
-        </div>
-
-        <h3>Unlocking a genuine long-term effect: self-regulation</h3>
-        <p>The "not stable" warning above isn't permanent — it reflects an assumption
-          you can change. <strong>Self-regulation</strong> is a factor's tendency to
-          return to its own baseline on its own once nothing is pushing it: a fish
-          stock that partially replenishes, or a driver kept in check by something
-          outside the model. By default every factor has none, which is exactly why a
-          genuine loop like this one can never come out "stable."</p>
-        <div class="step">
-          <div class="step-num">1</div>
-          <div class="step-body">
-            <h4>Mark self-regulation</h4>
-            <p>Go back to the <strong>Nodes</strong> step, edit each of the 5 factors,
-              and set <strong>Self-regulation</strong> to <em>high</em> (used here on
-              every factor just to make the effect obvious — in a real project you'd
-              only mark it where you actually believe it applies). Click
-              <strong>Build/Rebuild graph</strong>, then reapply the same scenario
-              (Fishing quota policy, 70%).</p>
-          </div>
-        </div>
-        <div class="step">
-          <div class="step-num">2</div>
-          <div class="step-body">
-            <h4>Watch the warning flip</h4>
-            <p>The banner above the tables now reads <strong>"stable"</strong> instead
-              of "not stable" — same network, same response, only the self-regulation
-              assumption changed. "Nodes affected" under Effect on the network goes
-              from 1 (immediate) / 1 (equilibrium) to 2 / <strong>5</strong> — every
-              factor now has a defined equilibrium, not just Fisher income loss.
-              "When will Impacts be neutralized?" updates too: Fisher income loss
-              settles at <strong>-0.121</strong>, reached within <strong>8</strong>
-              steps — a real settling point this time, not just a projected direction.</p>
-          </div>
-        </div>
         <div class="callout">
           <span class="dot"></span>
-          <div><strong>This isn't free precision — it's an assumption made explicit.</strong>
-          Setting self-regulation doesn't discover new information about the system; it
-          tells the app what you already believe about how each factor behaves on its
-          own. The next section checks how much the result actually depends on that
-          belief.</div>
+          <div><strong>Notice this network has no loop at all.</strong> No Impact here
+          links back to either Response — unlike the app's other example networks. The
+          sufficiency reading doesn't need one: the propagated effect above is still
+          well-defined and clearly non-zero, which is exactly the point of building it
+          this way (see "Is the response enough?" earlier on this page). A response
+          doesn't need to create a feedback loop for its effects to matter.</div>
         </div>
 
-        <h3>How much do you trust that? Sensitivity to self-regulation</h3>
-        <p>With at least one factor self-regulating, a fourth optional disclosure
-          appears: <strong>Show sensitivity to self-regulation</strong>. It works like
-          "Show robustness to uncertainty" above, but instead of nudging edge weights,
-          it nudges how <em>strongly</em> each factor self-regulates (by up to ±50%)
-          and checks whether the predicted direction still holds. Open it here: all 5
-          factors agree <strong>100%</strong> of the time — even generously varying how
-          much each factor self-regulates, the direction of the effect never flips. A
-          lower number would mean the self-regulation guess itself, not just the
-          network's links, is what's driving the answer — worth stating plainly in any
-          write-up that leans on it.</p>
+        <h3>How confident is that, response by response?</h3>
+        <p>Evaluated alone at full strength against the same pressure scenario, neither
+          <strong>Post-tsunami aid</strong> nor <strong>Post-war aid</strong> neutralizes
+          any of the five Impacts in any of 300 simulations that resample edge weights
+          within their confidence range — <strong>0%</strong> across the board.
+          Combined with "Does it hold up across how far the effect is traced?" (also
+          <strong>No</strong> everywhere, with no Impact marked Borderline at any
+          setting from 0.2 to 0.8), the verdict here isn't a coin flip sensitive to
+          exactly how the network is weighted — it holds up robustly, however you look
+          at it.</p>
 
-        <h3>Reach: the one thing that never needed any of this</h3>
-        <p><strong>Reach</strong>, right under "Effect on the network," was already
-          showing a real result before you touched self-regulation, and it hasn't
-          changed: the Fishing quota policy reaches <strong>4 factors, including 1 of 1
-          Impact</strong> — everything else in the network. That's because reach only
-          asks "what can this response's influence touch by following the network's
-          links" — no equilibrium, no stability, nothing to unlock.</p>
-        <p>Fishing quota policy reaches almost everything here because it happens to
-          close the loop back to the Driver (Quota policy → Tourism) — a response
-          positioned like that behaves like it's acting near the <strong>root</strong>
-          of the chain. A response placed at the very end instead — acting directly on
-          an Impact, with nothing left downstream for DPSIR to allow it to point to —
-          would reach far less. A simple illustration, without needing to build
-          anything:</p>
+        <h3>Reach</h3>
+        <p>Independent of everything above: <strong>9 factors reached, including 5 of 5
+          Impacts</strong> — both aid programs, individually or combined, touch nearly
+          the entire network, because both link into the same two factors (Fishers/boats,
+          Fleet motorization) that sit near the start of every causal chain in this
+          model. A response placed at the very end of a chain instead — acting directly
+          on an Impact, with nothing left downstream for DPSIR to allow it to point to —
+          would reach far less:</p>
         <div class="table-wrap">
           <table class="fields">
             <tr><th>Response position</th><th>Acts on</th><th>Reaches</th></tr>
@@ -1120,19 +1051,79 @@ P1,S1,3,0.85,negative,monitoring</pre>
             <tr><td class="key">End of chain</td><td>the Impact directly</td><td>1 factor (just the Impact itself)</td></tr>
           </table>
         </div>
-        <p class="muted" style="font-size:14px; margin-top:10px">Same idea either way: a
-          response that acts early in the causal chain has more chain left in front of
-          it to influence than one that only treats the symptom.</p>
+        <p class="muted" style="font-size:14px; margin-top:10px">A hypothetical contrast,
+          not this network's own numbers — both aid programs here happen to act at a
+          similar point in the chain, so their reach doesn't differ. In general, a
+          response placed earlier in the causal chain has more chain left in front of it
+          to influence than one that only treats the symptom.</p>
+
+        <h3>Temporal simulation: watching the aid become a new pressure</h3>
+        <p>The sufficiency reading above is a single instant — everything happening at
+          once. Open <strong>Show temporal simulation across discrete time windows</strong>,
+          set <strong>Pressure scenario</strong> to <em>Ongoing (permanent)</em>
+          (population and demand keep growing) and <strong>Response scenario</strong> to
+          <em>One-time (impulse)</em> (the aid is a single delivery of boats, not a
+          recurring program), and set the windows slider to 10.</p>
+        <p>For the first four windows, "How each Impact changes, window by window" shows
+          little to no difference between the baseline (pressure only) and the scenario
+          (pressure + aid) — the extra boats haven't worked their way through the network
+          yet. Starting window 5, the gap opens, and keeps opening:</p>
+        <div class="table-wrap">
+          <table class="fields">
+            <tr><th>Impact</th><th>Window 5 (baseline / scenario)</th><th>Window 10 (baseline / scenario)</th></tr>
+            <tr><td class="key">Catch decline</td><td>44.0 / 79.0</td><td>1,744.9 / 4,594.1</td></tr>
+            <tr><td class="key">Fisher income loss</td><td>42.0 / 68.3</td><td>1,317.7 / 3,454.6</td></tr>
+            <tr><td class="key">Conflict with Indian fishermen</td><td>28.0 / 45.5</td><td>878.5 / 2,303.0</td></tr>
+            <tr><td class="key">Traditional fishing decline</td><td>0.0 / 29.6</td><td>0.0 / 171.8</td></tr>
+            <tr><td class="key">Loss of traditional culture</td><td>0.0 / 22.2</td><td>0.0 / 128.9</td></tr>
+          </table>
+        </div>
+        <p>Two things worth reading closely here (values are abstract model units, not
+          real catch/income figures — what matters is the shape and the comparison, not
+          the raw size). First, for every Impact, the <em>scenario</em> column is bigger
+          than the <em>baseline</em> column, and the gap between them grows every window
+          — a one-time delivery of boats keeps making things worse long after it
+          happened, because the extra fishers/boats it added don't leave the system
+          (Fishers/boats barely self-regulates in this model, so the impulse ratchets
+          rather than fades). Second, look at <strong>Traditional fishing decline</strong>
+          and <strong>Loss of traditional culture</strong>: their <em>baseline</em> column
+          is <strong>exactly zero, every single window</strong>. Nothing in the pressure
+          scenario touches fleet motorization at all — these two Impacts exist
+          <em>purely</em> because of the aid. Without the aid, there would be no
+          traditional-fishing story to tell at all. Scroll down to the network
+          storyboard to watch this play out visually, window by window.</p>
 
         <div class="callout">
           <span class="dot"></span>
-          <div><strong>One more caveat, for later:</strong> every link here is treated as
-          proportional — double the quota's strength and its effect roughly doubles too
-          (try 40% and 100% and compare). Real systems often have thresholds instead —
-          a fish stock that tolerates pressure fine until it suddenly collapses past some
-          point. iDPSIR doesn't model that yet; read results as one useful, structured
-          lens on the system, not a substitute for expert judgment about where such
-          tipping points might sit.</div>
+          <div><strong>Why the numbers grow so fast.</strong> This network's feedback
+          paths aren't damped enough to settle down within 10 windows (population and
+          demand keep compounding every window, and the fishers/boats factor barely
+          self-regulates) — by design, so the shape of the runaway trend is visible
+          within a short, readable table. Treat this as a demonstration of
+          <em>direction and relative comparison</em>, not a 10-year forecast of real
+          catch numbers.</div>
+        </div>
+
+        <h3>A threshold worth knowing about</h3>
+        <p>The <strong>Fish stock → Catch decline</strong> edge has a
+          <code>threshold</code> set: 0.15 of the stock's <code>reference_value</code>
+          (100 in this network) — so catch decline only starts responding once the
+          simulated stock loss passes 15 points, instead of scaling from the very first
+          unit of decline. That's a real fisheries phenomenon (a collapse threshold),
+          and it's part of why, in the table above, Catch decline stays lower than the
+          other Impacts for the first several windows even as the fish stock itself is
+          already declining underneath it.</p>
+
+        <div class="callout warn">
+          <span class="dot"></span>
+          <div><strong>This example is illustrative, not the paper's own model.</strong>
+          The weights, thresholds, and self-regulation values here are the author's
+          reasoned interpretation of the qualitative story in Gnanapragasam et al. 2026,
+          not numbers extracted from the paper's own bioeconomic model — which fits real
+          catch/effort data with methods this app doesn't attempt to reproduce. Treat
+          this network the way you'd treat any DPSIR diagram you build yourself: one
+          useful, structured lens on the system, worth checking against expert judgment
+          before acting on it.</div>
         </div>
       </section>
 
@@ -1160,10 +1151,11 @@ P1,S1,3,0.85,negative,monitoring</pre>
           <div class="gloss-item"><dt>Density</dt><dd>How many of the possible connections in the network actually exist — higher means a more tightly linked system.</dd></div>
           <div class="gloss-item"><dt>Centrality</dt><dd>A family of scores for "how important is this node," measured in different ways (see Metrics above).</dd></div>
           <div class="gloss-item"><dt>Community</dt><dd>A cluster of nodes more connected to each other than to the rest of the network.</dd></div>
-          <div class="gloss-item"><dt>Sign confidence</dt><dd>How often a prediction's direction (Improves/Worsens/Stable) holds up across simulations that vary each edge's weight within its confidence range — low confidence means a more precise estimate of the network could flip the conclusion.</dd></div>
-          <div class="gloss-item"><dt>Edge sensitivity</dt><dd>How much a scenario's result would move if one edge's weight were nudged up 10% — the edges ranked highest are the ones most worth double-checking.</dd></div>
-          <div class="gloss-item"><dt>Self-regulation</dt><dd>A factor's tendency to return to its own baseline on its own, once nothing is pushing it — e.g. a habitat that recovers. Needed for a genuine long-term (equilibrium) effect to exist at all.</dd></div>
-          <div class="gloss-item"><dt>Reach</dt><dd>How many factors — and how many Impacts — a response's influence can touch by following the network's links, regardless of whether a long-term effect is defined.</dd></div>
+          <div class="gloss-item"><dt>Sufficiency</dt><dd>Whether a response scenario's mitigation on an Impact is enough to neutralize a pressure scenario's worsening — the primary Scenarios reading, always well-defined regardless of the network's structure.</dd></div>
+          <div class="gloss-item"><dt>Neutralized</dt><dd>An Impact's net effect (worsening + mitigation) is zero or negative — the response fully covers the pressure's worsening on that Impact. A positive net, even a small one, means "No."</dd></div>
+          <div class="gloss-item"><dt>Temporal simulation</dt><dd>An optional reading that runs a scenario forward window by window (discrete time steps) instead of reading a single instant — useful for seeing whether a response's benefit holds up or erodes over time.</dd></div>
+          <div class="gloss-item"><dt>Self-regulation</dt><dd>A factor's tendency to return to its own baseline on its own, once nothing is pushing it — e.g. a habitat that recovers. Only affects the optional temporal simulation, not the main sufficiency reading.</dd></div>
+          <div class="gloss-item"><dt>Reach</dt><dd>How many factors — and how many Impacts — a response's influence can touch by following the network's links, independent of both the sufficiency and temporal readings.</dd></div>
         </dl>
       </section>
 

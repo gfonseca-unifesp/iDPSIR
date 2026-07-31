@@ -52,6 +52,33 @@ test_that("spectral_radius returns 0 for a graph with no edges, not NaN or an er
   expect_equal(spectral_radius(W), 0)
 })
 
+test_that("propagate() gives a non-zero effect on a purely acyclic network, not the all-zero fallback meant for a truly edge-less graph (real bug, Fase 9)", {
+  # Hand-built A->B->C chain, weight 1 each - a real, valid causal network
+  # with zero eigenvalues (nilpotent W, no cycle anywhere), same as the
+  # Gnanapragasam et al. 2026 example network (Fase 9) that surfaced this:
+  # W has real edges but spectral_radius(W) == 0, same value a truly
+  # edge-less matrix returns. The two were conflated before this fix,
+  # discarding a well-defined, non-zero effect for every acyclic network -
+  # verified against scratchpad/verify_propagate_fix.R before hardcoding.
+  nodes <- data.frame(id = c("A", "B", "C"), dpsir_category = c("Driver", "Pressure", "State"), stringsAsFactors = FALSE)
+  edges <- data.frame(
+    from = c("A", "B"), to = c("B", "C"), weight = 1, confidence = 1,
+    interaction_type = "positive", stringsAsFactors = FALSE
+  )
+  g <- graph_from_data_frame(edges, vertices = nodes, directed = TRUE)
+
+  W <- build_signed_matrix(g)
+  expect_equal(spectral_radius(W), 0) # nilpotent, not edge-less
+  expect_false(all(W == 0)) # confirms it's the nilpotent case, not the truly empty one
+
+  press <- setNames(c(1, 0, 0), c("A", "B", "C"))
+  effect <- propagate(W, press, c = 0.5)
+
+  expect_equal(unname(effect["A"]), 0)
+  expect_equal(unname(effect["B"]), 0.5)
+  expect_equal(unname(effect["C"]), 0.25)
+})
+
 test_that("propagate never fails - not even on the network already known to be singular for -A^-1", {
   # data/sample_nodes.csv + sample_edges.csv is documented elsewhere in this
   # project (Fase 5 Marco A) as producing a singular interaction matrix,

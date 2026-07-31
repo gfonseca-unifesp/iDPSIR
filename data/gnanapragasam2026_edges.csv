@@ -1,0 +1,14 @@
+from,to,weight,confidence,interaction_type,evidence_type,threshold,reference
+D1,P1,1.5,0.7,positive,expert_assessment,,
+D2,P1,1.5,0.7,positive,expert_assessment,,
+D3,P1,2.5,0.85,positive,monitoring,,
+P1,S1,2,0.8,negative,monitoring,,
+S1,I1,2,0.75,negative,observational,0.15,
+S1,I2,1.5,0.65,negative,observational,,
+S1,I3,1,0.5,negative,expert_assessment,,
+S2,I4,2,0.6,positive,expert_assessment,,
+S2,I5,1.5,0.5,positive,expert_assessment,,
+R1,D3,1.5,0.6,positive,expert_assessment,,"Adapted from the aid-driven fleet growth narrative in Gnanapragasam et al. 2026, Marine Policy - illustrative interpretation, not the paper's own quantitative model"
+R2,D3,2,0.6,positive,expert_assessment,,"Adapted from the aid-driven fleet growth narrative in Gnanapragasam et al. 2026, Marine Policy - illustrative interpretation, not the paper's own quantitative model"
+R1,S2,1,0.5,positive,expert_assessment,,
+R2,S2,1.5,0.5,positive,expert_assessment,,

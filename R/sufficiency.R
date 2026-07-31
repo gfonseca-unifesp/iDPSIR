@@ -43,6 +43,14 @@
 # Responses activated at a strength). Because propagate() is linear in p,
 # Phi(p_D + p_R) = Phi(p_D) + Phi(p_R) - the two are always computed
 # separately and summed, never re-run combined.
+#
+# Special case, found building the Gnanapragasam et al. 2026 example
+# network (Fase 9): a purely ACYCLIC causal network (no loop anywhere - a
+# real, valid DPSIR network, not a degenerate one) has rho(W) = 0 too,
+# since a DAG's matrix is nilpotent (every eigenvalue exactly 0) - same
+# value spectral_radius() returns for a truly edge-less W. propagate()
+# tells the two apart explicitly (see its own comments) rather than
+# treating "no cycle" the same as "no edges at all".
 
 # Signed interaction matrix with NO diagonal term - deliberately reuses
 # build_interaction_matrix() (R/loop_analysis.R) for the sign/weight
@@ -78,23 +86,42 @@ propagate <- function(W, p, c = 0.5) {
   stopifnot(c > 0, c < 1)
 
   n <- nrow(W)
-  rho <- spectral_radius(W)
 
-  if (rho == 0) {
-    # No edges (or a nilpotent W) - nothing to propagate through, so the
-    # effect beyond the direct push itself is exactly zero everywhere.
+  if (all(W == 0)) {
+    # Truly no edges - nothing to propagate through, so the effect beyond
+    # the direct push itself is exactly zero everywhere.
     return(setNames(rep(0, n), rownames(W)))
   }
 
-  lambda <- c / rho
+  rho <- spectral_radius(W)
+
+  # Real bug, found building the Gnanapragasam et al. 2026 example network
+  # (Revisao 1, Fase 9): a purely acyclic causal network (a DAG - e.g. one
+  # where a Response's edges never loop back through an Impact) has a
+  # NILPOTENT W - every eigenvalue is exactly 0, same as spectral_radius()
+  # returns for a truly edge-less matrix, but the two cases are NOT the
+  # same. The old code treated both as "nothing to propagate through" and
+  # returned all-zero here - silently discarding a real, well-defined
+  # effect for every acyclic network (confirmed against a hand-built 3-node
+  # A->B->C chain: propagate() returned all-zero when it should have shown
+  # a nonzero effect at B and C). A nilpotent W has NO eigenvalue to divide
+  # by (so `c / rho` is undefined), but (I - lambda*W) is invertible for
+  # ANY lambda in this case (its eigenvalues are all exactly 1 regardless
+  # of lambda) - so `c` is used directly as lambda instead. The Neumann
+  # series lambda*W*p + lambda^2*W^2*p + ... still terminates after
+  # finitely many terms (the DAG's longest path length) and is generally
+  # non-zero: an effect propagates through a DAG exactly like it does
+  # through a network with cycles, it just can't loop back and compound.
+  lambda <- if (rho == 0) c else c / rho
   M <- diag(n) - lambda * W
   solved <- tryCatch(solve(M, p), error = function(e) NULL)
 
   if (is.null(solved)) {
-    # Should not happen - lambda*rho(W) = c < 1 guarantees (I - lambda*W)
-    # is invertible for any W - kept as a defensive fallback, not an
-    # expected code path, matching press_perturbation()'s own singular-
-    # matrix handling in R/loop_analysis.R.
+    # Should not happen - (I - lambda*W) is invertible either way: when
+    # rho > 0, lambda*rho(W) = c < 1 guarantees it directly; when rho == 0
+    # (a DAG), its eigenvalues are all exactly 1 regardless of lambda.
+    # Kept as a defensive fallback, not an expected code path, matching
+    # press_perturbation()'s own singular-matrix handling in R/loop_analysis.R.
     warning("Propagation matrix is unexpectedly singular even at c < 1.", call. = FALSE)
     return(setNames(rep(NA_real_, n), rownames(W)))
   }
