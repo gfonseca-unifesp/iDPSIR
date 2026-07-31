@@ -351,7 +351,13 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
     has_self_regulation <- reactive({
       req(graph())
       sr <- V(graph())$self_regulation
-      !is.null(sr) && any(sr != "none")
+      # Revisao 1, Fase 5: self_regulation stopped being categorical
+      # ("none"/"low"/...) and became numeric (0 by default) - comparing a
+      # numeric vector against the string "none" coerces to character and is
+      # always TRUE, which silently pinned this reactive to TRUE for every
+      # network (even one where nobody touched self-regulation at all) until
+      # caught here. `> 0` is the real "is anyone using it" check now.
+      !is.null(sr) && any(suppressWarnings(as.numeric(sr)) > 0, na.rm = TRUE)
     })
 
     current_scenario <- reactiveVal(NULL)
@@ -541,6 +547,40 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
         ),
         uiOutput(ns("self_regulation_sensitivity_section")),
         tags$hr(),
+        checkboxInput(ns("show_temporal"), "Show temporal simulation across discrete time windows (optional)", value = FALSE),
+        conditionalPanel(
+          condition = sprintf("input['%s']", ns("show_temporal")),
+          p(
+            class = "text-muted",
+            "Runs the pressure and response scenarios forward window by window instead of reading a single instant -",
+            "useful when a response might, windows later, become a new pressure itself (e.g. aid that grows the fleet,",
+            "which later increases fishing effort)."
+          ),
+          fluidRow(
+            column(4, sliderInput(ns("temporal_windows"), "Number of windows", min = 2, max = 15, value = 5, step = 1)),
+            column(4, selectInput(
+              ns("temporal_mode_pressure"), "Pressure scenario",
+              choices = c("Ongoing (permanent)" = "permanent", "One-time (impulse)" = "impulse"),
+              selected = "permanent"
+            )),
+            column(4, selectInput(
+              ns("temporal_mode_response"), "Response scenario",
+              choices = c("One-time (impulse)" = "impulse", "Ongoing (permanent)" = "permanent"),
+              selected = "impulse"
+            ))
+          ),
+          h5("How each Impact changes, window by window"),
+          DTOutput(ns("temporal_table")),
+          h5("Network storyboard"),
+          p(
+            class = "text-muted",
+            "Same layout in every panel - only color and size change. Redder = increased from zero in this scenario,",
+            "bluer = decreased; bigger = larger change. Watch how the pattern spreads or fades across windows."
+          ),
+          plotOutput(ns("temporal_storyboard"), height = "600px"),
+          plot_download_row(ns, "temporal_storyboard")
+        ),
+        tags$hr(),
         actionButton(ns("save_scenario"), "Save this scenario", icon = icon("save"), class = "btn-outline-primary")
       )
     })
@@ -715,6 +755,99 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
       datatable(sens_df, rownames = FALSE, options = list(dom = "t", pageLength = 10)) %>%
         formatRound(columns = "Agreement (%)", digits = 0)
     })
+
+    # =================================================
+    # TEMPORAL ENGINE (Revisao 1, Fase 6)
+    # =================================================
+    #
+    # Shared by the table and the storyboard below, so both read the exact
+    # same simulation for the current live inputs (windows/mode selectors),
+    # not two separate runs that could disagree. Gated by
+    # req(isTRUE(input$show_temporal)) so it doesn't run at all while the
+    # disclosure is collapsed. withProgress()/incProgress() (plain shiny,
+    # no new dependency) gives the user a "Window X of N" readout while it
+    # runs - simulate_temporal_pair() itself (R/temporal.R) stays a pure,
+    # Shiny-free function; the progress bar is wired in only through the
+    # optional `on_step` callback it exposes for exactly this purpose.
+    temporal_result <- reactive({
+      sc <- current_scenario()
+      req(sc, isTRUE(input$show_temporal))
+
+      windows <- input$temporal_windows
+
+      withProgress(message = "Simulating temporal windows", value = 0, {
+        simulate_temporal_pair(
+          graph(), sc$p_D, sc$press, windows = windows,
+          mode_D = input$temporal_mode_pressure, mode_R = input$temporal_mode_response,
+          on_step = function(t, total) {
+            incProgress(1 / total, detail = sprintf("Window %d of %d", t, total))
+          }
+        )
+      })
+    })
+
+    output$temporal_table <- renderDT({
+      tr <- temporal_result()
+      req(tr)
+
+      df <- format_temporal_table(graph(), tr)
+      if (nrow(df) == 0) {
+        return(datatable(
+          data.frame(Note = "No Impact factors in this network yet."),
+          rownames = FALSE, options = list(dom = "t")
+        ))
+      }
+
+      df$id <- NULL
+      names(df) <- c("Impact", "Window", "Baseline", "Scenario", "Verdict")
+
+      datatable(df, rownames = FALSE, options = list(dom = "t", pageLength = 15)) %>%
+        formatRound(columns = c("Baseline", "Scenario"), digits = 3)
+    })
+
+    # A fixed layout, computed once per network (same helper the Graph tab
+    # uses) - only node color/size vary between storyboard panels, so the
+    # network appears to hold still while the state "plays" across it.
+    temporal_layout <- reactive({
+      req(graph())
+      compute_graph_layout(nodes(), schema())
+    })
+
+    output$temporal_storyboard <- renderPlot({
+      tr <- temporal_result()
+      req(tr)
+      draw_temporal_storyboard(graph(), temporal_layout(), tr$scenario)
+    })
+
+    output$download_temporal_storyboard_png <- downloadHandler(
+      filename = function() paste0("temporal_storyboard_", Sys.Date(), ".png"),
+      content = function(file) {
+        tr <- temporal_result()
+        req(tr)
+        n_panels <- nrow(tr$scenario)
+        ncol_grid <- ceiling(sqrt(n_panels))
+        nrow_grid <- ceiling(n_panels / ncol_grid)
+        render_plot_png(
+          function() draw_temporal_storyboard(graph(), temporal_layout(), tr$scenario),
+          file, width = 260 * ncol_grid, height = 260 * nrow_grid
+        )
+      }
+    )
+
+    output$download_temporal_storyboard_svg <- downloadHandler(
+      filename = function() paste0("temporal_storyboard_", Sys.Date(), ".svg"),
+      content = function(file) {
+        tr <- temporal_result()
+        req(tr)
+        n_panels <- nrow(tr$scenario)
+        ncol_grid <- ceiling(sqrt(n_panels))
+        nrow_grid <- ceiling(n_panels / ncol_grid)
+        render_plot_svg(
+          function() draw_temporal_storyboard(graph(), temporal_layout(), tr$scenario),
+          file, width = 2.7 * ncol_grid, height = 2.7 * nrow_grid
+        )
+      }
+    )
 
     output$network_effect_table <- renderDT({
       sc <- current_scenario()

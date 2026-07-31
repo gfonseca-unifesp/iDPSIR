@@ -180,6 +180,24 @@ test_that("format_temporal_table returns an empty data.frame, not an error, when
   expect_equal(nrow(format_temporal_table(g, result)), 0)
 })
 
+test_that("on_step callback fires once per window with (t, windows), for the progress indicator (Revisao 1, Fase 6)", {
+  g <- build_test_network()
+  p_D <- build_press_vector(g, active_ids = "D1", strengths = c(D1 = 1))
+  zero_p <- zero_press(g)
+
+  calls <- list()
+  result <- simulate_temporal_pair(
+    g, p_D, zero_p, windows = 4, mode_D = "permanent", mode_R = "impulse",
+    on_step = function(t, windows) calls[[length(calls) + 1]] <<- c(t, windows)
+  )
+
+  expect_equal(length(calls), 4)
+  expect_equal(calls, list(c(1, 4), c(2, 4), c(3, 4), c(4, 4)))
+  # on_step is purely a side effect - the simulation result itself must be
+  # unaffected, same numbers already verified in the hand-computed test above.
+  expect_equal(unname(result$baseline[, "D1"]), c(0, 1, 2, 3, 4))
+})
+
 test_that("threshold gating (relative to reference_value) blocks an edge until the source crosses it, then it stays on", {
   g <- build_test_network()
   # S1 -> I1 gets a threshold: only contributes once |S1| >= 2 (reference_value

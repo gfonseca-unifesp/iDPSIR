@@ -137,12 +137,20 @@ temporal_step <- function(x, W, growth_rate, threshold_matrix, reference_values,
 # historico completo (janela x no) das duas rodadas, comecando de x=0 na
 # janela 0 - quem quiser so os nos de Impacto ou so a ultima janela filtra
 # depois (ver format_temporal_table() abaixo).
+#
+# `on_step`, opcional (Revisao 1, Fase 6): callback chamado a cada janela
+# como `on_step(t, windows)`, ANTES de qualquer dependencia de Shiny entrar
+# neste arquivo - este motor continua puro/testavel sem shiny carregado.
+# mod_responses.R passa uma funcao que chama shiny::incProgress() aqui, pra
+# a UI mostrar "Simulando janela X de N" em vez de parecer travada - default
+# NULL (no-op), comportamento identico a antes desta mudanca.
 simulate_temporal_pair <- function(g, p_D, p_R, windows = 5,
                                     mode_D = c("permanent", "impulse"),
                                     mode_R = c("impulse", "permanent"),
                                     growth_rate = NULL,
                                     threshold_matrix = NULL,
-                                    reference_values = NULL) {
+                                    reference_values = NULL,
+                                    on_step = NULL) {
   stopifnot(inherits(g, "igraph"))
   stopifnot(windows >= 1)
   mode_D <- match.arg(mode_D)
@@ -174,6 +182,8 @@ simulate_temporal_pair <- function(g, p_D, p_R, windows = 5,
 
     hist_baseline[t + 1, ] <- x_baseline
     hist_scenario[t + 1, ] <- x_scenario
+
+    if (!is.null(on_step)) on_step(t, windows)
   }
 
   list(baseline = hist_baseline, scenario = hist_scenario, windows = windows)

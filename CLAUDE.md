@@ -2251,13 +2251,99 @@ motor temporal.
   `test-loop_analysis.R` foram ajustados pra usar valores numéricos crus
   em vez das strings categóricas antigas (170 assertivas no total); suíte
   completa e checagem de sintaxe limpas.
-- [ ] **Fase 6** — UI da leitura temporal na aba Scenarios: disclosure
-  opcional, nº de janelas, impulso/permanente por pressão/resposta,
-  indicador de progresso (`withProgress()`/`incProgress()`, pedido
-  explícito do usuário pra deixar claro que o app não travou) e uma
-  "prancha" de grafos por janela (`igraph::plot.igraph()`, mesmo layout
-  fixo em todas as janelas, cor/tamanho do nó variando por $x_i(t)$ — base
-  R, zero pacote novo, mesma filosofia de `R/scenario_plots.R`).
+- [x] **Fase 6 concluída** — UI da leitura temporal na aba Scenarios
+  (`R/modules/mod_responses.R`), quinto disclosure opcional na mesma lista
+  de "Show how the effect evolves over time"/"Show robustness to
+  uncertainty"/etc.: nº de janelas (slider 2-15, default 5), seletor
+  impulso/permanente independente pra pressão (default "Ongoing/permanent")
+  e resposta (default "One-time/impulse") — mesmos defaults de
+  `simulate_temporal_pair()`. Reaproveita `sc$p_D`/`sc$press` já
+  computados em "Apply scenario" (mesmos vetores usados pela leitura
+  estática), então o cenário testado é sempre o mesmo configurado nos
+  painéis Pressure/Response acima, nunca um terceiro cenário paralelo.
+  `temporal_result` é uma `reactive` só computada quando o disclosure está
+  aberto (`req(isTRUE(input$show_temporal))`), compartilhada pela tabela e
+  pela prancha — a simulação roda uma vez só, nunca duas.
+
+  **Indicador de progresso**: `simulate_temporal_pair()` (`R/temporal.R`)
+  ganhou um parâmetro opcional `on_step(t, windows)`, chamado a cada janela
+  do loop — default `NULL` (no-op), preservando a função pura/testável sem
+  Shiny. `mod_responses.R` embrulha a chamada em `withProgress()` e passa
+  `on_step = function(t, total) incProgress(1/total, detail = sprintf(...))`
+  — "Window X of N" aparece enquanto simula, sem acoplar `R/temporal.R` a
+  `shiny`. Novo teste em `test-temporal.R` confirma o callback é chamado
+  exatamente `windows` vezes com `(t, windows)` corretos, e que ele é
+  puramente um efeito colateral (não muda o resultado da simulação).
+
+  **Prancha de grafos por janela**: `draw_temporal_storyboard()`
+  (`R/scenario_plots.R`, mesmo arquivo/filosofia dos gráficos de
+  trajetória/sensibilidade — base R, sem pacote novo) desenha um painel
+  por janela via `igraph::plot.igraph()`, todos com o **mesmo layout**
+  (`compute_graph_layout()`, `R/graph.R` — o mesmo helper que a aba Graph
+  usa, computado uma vez só via uma `reactive` própria,
+  `temporal_layout()`) — só cor/tamanho do nó variam entre painéis (escala
+  divergente vermelho/azul por sinal de $x_i(t)$, tamanho por
+  magnitude), deliberadamente **não** rotulada como "bom/ruim" (isso
+  depende do que cada fator significa) — só "aumentou"/"diminuiu a partir
+  de zero". Ganhou os mesmos botões "Download PNG"/"Download SVG" que os
+  outros dois gráficos da aba (`plot_download_row()`), preparando o
+  terreno pra Fase 7 incluir a prancha no relatório.
+
+  **Bug real, encontrado só ao testar ao vivo** (nenhum teste standalone
+  exercitava desenhar o grafo de verdade com `igraph::plot.igraph()` —
+  todos os testes de `R/temporal.R` até aqui só verificavam os números,
+  nunca a prancha): a prancha quebrava com **"Bad vertex shape(s):
+  triangle, dot, diamond, star"**. Causa: `prepare_nodes_for_graph()`
+  (`R/graph.R`) já preenche um atributo de vértice `shape` no grafo
+  principal (`apply_schema_visual_mapping()`, vocabulário do widget
+  `vis.Network` — `square`/`triangle`/`dot`/`diamond`/`star`) pra colorir o
+  grafo interativo da aba Graph; `igraph::plot.igraph()` lê automaticamente
+  qualquer atributo de vértice chamado `shape` como o parâmetro
+  `vertex.shape`, e nenhum desses nomes é uma forma válida de
+  `plot.igraph` (que só aceita `circle`/`square`/`csquare`/etc. do próprio
+  igraph). Corrigido passando `vertex.shape = "circle"` explicitamente em
+  `draw_temporal_storyboard()` — um argumento explícito sempre tem
+  prioridade sobre o atributo de mesmo nome no grafo.
+
+  **Segundo bug real, encontrado revisando o código antes de testar** (não
+  ao vivo — pego relendo `mod_responses.R` antes de começar a Fase 6):
+  `has_self_regulation()` ainda comparava `sr != "none"` — sobrevivência da
+  Fase 5, que converteu `self_regulation` de categórico (`"none"`/...) pra
+  numérico (`0` por padrão). Comparar um vetor numérico contra a string
+  `"none"` sempre coage pra caractere e sempre dá `TRUE` (`"0" != "none"`),
+  então essa reactive ficou **permanentemente `TRUE`** pra qualquer rede,
+  mesmo uma sem nenhuma auto-regulação configurada — mostrando a nota e o
+  disclosure "Show sensitivity to self-regulation" sempre, incondicionalmente.
+  Corrigido pra `any(as.numeric(sr) > 0)`. Verificado ao vivo: a rede de
+  pescas (todos os nós com `self_regulation=0`, nunca tocados no
+  formulário desde a Fase 5) já não mostra mais a nota nem o disclosure —
+  o comportamento correto, ausente desde que a Fase 5 introduziu a
+  conversão numérica e só agora corrigido.
+
+  Testado ponta a ponta rodando o app de verdade contra
+  `docs/example_fisheries.idpsir.json`: Overfishing (pressão) + Fishing
+  quota policy (resposta) ativados, "Apply scenario" clicado — nota/
+  disclosure de auto-regulação corretamente ausentes (fix acima
+  confirmado); "Show temporal simulation" aberto, tabela "How each Impact
+  changes, window by window" mostra os valores esperados por janela
+  (incluindo o "Impact_i(t) = max(0, x_i(t))" já documentado em
+  `format_temporal_table()` cortando os mergulhos negativos da rede —
+  documentadamente instável — de volta a zero, não um bug novo); prancha
+  renderiza sem erro (confirmado decodificando o PNG retornado num
+  `<canvas>` via JS e contando pixels não-brancos — 1.48% do total,
+  provando conteúdo real, não uma imagem em branco, já que o
+  `computer{action:"screenshot"}` deste ambiente devolveu uma captura em
+  branco por um motivo de timing alheio ao app, não confiável aqui);
+  subir "Number of windows" pra 12 recomputa a tabela (13 janelas) e a
+  prancha (13 painéis) sem erro; mudar o modo da pressão pra "impulse" via
+  `Shiny.setInputValue` muda os números da tabela corretamente (prova que
+  o seletor está de fato conectado à simulação). Download PNG (`fetch()`
+  direto na URL do `downloadHandler`: `content-type: image/png`, 200,
+  12.8 KB) e SVG (118 KB, começa com `<svg`) ambos confirmados. Sem erro
+  no console do navegador nem do servidor em nenhum passo, depois dos dois
+  fixes. Suíte `testthat` ganhou 1 teste novo em `test-temporal.R` (26
+  assertivas no total) e a suíte completa + checagem de sintaxe seguem
+  limpas.
 - [ ] **Fase 7** — relatório: seção nova pra leitura temporal +
   checkboxes pra escolher quais gráficos de cenário entram (hoje só
   imagens do grafo têm essa seleção).
