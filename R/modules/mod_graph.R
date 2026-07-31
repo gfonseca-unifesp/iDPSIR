@@ -56,7 +56,6 @@ mod_graph_ui <- function(id) {
         selectInput(ns("palette"), "Color palette", choices = get_dpsir_palette_choices()),
         checkboxInput(ns("use_shapes"), "Use DPSIR shapes", value = TRUE),
         selectInput(ns("subsystem_filter"), "Subsystem", choices = "All"),
-        selectInput(ns("temporal_filter"), "Temporal scale", choices = "All"),
         checkboxInput(ns("show_node_legend"), "Show category/community legend", value = TRUE),
         checkboxInput(ns("show_edge_legend"), "Show edge-type legend", value = TRUE)
       ),
@@ -146,9 +145,6 @@ mod_graph_server <- function(id, schema, nodes, edges, graph, positions, set_pos
 
       subsystems <- sort(unique(n$subsystem[nzchar(n$subsystem)]))
       updateSelectInput(session, "subsystem_filter", choices = c("All", subsystems), selected = "All")
-
-      temporals <- sort(unique(n$temporal_scale[nzchar(n$temporal_scale)]))
-      updateSelectInput(session, "temporal_filter", choices = c("All", temporals), selected = "All")
     })
 
     # =================================================
@@ -199,10 +195,6 @@ mod_graph_server <- function(id, schema, nodes, edges, graph, positions, set_pos
 
       if (!is.null(input$subsystem_filter) && input$subsystem_filter != "All") {
         n <- n[n$subsystem == input$subsystem_filter, ]
-      }
-
-      if (!is.null(input$temporal_filter) && input$temporal_filter != "All") {
-        n <- n[n$temporal_scale == input$temporal_filter, ]
       }
 
       n
@@ -467,9 +459,6 @@ mod_graph_server <- function(id, schema, nodes, edges, graph, positions, set_pos
       filters <- character()
       if (!is.null(input$subsystem_filter) && input$subsystem_filter != "All") {
         filters <- c(filters, paste0("subsystem = ", input$subsystem_filter))
-      }
-      if (!is.null(input$temporal_filter) && input$temporal_filter != "All") {
-        filters <- c(filters, paste0("temporal scale = ", input$temporal_filter))
       }
       filter_desc <- if (length(filters) > 0) paste0("filtered by ", paste(filters, collapse = ", ")) else "no filters applied"
 

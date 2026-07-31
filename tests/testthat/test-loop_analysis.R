@@ -86,9 +86,12 @@ test_that("build_interaction_matrix returns a zero matrix for a graph with no ed
 })
 
 test_that("build_interaction_matrix adds a diagonal term from self_regulation (roadmap item 9.1)", {
+  # Revisao 1, Fase 5: self_regulation e numerico direto agora (nao mais
+  # none/low/medium/high) - self_regulation_diagonal() so negativa o valor
+  # (0.5 digitado vira -0.5 na diagonal), sem tabela de mapeamento.
   nodes <- data.frame(
     id = c("A", "B", "C", "D"),
-    self_regulation = c("none", "low", "medium", "high"),
+    self_regulation = c(0, 0.5, 1, 2),
     stringsAsFactors = FALSE
   )
   edges <- data.frame(from = character(), to = character(), stringsAsFactors = FALSE)
@@ -112,7 +115,11 @@ test_that("build_interaction_matrix treats a missing self_regulation attribute a
 test_that("strong self-regulation on every node can make an otherwise-unstable network stable, with a fully defined equilibrium", {
   sp <- read_savepoint("../../docs/example_fisheries.idpsir.json")
   nodes_self_regulated <- sp$nodes
-  nodes_self_regulated$self_regulation <- "high"
+  # Numerico direto (Revisao 1, Fase 5) - 2 reproduz a mesma magnitude que
+  # o antigo "high" categorico dava (self_regulation_magnitudes()["high"]
+  # = -2); o mapeamento leniente pra strings antigas (validate.R) so vai
+  # ate 0.6, insuficiente pra estabilizar esta rede especifica.
+  nodes_self_regulated$self_regulation <- 2
   nodes_self_regulated <- normalize_dpsir_nodes(nodes_self_regulated)
   g <- build_igraph(nodes_self_regulated, sp$edges, get_default_dpsir_schema())
 

@@ -43,15 +43,25 @@ zero_press <- function(g) {
   setNames(rep(0, vcount(g)), V(g)$name)
 }
 
-test_that("build_growth_rate_vector defaults to 0 when the column doesn't exist yet (pre-Fase-5)", {
+test_that("build_test_network's normalize_dpsir_nodes() already fills growth_rate/reference_value with defaults (Fase 5)", {
   g <- build_test_network()
-  expect_null(V(g)$growth_rate)
   expect_true(all(build_growth_rate_vector(g) == 0))
+  expect_true(all(build_reference_values(g) == 1))
 })
 
-test_that("build_reference_values defaults to 1 when the column doesn't exist yet (pre-Fase-5)", {
-  g <- build_test_network()
+test_that("build_growth_rate_vector/build_reference_values fall back to 0/1 on a graph built without normalize_dpsir_nodes() at all", {
+  # A graph assembled directly via graph_from_data_frame() (same pattern
+  # already used elsewhere in this project's tests for pure structural
+  # checks) never went through normalize_dpsir_nodes() - growth_rate/
+  # reference_value are genuinely absent vertex attributes here, the
+  # actual scenario these fallbacks exist for.
+  nodes <- data.frame(id = c("A", "B"), stringsAsFactors = FALSE)
+  edges <- data.frame(from = "A", to = "B", weight = 1, interaction_type = "positive", stringsAsFactors = FALSE)
+  g <- graph_from_data_frame(edges, vertices = nodes, directed = TRUE)
+
+  expect_null(V(g)$growth_rate)
   expect_null(V(g)$reference_value)
+  expect_true(all(build_growth_rate_vector(g) == 0))
   expect_true(all(build_reference_values(g) == 1))
 })
 
@@ -105,23 +115,29 @@ test_that("impulse mode only pushes on window 1; permanent mode keeps pushing ev
   expect_equal(unname(permanent$scenario[, "R1"]), 0:5)
 })
 
-test_that("real finding: reusing the OLD self_regulation magnitudes (none/low/medium/high) in this discrete difference equation oscillates, not decays", {
-  g <- build_test_network(self_regulation = c(D1 = "none", P1 = "none", S1 = "high", I1 = "none", R1 = "none"))
+test_that("real finding: a self_regulation magnitude of 2 (outside the intended [0,1) range) oscillates in this discrete difference equation instead of decaying", {
+  # self_regulation is numeric directly since Fase 5 - a raw value of 2
+  # reproduces the exact magnitude the OLD categorical "high" used to map
+  # to (self_regulation_magnitudes()["high"] = -2, before that function was
+  # removed), reachable today only by bypassing the form's 0-1 validation
+  # (e.g. a hand-edited CSV) - still worth guaranteeing the engine doesn't
+  # silently misbehave if that happens.
+  g <- build_test_network(self_regulation = c(D1 = 0, P1 = 0, S1 = 2, I1 = 0, R1 = 0))
   p_test <- build_press_vector(g, active_ids = "S1", strengths = c(S1 = -1))
   zero_p <- zero_press(g)
 
   result <- simulate_temporal_pair(g, p_test, zero_p, windows = 6, mode_D = "impulse", mode_R = "impulse")
 
-  # self_regulation = "high" -> magnitude -2 -> (1 + (-2)) = -1: the state
-  # flips sign every window at the SAME magnitude forever, never actually
-  # decaying toward 0. This is the real, tested motivation for Fase 5
-  # converting self_regulation to a continuous fraction applied as
-  # `x(t+1) -= self_regulation * x(t)` instead of reusing these magnitudes.
+  # self_regulation = 2 -> diagonal = -2 (negated) -> (1 + (-2)) = -1: the
+  # state flips sign every window at the SAME magnitude forever, never
+  # actually decaying toward 0. This is the real, tested motivation for
+  # Fase 5 constraining self_regulation to [0,1) in the form (mod_data.R)
+  # instead of allowing magnitudes this large.
   expect_equal(unname(result$baseline[, "S1"]), c(0, -1, 1, -1, 1, -1, 1))
 })
 
-test_that("self_regulation = 'none' leaves an impulse permanently unchanged (ratchet, no natural recovery)", {
-  g <- build_test_network(self_regulation = c(D1 = "none", P1 = "none", S1 = "none", I1 = "none", R1 = "none"))
+test_that("self_regulation = 0 leaves an impulse permanently unchanged (ratchet, no natural recovery)", {
+  g <- build_test_network(self_regulation = c(D1 = 0, P1 = 0, S1 = 0, I1 = 0, R1 = 0))
   p_test <- build_press_vector(g, active_ids = "S1", strengths = c(S1 = -1))
   zero_p <- zero_press(g)
 

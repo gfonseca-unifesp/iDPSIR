@@ -18,8 +18,9 @@ create_empty_nodes_table <- function() {
     subsystem = character(),
     uncertainty = character(),
     controllability = character(),
-    temporal_scale = character(),
-    self_regulation = character(),
+    self_regulation = numeric(),
+    growth_rate = numeric(),
+    reference_value = numeric(),
     stringsAsFactors = FALSE
   )
 }
@@ -382,8 +383,7 @@ mod_data_server <- function(id, seed = NULL) {
         id = "", label = "", dpsir_category = schema_categories(rv$schema)[1],
         subsystem = "", uncertainty = get_uncertainty_levels()[1],
         controllability = get_controllability_levels()[1],
-        temporal_scale = get_temporal_scales()[1],
-        self_regulation = get_self_regulation_levels()[1]
+        self_regulation = 0, growth_rate = 0, reference_value = 1
       )
 
       modalDialog(
@@ -394,16 +394,36 @@ mod_data_server <- function(id, seed = NULL) {
         textInput(ns("nm_subsystem"), "Subsystem", value = d$subsystem),
         selectInput(ns("nm_uncertainty"), "Uncertainty", choices = get_uncertainty_levels(), selected = d$uncertainty),
         selectInput(ns("nm_controllability"), "Controllability", choices = get_controllability_levels(), selected = d$controllability),
-        selectInput(ns("nm_temporal"), "Temporal scale", choices = get_temporal_scales(), selected = d$temporal_scale),
-        selectInput(
-          ns("nm_self_regulation"), "Self-regulation",
-          choices = get_self_regulation_levels(), selected = d$self_regulation %||% get_self_regulation_levels()[1]
+        numericInput(
+          ns("nm_self_regulation"), "Self-regulation (0-1)",
+          value = d$self_regulation %||% 0, min = 0, max = 0.99, step = 0.05
         ),
         tags$p(
           class = "text-muted", style = "font-size: 12px;",
           "Does this factor tend to return to its own baseline on its own once nothing is",
-          "pushing it? E.g. a habitat that recovers, or a factor controlled by something",
-          "outside the model. Leave \"none\" if it only changes because of the network's links."
+          "pushing it? 0 = no, it only changes because of the network's links. Closer to 1 =",
+          "strongly, on its own (e.g. a habitat that recovers, or a factor controlled by",
+          "something outside the model) - the fraction of its current deviation that reverts",
+          "each simulated step."
+        ),
+        numericInput(
+          ns("nm_growth_rate"), "Growth rate (optional)",
+          value = d$growth_rate %||% 0, step = 0.01
+        ),
+        tags$p(
+          class = "text-muted", style = "font-size: 12px;",
+          "Leave at 0 for most factors. Only used by the Scenarios tab's discrete-window",
+          "simulation: a factor's own trend over time, independent of the network's links",
+          "(e.g. population growth, a rising consumption trend)."
+        ),
+        numericInput(
+          ns("nm_reference_value"), "Reference value (optional)",
+          value = d$reference_value %||% 1, step = 0.5
+        ),
+        tags$p(
+          class = "text-muted", style = "font-size: 12px;",
+          "Leave at 1 for most factors. Only relevant for a State factor with a threshold",
+          "set on one of its outgoing edges - the scale that threshold is a fraction of."
         ),
         footer = tagList(
           modalButton("Cancel"),
@@ -457,6 +477,18 @@ mod_data_server <- function(id, seed = NULL) {
         return()
       }
 
+      self_regulation <- input$nm_self_regulation
+      if (is.na(self_regulation) || self_regulation < 0 || self_regulation >= 1) {
+        showNotification("Self-regulation must be between 0 and just under 1.", type = "error")
+        return()
+      }
+
+      reference_value <- input$nm_reference_value
+      if (is.na(reference_value) || reference_value == 0) {
+        showNotification("Reference value cannot be zero.", type = "error")
+        return()
+      }
+
       new_row <- data.frame(
         id = new_id,
         label = input$nm_label,
@@ -464,8 +496,9 @@ mod_data_server <- function(id, seed = NULL) {
         subsystem = input$nm_subsystem,
         uncertainty = input$nm_uncertainty,
         controllability = input$nm_controllability,
-        temporal_scale = input$nm_temporal,
-        self_regulation = input$nm_self_regulation,
+        self_regulation = self_regulation,
+        growth_rate = input$nm_growth_rate %||% 0,
+        reference_value = reference_value,
         stringsAsFactors = FALSE
       )
 
@@ -473,7 +506,14 @@ mod_data_server <- function(id, seed = NULL) {
         rv$nodes <- rbind(rv$nodes, new_row)
       } else {
         idx <- which(rv$nodes$id == existing_id)
-        rv$nodes[idx, ] <- new_row
+        # Assign by name, not position: rv$nodes may have its columns in a
+        # different order than new_row (e.g. a savepoint whose optional
+        # columns were appended in a different sequence by
+        # normalize_dpsir_nodes()) - a positional `rv$nodes[idx, ] <- new_row`
+        # would silently shift values into the wrong column when the order
+        # differs, even though the column names/counts match (same bug class
+        # already found and fixed for the now-dropped temporal_scale column).
+        rv$nodes[idx, names(new_row)] <- new_row
 
         if (!identical(existing_id, new_id)) {
           rv$edges$from[rv$edges$from == existing_id] <- new_id
@@ -536,12 +576,12 @@ mod_data_server <- function(id, seed = NULL) {
         numericInput(ns("em_confidence"), "Confidence (0-1)", value = d$confidence, min = 0, max = 1, step = 0.05),
         selectInput(ns("em_interaction"), "Interaction type", choices = get_interaction_types(), selected = d$interaction_type),
         selectInput(ns("em_evidence"), "Evidence type", choices = get_evidence_types(), selected = d$evidence_type),
-        numericInput(ns("em_threshold"), "Threshold (optional)", value = d$threshold, min = 0, step = 0.5),
+        numericInput(ns("em_threshold"), "Threshold (optional, 0-1, State origin only)", value = d$threshold, min = 0, max = 1, step = 0.05),
         tags$p(
           class = "text-muted", style = "font-size: 13px;",
-          "Leave blank for most edges. Only used by the Scenarios tab's trajectory",
-          "chart: how much the source factor has to change (in this scenario) before",
-          "this edge switches on, instead of always contributing proportionally."
+          "Leave blank for most edges. Only allowed when \"From\" is a State factor - the",
+          "fraction of that factor's reference value it has to move (in this scenario)",
+          "before this edge switches on, instead of always contributing proportionally."
         ),
         textInput(ns("em_reference"), "Reference (optional)", value = d$reference, placeholder = "DOI, URL, or citation"),
         tags$p(
@@ -600,9 +640,23 @@ mod_data_server <- function(id, seed = NULL) {
       }
 
       threshold <- input$em_threshold
-      if (!is.null(threshold) && !is.na(threshold) && threshold < 0) {
-        showNotification("Threshold, if set, must be zero or greater.", type = "error")
-        return()
+      if (!is.null(threshold) && !is.na(threshold)) {
+        if (threshold < 0 || threshold > 1) {
+          showNotification("Threshold, if set, must be between 0 and 1.", type = "error")
+          return()
+        }
+
+        # Revisao 1, Fase 5: threshold restrito a arestas cuja origem e
+        # State - e uma propriedade de variavel de estado ecologica (ponto
+        # de virada), nao de Driver/Pressure/Impact/Response. Validado aqui
+        # em vez de escondido/desabilitado no formulario (o dropdown "From"
+        # nao e reativo dentro do modal, mesmo padrao ja usado por
+        # weight/confidence acima).
+        from_category <- rv$nodes$dpsir_category[rv$nodes$id == input$em_from]
+        if (length(from_category) == 0 || !identical(from_category, "State")) {
+          showNotification("Threshold can only be set when \"From\" is a State factor.", type = "error")
+          return()
+        }
       }
 
       new_row <- data.frame(
@@ -622,7 +676,14 @@ mod_data_server <- function(id, seed = NULL) {
       if (is.null(idx)) {
         rv$edges <- rbind(rv$edges, new_row)
       } else {
-        rv$edges[idx, ] <- new_row
+        # Assign by name, not position - see the matching comment on the
+        # node edit above. Real bug found live testing Fase 5: an old
+        # savepoint with no "threshold" column (added by normalize_dpsir_edges()
+        # AFTER "reference", since "reference" already existed) ends up with
+        # columns ordered [..., reference, threshold], while new_row here is
+        # built [..., threshold, reference] - a positional assignment put the
+        # threshold value entered in the form into the reference column instead.
+        rv$edges[idx, names(new_row)] <- new_row
       }
 
       removeModal()

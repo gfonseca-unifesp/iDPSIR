@@ -98,3 +98,65 @@ test_that("schemas_equivalent ignores cosmetic differences (color/shape) but not
   schema_c$role[schema_c$name == "Response"] <- NA
   expect_false(schemas_equivalent(schema_a, schema_c))
 })
+
+test_that("normalize_dpsir_nodes defaults self_regulation/growth_rate/reference_value when the columns are entirely absent (Revisao 1, Fase 5)", {
+  nodes <- data.frame(id = "A", label = "A", dpsir_category = "Driver", stringsAsFactors = FALSE)
+  normalized <- normalize_dpsir_nodes(nodes)
+
+  expect_equal(normalized$self_regulation, 0)
+  expect_equal(normalized$growth_rate, 0)
+  expect_equal(normalized$reference_value, 1)
+})
+
+test_that("normalize_dpsir_nodes reads self_regulation/growth_rate/reference_value numbers straight through when present", {
+  nodes <- data.frame(
+    id = c("A", "B"), label = c("A", "B"), dpsir_category = "Driver",
+    self_regulation = c(0.3, 0.7), growth_rate = c(0.02, -0.01), reference_value = c(100, 5),
+    stringsAsFactors = FALSE
+  )
+  normalized <- normalize_dpsir_nodes(nodes)
+
+  expect_equal(normalized$self_regulation, c(0.3, 0.7))
+  expect_equal(normalized$growth_rate, c(0.02, -0.01))
+  expect_equal(normalized$reference_value, c(100, 5))
+})
+
+test_that("normalize_dpsir_nodes maps a legacy categorical self_regulation (none/low/medium/high) to a numeric equivalent, for backward compatibility with a pre-Fase-5 savepoint", {
+  nodes <- data.frame(
+    id = c("A", "B", "C", "D"), label = "x", dpsir_category = "Driver",
+    self_regulation = c("none", "low", "medium", "high"),
+    stringsAsFactors = FALSE
+  )
+  normalized <- normalize_dpsir_nodes(nodes)
+
+  expect_equal(normalized$self_regulation, c(0, 0.2, 0.4, 0.6))
+})
+
+test_that("normalize_dpsir_nodes treats reference_value = 0 the same as missing (falls back to 1, avoids a division by zero downstream)", {
+  nodes <- data.frame(
+    id = "A", label = "A", dpsir_category = "Driver", reference_value = 0,
+    stringsAsFactors = FALSE
+  )
+  normalized <- normalize_dpsir_nodes(nodes)
+
+  expect_equal(normalized$reference_value, 1)
+})
+
+test_that("normalize_dpsir_nodes drops a retired temporal_scale column from an old savepoint/CSV, not just ignores it", {
+  # Real bug, found only by testing live: leaving the column "just
+  # ignored" (present but unread) made an old savepoint's node table have
+  # a different column COUNT than a freshly-built row from the edit
+  # form (which no longer asks for temporal_scale) - editing an existing
+  # node then corrupted every column after subsystem, because
+  # `rv$nodes[idx, ] <- new_row` (mod_data.R) assigns positionally when
+  # column counts differ, not by name. Dropping the column here keeps
+  # the node table's shape consistent regardless of the source data.
+  nodes <- data.frame(
+    id = "A", label = "A", dpsir_category = "Driver", temporal_scale = "medium",
+    stringsAsFactors = FALSE
+  )
+  normalized <- normalize_dpsir_nodes(nodes)
+
+  expect_false("temporal_scale" %in% names(normalized))
+  expect_equal(normalized$self_regulation, 0)
+})

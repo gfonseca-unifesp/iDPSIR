@@ -52,9 +52,11 @@
 # (p_D+p_R) - em vez de tentar decompor uma unica rodada combinada.
 #
 # Achado real, testado antes de decidir a Fase 5 (nao assumido):
-# reaproveitar as magnitudes do self_regulation ANTIGO (none=0, low=-0.5,
-# medium=-1, high=-2 - ver self_regulation_magnitudes(), R/loop_analysis.R)
-# direto nesta equacao de diferenca discreta OSCILA em vez de decair.
+# reaproveitar as magnitudes categoricas que self_regulation tinha ANTES
+# da Fase 5 (none=0, low=-0.5, medium=-1, high=-2 - eram
+# self_regulation_magnitudes(), R/loop_analysis.R, removida pela propria
+# Fase 5 por causa exatamente deste achado) direto nesta equacao de
+# diferenca discreta OSCILA em vez de decair.
 # x(t+1) = x(t) + sr*x(t) = (1+sr)*x(t) so decai suavemente quando
 # |1+sr| < 1; com sr=-2 (o "high" antigo), (1+sr) = -1 exatamente - o
 # estado flip-flopa de sinal pra sempre com a MESMA magnitude, nem cresce

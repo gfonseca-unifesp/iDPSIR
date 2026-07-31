@@ -15,29 +15,27 @@
 # `apply_response()` (R/responses.R) fica preservada no disco mas deixa de
 # ser o motor principal da aba Scenarios.
 
-# Roadmap Fase 9 item 9.1: none=0 -> unchanged from before this field
-# existed. The rest is a deliberately simple, documented-here-only mapping
-# (never shown to the user as a number - see mod_data.R's tooltip) from a
-# qualitative level to how strongly a factor pulls itself back toward its
-# own baseline. Magnitudes chosen to sit in the same range as typical edge
-# weights in this app (see docs/example_fisheries.idpsir.json: 0.5-3), so a
-# node's self-regulation can meaningfully compete with what its incoming
-# edges are pushing, without one mechanism structurally dominating the other.
-self_regulation_magnitudes <- function() c(none = 0, low = -0.5, medium = -1, high = -2)
-
-# Per-node self-regulation as a plain named vector - shared by
-# build_interaction_matrix() and, later, the sensitivity-to-self-regulation
-# routine (item 9.1.4), so both read the same mapping.
+# Revisao 1, Fase 5: self_regulation deixou de ser um vocabulario
+# categorico (none/low/medium/high, com uma tabela fixa de magnitudes) e
+# virou uma fracao continua em [0,1) digitada direto pelo usuario -
+# "fracao do desvio que reverte por janela". Sempre negativada aqui pra
+# virar a magnitude de decaimento na diagonal (0,4 digitado vira -0,4 na
+# diagonal: x(t+1) = x(t) - 0,4*x(t) = 0,6*x(t), decaimento geometrico
+# limpo) - ver R/temporal.R pro motivo real testado (as magnitudes fixas
+# antigas, calibradas pro Euler implicito do motor de equilibrio, oscilam
+# em vez de decair na equacao de diferenca discreta do motor temporal
+# novo). Per-node self-regulation como um vetor nomeado simples -
+# compartilhado por build_interaction_matrix() e pela rotina de
+# sensibilidade-a-auto-regulacao (item 9.1.4), os dois leem o mesmo valor.
 self_regulation_diagonal <- function(g) {
   node_names <- V(g)$name
   self_reg <- V(g)$self_regulation
   if (is.null(self_reg)) {
-    self_reg <- rep("none", length(node_names))
+    return(setNames(rep(0, length(node_names)), node_names))
   }
-  magnitudes <- self_regulation_magnitudes()
-  values <- unname(magnitudes[self_reg])
+  values <- suppressWarnings(as.numeric(self_reg))
   values[is.na(values)] <- 0
-  setNames(values, node_names)
+  setNames(-values, node_names)
 }
 
 build_interaction_matrix <- function(g) {

@@ -2179,12 +2179,78 @@ motor temporal.
   Fase 5 converter autorregulação pra fração contínua $[0,1)$. 21
   assertivas novas em `tests/testthat/test-temporal.R`, suíte completa
   (147 assertivas) e checagem de sintaxe limpas.
-- [ ] **Fase 5** — schema/dados: `growth_rate`/`reference_value` opcionais
-  em Nós; `threshold` vira fração 0-1 restrita a arestas com origem State;
-  autorregulação vira `numericInput` 0-1 (era `selectInput`
-  none/low/medium/high), `self_regulation_magnitudes()` removida;
-  `temporal_scale` aposentado do formulário/schema/CSV (leitura tolerante
-  mantida pra savepoint antigo).
+- [x] **Fase 5 concluída** — schema/dados: `growth_rate`/`reference_value`
+  opcionais em Nós (`R/schema.R`, `R/validate.R`'s `normalize_dpsir_nodes()`,
+  `R/modules/mod_data.R`'s formulário + `create_empty_nodes_table()`);
+  `threshold` (aresta) vira fração 0-1 restrita a arestas com origem State
+  (validado em `confirm_edge`, `mod_data.R`); autorregulação vira
+  `numericInput` 0-1 (era `selectInput` none/low/medium/high),
+  `self_regulation_magnitudes()` removida de `R/loop_analysis.R`;
+  `temporal_scale` **removido** (não só ignorado) de
+  `normalize_dpsir_nodes()`, do schema (`get_temporal_scales()` removida) e
+  do formulário/CSV.
+
+  **Dois bugs reais de corrupção de coluna, encontrados só ao testar ao
+  vivo** (nenhum dos dois em checagem de sintaxe nem na suíte `testthat` —
+  nenhum teste exercitava "editar um nó/aresta já carregado de um
+  savepoint antigo cujas colunas opcionais foram preenchidas em ordem
+  diferente da que o formulário usa hoje"):
+  - **Nós**: carregar `docs/example_fisheries.idpsir.json` (savepoint
+    anterior à Fase 5 — sem `self_regulation`, com `temporal_scale`) e
+    editar um nó existente corrompia toda coluna a partir de `subsystem`:
+    o valor novo de `self_regulation` ia parar na posição de
+    `temporal_scale`, `growth_rate` na de `self_regulation`, e
+    `reference_value` acabava mostrando o próprio `id` do nó (reciclagem
+    do R). Causa: `rv$nodes[idx, ] <- new_row` (`mod_data.R`) faz
+    atribuição **posicional** quando o número de colunas de `rv$nodes`
+    (10, ainda com `temporal_scale`) difere do `new_row` reconstruído pelo
+    formulário (9, sem `temporal_scale`). Corrigido na raiz:
+    `normalize_dpsir_nodes()` agora **remove** a coluna
+    (`nodes$temporal_scale <- NULL`), não só a ignora — garante que
+    `rv$nodes` sempre tem exatamente o mesmo conjunto de colunas que o
+    formulário produz, não importa a origem dos dados.
+  - **Arestas**: mesmo padrão de bug, causa diferente. Editar a aresta
+    S1→I1 desse mesmo savepoint antigo (que tem `reference` mas não
+    `threshold`) e definir um Threshold fazia o valor aparecer na coluna
+    **reference** da tabela, com `threshold` ficando em branco — não um
+    problema de contagem de colunas (ambas existem), mas de **ordem**:
+    `create_empty_edges_table()`/`confirm_edge`'s `new_row` constroem
+    `threshold` antes de `reference`, mas como o savepoint antigo não tinha
+    `threshold`, `normalize_dpsir_edges()` (`R/validate.R`) o adiciona **por
+    último** (`edges$threshold <- ...`, depois que `reference` já existia)
+    — resultando em `rv$edges` com a ordem `[...,reference,threshold]`,
+    oposta à de `new_row`. `rv$edges[idx, ] <- new_row` (mesma linha de
+    código, mesmo padrão de bug do lado de nós) atribuiu posicionalmente,
+    trocando os dois valores. Corrigido na origem do problema (a
+    atribuição em si, não a ordem das colunas — mais robusto a qualquer
+    ordem futura): `rv$nodes[idx, names(new_row)] <- new_row` e
+    `rv$edges[idx, names(new_row)] <- new_row` — atribuição por **nome**,
+    correta não importa a ordem das colunas em `rv$nodes`/`rv$edges`,
+    contanto que os nomes existam (garantido por `normalize_dpsir_nodes()`/
+    `normalize_dpsir_edges()`).
+
+  Verificado ao vivo rodando o app de verdade contra
+  `docs/example_fisheries.idpsir.json` (savepoint pré-Fase-5, sem
+  `self_regulation`, com `temporal_scale`): (1) tabela de Nós mostra
+  corretamente as colunas `self_regulation`/`growth_rate`/`reference_value`
+  (defaults 0/0/1) e nenhuma `temporal_scale`; (2) editar S1 (Self-regulation
+  0.4, Growth rate 0.02, Reference value 50) grava exatamente nesses campos,
+  com D1/P1/I1/R1 inalterados (0/0/1) — confirma o fix da corrupção de nós;
+  (3) tabela de Arestas mostra `threshold` como última coluna; (4) tentar
+  definir um Threshold na aresta D1→P1 (origem Driver) é rejeitado com
+  "Threshold can only be set when \"From\" is a State factor.", sem alterar
+  a linha; (5) definir Threshold=0.3 na aresta S1→I1 (origem State) salva
+  corretamente **na coluna threshold**, com `reference` permanecendo em
+  branco — confirma o fix da corrupção de arestas; (6) passo Review mostra
+  "Everything is valid", grafo constrói com sucesso; (7) aba Graph não
+  mostra mais o dropdown "Temporal scale" (só "Subsystem" como filtro).
+  Sem erro no console do servidor em nenhum passo, depois dos dois fixes.
+  Suíte `testthat` ganhou 5 testes novos em `test-validate.R` (defaults,
+  passthrough numérico, mapeamento legado categórico→numérico,
+  `reference_value=0`→1, remoção de `temporal_scale`) e 2 testes em
+  `test-loop_analysis.R` foram ajustados pra usar valores numéricos crus
+  em vez das strings categóricas antigas (170 assertivas no total); suíte
+  completa e checagem de sintaxe limpas.
 - [ ] **Fase 6** — UI da leitura temporal na aba Scenarios: disclosure
   opcional, nº de janelas, impulso/permanente por pressão/resposta,
   indicador de progresso (`withProgress()`/`incProgress()`, pedido

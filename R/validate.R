@@ -16,19 +16,66 @@ normalize_dpsir_nodes <- function(nodes) {
   nodes$label <- as.character(nodes$label)
   nodes$dpsir_category <- trimws(as.character(nodes$dpsir_category))
 
-  # Optional, defaults to "none" - same lenient pattern as uncertainty/
-  # controllability (no vocabulary validation here either, just the form's
-  # dropdown constrains it structurally); missing entirely from
-  # older savepoints/CSVs is the normal case, reproducing today's behavior
-  # (no self-regulation) rather than being an error. See R/schema.R's
-  # get_self_regulation_levels() and R/loop_analysis.R's use in
-  # build_interaction_matrix().
+  # Revisao 1, Fase 5: self_regulation deixou de ser um vocabulario
+  # categorico (none/low/medium/high) e virou uma fracao continua em
+  # [0,1) - ver R/temporal.R pro motivo real testado (as magnitudes
+  # categoricas antigas oscilam em vez de decair na equacao de diferenca
+  # discreta do motor temporal). Missing entirely e o caso normal (default
+  # 0, mesmo comportamento de sempre) - ver R/loop_analysis.R's
+  # self_regulation_diagonal(). Um savepoint/CSV de antes desta mudanca
+  # ainda pode trazer as strings antigas - mapeadas aqui pra um valor
+  # numerico so pra nao quebrar ao carregar, nao e o caminho principal.
   if (!"self_regulation" %in% names(nodes)) {
-    nodes$self_regulation <- "none"
+    nodes$self_regulation <- 0
   } else {
-    nodes$self_regulation[is.na(nodes$self_regulation)] <- "none"
-    nodes$self_regulation <- trimws(as.character(nodes$self_regulation))
+    raw <- nodes$self_regulation
+    legacy_levels <- c(none = 0, low = 0.2, medium = 0.4, high = 0.6)
+    is_legacy_string <- as.character(raw) %in% names(legacy_levels)
+    numeric_values <- suppressWarnings(as.numeric(raw))
+    numeric_values[is_legacy_string] <- legacy_levels[as.character(raw)[is_legacy_string]]
+    numeric_values[is.na(numeric_values)] <- 0
+    nodes$self_regulation <- numeric_values
   }
+
+  # Revisao 1, Fase 5: tendencia exogena propria do no (crescimento
+  # populacional, tendencia de consumo), independente das arestas - ver
+  # R/temporal.R. Opcional, default 0 (constante, comportamento de hoje).
+  if (!"growth_rate" %in% names(nodes)) {
+    nodes$growth_rate <- 0
+  } else {
+    nodes$growth_rate <- suppressWarnings(as.numeric(nodes$growth_rate))
+    nodes$growth_rate[is.na(nodes$growth_rate)] <- 0
+  }
+
+  # Revisao 1, Fase 5: escala de referencia do no, usada so pra tornar
+  # `threshold` (aresta) relativo em vez de absoluto - ver R/temporal.R.
+  # Opcional, default 1 (threshold se comporta como magnitude absoluta,
+  # igual a antes desta coluna existir).
+  if (!"reference_value" %in% names(nodes)) {
+    nodes$reference_value <- 1
+  } else {
+    nodes$reference_value <- suppressWarnings(as.numeric(nodes$reference_value))
+    nodes$reference_value[is.na(nodes$reference_value) | nodes$reference_value == 0] <- 1
+  }
+
+  # `temporal_scale` foi aposentado (ver R/schema.R) - removida aqui, nao
+  # so ignorada, se um savepoint/CSV antigo ainda trouxer a coluna.
+  #
+  # Bug real, encontrado so ao testar ao vivo (carregar um savepoint
+  # antigo com `temporal_scale`, editar um no existente): deixar a coluna
+  # "so ignorada" (sem remover) fazia `rv$nodes` (carregado, com
+  # `temporal_scale`) e o `new_row` reconstruido pelo formulario (sem
+  # `temporal_scale`, ja que o formulario nao pergunta mais por ela) terem
+  # um NUMERO DIFERENTE de colunas - `rv$nodes[idx, ] <- new_row`
+  # (mod_data.R) faz a atribuicao POSICIONALMENTE quando as colunas nao
+  # batem, nao por nome, deslocando every valor uma posicao a partir de
+  # onde a coluna faltante ficaria (self_regulation acabava gravado na
+  # posicao de temporal_scale, growth_rate na de self_regulation, etc, e
+  # reference_value virava o proprio id do no por causa da reciclagem).
+  # Remover a coluna aqui garante que `rv$nodes` sempre tem exatamente o
+  # mesmo conjunto de colunas que o formulario produz, nao importa se os
+  # dados de origem (savepoint/CSV) tinham `temporal_scale` ou nao.
+  nodes$temporal_scale <- NULL
 
   nodes
 }

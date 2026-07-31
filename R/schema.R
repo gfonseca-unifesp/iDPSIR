@@ -197,13 +197,19 @@ get_uncertainty_levels <- function() c("low", "medium", "high")
 
 get_controllability_levels <- function() c("low", "medium", "high")
 
-# Roadmap Fase 9 item 9.1: whether a factor tends to return to its own
-# baseline on its own once nothing is pushing it (see R/loop_analysis.R for
-# how this becomes a diagonal term in the interaction matrix). "none" is the
-# default - same behavior as before this field existed.
-get_self_regulation_levels <- function() c("none", "low", "medium", "high")
-
-get_temporal_scales <- function() c("short", "medium", "long")
+# `temporal_scale` (short/medium/long) foi aposentado na Revisao 1: nunca
+# entrava em nenhum calculo (so decorativo desde a Fase 1) e ficou
+# redundante/contraditorio com `growth_rate`/auto-regulacao (agora
+# numericos, ver R/temporal.R) respondendo a mesma pergunta - "muda rapido
+# ou devagar" - de forma quantitativa. get_temporal_scales() removida;
+# normalize_dpsir_nodes() (R/validate.R) continua lendo tolerantemente um
+# savepoint/CSV antigo que ainda tenha a coluna, so ignorada.
+#
+# `self_regulation` (Fase 9) deixou de ser um vocabulario controlado
+# (none/low/medium/high) - vira uma fracao continua em [0,1) digitada
+# diretamente (ver formulario de no em mod_data.R e
+# self_regulation_diagonal(), R/loop_analysis.R). get_self_regulation_levels()
+# removida junto.
 
 get_interaction_types <- function() {
   c("positive", "negative")

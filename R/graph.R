@@ -200,8 +200,7 @@ build_node_tooltip <- function(nodes) {
     "Category: {nodes$dpsir_category}<br>",
     "Subsystem: {ifelse(is.na(nodes$subsystem) | nodes$subsystem == '', '-', nodes$subsystem)}<br>",
     "Uncertainty: {ifelse(is.na(nodes$uncertainty) | nodes$uncertainty == '', '-', nodes$uncertainty)}<br>",
-    "Controllability: {ifelse(is.na(nodes$controllability) | nodes$controllability == '', '-', nodes$controllability)}<br>",
-    "Temporal scale: {ifelse(is.na(nodes$temporal_scale) | nodes$temporal_scale == '', '-', nodes$temporal_scale)}"
+    "Controllability: {ifelse(is.na(nodes$controllability) | nodes$controllability == '', '-', nodes$controllability)}"
   )
 }
 
