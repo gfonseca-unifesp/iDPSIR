@@ -979,6 +979,14 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
       # for the response strengths themselves.
       sc$trajectory_steps <- input$trajectory_steps %||% 20
 
+      # Revisao 1, Fase 7: same reasoning, for the temporal disclosure's own
+      # settings - the report (R/report.R) re-simulates from sc$p_D/sc$press
+      # rather than storing the whole windows x nodes history, so it needs
+      # to know how many windows and which impulse/permanent mode to use.
+      sc$temporal_windows <- input$temporal_windows %||% 5
+      sc$temporal_mode_pressure <- input$temporal_mode_pressure %||% "permanent"
+      sc$temporal_mode_response <- input$temporal_mode_response %||% "impulse"
+
       saved <- saved_scenarios$list
       saved[[sc$name]] <- sc
       saved_scenarios$list <- saved

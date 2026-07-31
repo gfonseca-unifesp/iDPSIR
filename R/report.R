@@ -53,7 +53,10 @@ build_full_report_html <- function(
     include_references = FALSE,
     saved_scenarios = list(),
     selected_scenario_names = character(),
-    include_reproducibility = FALSE
+    include_reproducibility = FALSE,
+    include_trajectory_chart = TRUE,
+    include_sensitivity_chart = TRUE,
+    include_temporal_section = FALSE
 ) {
   # Sequential "Figure N"/"Table N" numbering across the whole report, plus
   # a caption paragraph under each - both requested so the report reads like
@@ -320,61 +323,141 @@ build_full_report_html <- function(
     # (R/scenario_plots.R) are the exact same functions mod_responses.R
     # uses on screen and for its own PNG/SVG downloads, so the report
     # figure can never drift from what the user saw live.
-    trajectory_sections <- lapply(selected_scenario_names, function(scenario_name) {
-      sc <- saved_scenarios[[scenario_name]]
-      steps <- sc$trajectory_steps %||% 20
-      traj <- simulate_trajectory_thresholded(
-        build_interaction_matrix(graph), sc$press, Th = build_threshold_matrix(graph), steps = steps
-      )
-      labels <- V(graph)$label[match(colnames(traj), V(graph)$name)]
-      img_uri <- plot_to_data_uri(function() draw_trajectory_plot(traj, labels))
+    #
+    # Revisao 1, Fase 7: each of these three scenario charts is now gated by
+    # its own checkbox (mod_report.R) - previously trajectory/sensitivity
+    # were always included whenever a scenario was selected, with no way to
+    # leave them out (the operational point that motivated this fase: "only
+    # the graph image has a which-charts-go-in-the-report control today").
+    # Defaults keep that prior always-on behavior for trajectory/sensitivity;
+    # the brand-new temporal section defaults off, same "opt-in" convention
+    # as every other disclosure introduced this revision.
+    if (isTRUE(include_trajectory_chart)) {
+      trajectory_sections <- lapply(selected_scenario_names, function(scenario_name) {
+        sc <- saved_scenarios[[scenario_name]]
+        steps <- sc$trajectory_steps %||% 20
+        traj <- simulate_trajectory_thresholded(
+          build_interaction_matrix(graph), sc$press, Th = build_threshold_matrix(graph), steps = steps
+        )
+        labels <- V(graph)$label[match(colnames(traj), V(graph)$name)]
+        img_uri <- plot_to_data_uri(function() draw_trajectory_plot(traj, labels))
 
-      tagList(
-        tags$h4(scenario_name),
-        tags$img(class = "report-graph-image", src = img_uri),
-        caption_tag(
-          "Figure", next_figure_n(),
-          sprintf(
-            "How \"%s\"'s effect evolves over %d simulated steps - useful mainly when the network's feedback loops aren't stable, since the equilibrium number alone is then only a directional estimate.",
-            scenario_name, steps
+        tagList(
+          tags$h4(scenario_name),
+          tags$img(class = "report-graph-image", src = img_uri),
+          caption_tag(
+            "Figure", next_figure_n(),
+            sprintf(
+              "How \"%s\"'s effect evolves over %d simulated steps - useful mainly when the network's feedback loops aren't stable, since the equilibrium number alone is then only a directional estimate.",
+              scenario_name, steps
+            )
           )
         )
-      )
-    })
+      })
 
-    sections <- c(sections, list(
-      tags$h3("How the effect evolves over time"),
-      tagList(trajectory_sections)
-    ))
+      sections <- c(sections, list(
+        tags$h3("How the effect evolves over time"),
+        tagList(trajectory_sections)
+      ))
+    }
 
-    sensitivity_sections <- lapply(selected_scenario_names, function(scenario_name) {
-      sc <- saved_scenarios[[scenario_name]]
-      top <- utils::head(sc$sensitivity[order(-sc$sensitivity$influence), c("link", "weight", "confidence", "influence")], 5)
-      names(top) <- c("Link", "Weight", "Confidence", "Influence")
-      img_uri <- plot_to_data_uri(function() draw_sensitivity_plot(sc$sensitivity, top_n = 10))
+    if (isTRUE(include_sensitivity_chart)) {
+      sensitivity_sections <- lapply(selected_scenario_names, function(scenario_name) {
+        sc <- saved_scenarios[[scenario_name]]
+        top <- utils::head(sc$sensitivity[order(-sc$sensitivity$influence), c("link", "weight", "confidence", "influence")], 5)
+        names(top) <- c("Link", "Weight", "Confidence", "Influence")
+        img_uri <- plot_to_data_uri(function() draw_sensitivity_plot(sc$sensitivity, top_n = 10))
 
-      tagList(
-        tags$h4(scenario_name),
-        tags$img(class = "report-graph-image", src = img_uri),
-        caption_tag(
-          "Figure", next_figure_n(),
-          sprintf("For \"%s\", which edges' weight would move its equilibrium effect the most if bumped up 10%% (top 10, ranked highest first).", scenario_name)
+        tagList(
+          tags$h4(scenario_name),
+          tags$img(class = "report-graph-image", src = img_uri),
+          caption_tag(
+            "Figure", next_figure_n(),
+            sprintf("For \"%s\", which edges' weight would move its equilibrium effect the most if bumped up 10%% (top 10, ranked highest first).", scenario_name)
+          ),
+          report_html_table(top),
+          caption_tag(
+            "Table", next_table_n(),
+            sprintf(
+              "For \"%s\", the edges whose weight - if bumped up 10%% - would move its equilibrium effect the most, ranked highest first. Worth double-checking these estimates first if you're unsure about them.",
+              scenario_name
+            )
+          )
+        )
+      })
+
+      sections <- c(sections, list(
+        tags$h3("Which edges matter most (top 5 per scenario)"),
+        tagList(sensitivity_sections)
+      ))
+    }
+
+    # Revisao 1, Fase 7: temporal simulation section - one storyboard + one
+    # window-by-window table per selected scenario. Re-simulates from
+    # sc$p_D/sc$press/sc$temporal_* (captured at "Save this scenario" time,
+    # R/modules/mod_responses.R) rather than storing the whole windows x
+    # nodes history in the scenario object, same "recompute from stored
+    # config" pattern already used for the trajectory chart above. The
+    # layout is computed once (not per scenario) - every panel of every
+    # scenario's storyboard shares the same node positions as the Graph tab.
+    if (isTRUE(include_temporal_section)) {
+      temporal_layout <- compute_graph_layout(graph_to_nodes(graph), schema)
+
+      temporal_sections <- lapply(selected_scenario_names, function(scenario_name) {
+        sc <- saved_scenarios[[scenario_name]]
+        tr <- simulate_temporal_pair(
+          graph, sc$p_D, sc$press,
+          windows = sc$temporal_windows %||% 5,
+          mode_D = sc$temporal_mode_pressure %||% "permanent",
+          mode_R = sc$temporal_mode_response %||% "impulse"
+        )
+
+        table_df <- format_temporal_table(graph, tr)
+        table_tag <- if (nrow(table_df) == 0) {
+          tags$p("No Impact factors in this network yet.")
+        } else {
+          table_df$id <- NULL
+          names(table_df) <- c("Impact", "Window", "Baseline", "Scenario", "Verdict")
+          tagList(
+            report_html_table(table_df),
+            caption_tag(
+              "Table", next_table_n(),
+              sprintf(
+                "For \"%s\": how each Impact factor changes window by window, comparing a baseline run (pressure only) against the scenario run (pressure and response together) over %d discrete windows.",
+                scenario_name, tr$windows
+              )
+            )
+          )
+        }
+
+        img_uri <- plot_to_data_uri(
+          function() draw_temporal_storyboard(graph, temporal_layout, tr$scenario),
+          width = 900, height = 900
+        )
+
+        tagList(
+          tags$h4(scenario_name),
+          table_tag,
+          tags$img(class = "report-graph-image", src = img_uri),
+          caption_tag(
+            "Figure", next_figure_n(),
+            sprintf(
+              "For \"%s\": one panel per discrete time window (same layout throughout) - node color shows whether that factor increased (redder) or decreased (bluer) from zero in this scenario, size shows how large the change is.",
+              scenario_name
+            )
+          )
+        )
+      })
+
+      sections <- c(sections, list(
+        tags$h2("Temporal simulation (discrete windows)"),
+        tags$p(
+          "Runs the pressure and response scenarios forward window by window instead of reading a single instant -",
+          "useful when a response might, windows later, become a new pressure itself."
         ),
-        report_html_table(top),
-        caption_tag(
-          "Table", next_table_n(),
-          sprintf(
-            "For \"%s\", the edges whose weight - if bumped up 10%% - would move its equilibrium effect the most, ranked highest first. Worth double-checking these estimates first if you're unsure about them.",
-            scenario_name
-          )
-        )
-      )
-    })
-
-    sections <- c(sections, list(
-      tags$h3("Which edges matter most (top 5 per scenario)"),
-      tagList(sensitivity_sections)
-    ))
+        tagList(temporal_sections)
+      ))
+    }
   }
 
   if (isTRUE(include_references)) {

@@ -2344,9 +2344,58 @@ motor temporal.
   fixes. Suíte `testthat` ganhou 1 teste novo em `test-temporal.R` (26
   assertivas no total) e a suíte completa + checagem de sintaxe seguem
   limpas.
-- [ ] **Fase 7** — relatório: seção nova pra leitura temporal +
-  checkboxes pra escolher quais gráficos de cenário entram (hoje só
-  imagens do grafo têm essa seleção).
+- [x] **Fase 7 concluída** — relatório. Duas mudanças em
+  `R/report.R`/`R/modules/mod_report.R`:
+  - **Seleção de gráficos de cenário** (ponto operacional (b) da Revisão
+    1): nova caixa "Scenario charts" na aba Report, com 3 checkboxes —
+    "How the effect evolves over time" (trajetória, default ligado — mesmo
+    comportamento de sempre, que nunca teve como ser desligado até agora),
+    "Which edges matter most" (sensibilidade, default ligado, mesmo
+    motivo) e "Temporal simulation (discrete windows)" (novo, default
+    **desligado** — mesma convenção "opt-in" de todo disclosure novo desta
+    revisão). `build_full_report_html()` ganhou
+    `include_trajectory_chart`/`include_sensitivity_chart`/
+    `include_temporal_section` (todos com o mesmo default da UI), cada um
+    envolvendo o bloco de seção correspondente num `if (isTRUE(...))` —
+    nenhuma mudança de comportamento pra quem não mexer nos checkboxes
+    novos (os dois primeiros continuam ligados por padrão).
+  - **Seção "Temporal simulation (discrete windows)"**: uma subseção por
+    cenário selecionado, com a tabela "How each Impact changes, window by
+    window" (mesma `format_temporal_table()` da tela) e a prancha de
+    grafos (`draw_temporal_storyboard()`, `R/scenario_plots.R`, via
+    `plot_to_data_uri()` — mesmo padrão já usado pelos gráficos de
+    trajetória/sensibilidade). Reaproveita `sc$p_D`/`sc$press` já
+    guardados no cenário salvo — não guarda o histórico completo
+    (janelas × nós) no objeto do cenário, só os 3 novos campos que faltam
+    pra reproduzi-lo: `sc$temporal_windows`/`sc$temporal_mode_pressure`/
+    `sc$temporal_mode_response`, capturados em "Save this scenario"
+    (`mod_responses.R`) com o mesmo padrão já usado por
+    `sc$trajectory_steps` — configurado na tela vira o que é salvo, sem
+    precisar guardar o resultado inteiro. O layout da prancha
+    (`compute_graph_layout(graph_to_nodes(graph), schema)`) é calculado
+    uma vez só, fora do loop por cenário — todo painel de toda prancha de
+    todo cenário selecionado compartilha as mesmas posições de nó.
+
+  Testado ponta a ponta rodando o app de verdade contra
+  `docs/example_fisheries.idpsir.json`: Overfishing (pressão) + Fishing
+  quota policy (resposta) aplicados e salvos como "Scenario 1"; na aba
+  Report, "Scenario 1" selecionado e "Temporal simulation" ligado — HTML
+  baixado (via `fetch()` direto na URL do `downloadHandler`, mesmo truque
+  de sempre) contém a seção "Temporal simulation (discrete windows)", a
+  tabela com as colunas Impact/Window/Baseline/Scenario/Verdict, e uma
+  imagem `<img>` real (~11,7 KB de base64, decodificada com sucesso) —
+  junto com "How the effect evolves over time"/"Which edges matter most"
+  (ambos ligados por padrão) e todas as seções pré-existentes
+  ("Response sufficiency"/"Scenarios compared"), sem regressão. Desligar
+  os checkboxes de trajetória e sensibilidade e gerar de novo: as duas
+  seções desaparecem do HTML (confirmado via busca de texto), a seção
+  temporal continua presente, contagem de "Figure" caiu de 3 pra 1 e de
+  "Table" de 10 pra 9 — prova de que os 3 toggles de fato controlam o
+  conteúdo, não só existem na tela. Sem erro no console do navegador nem
+  do servidor em nenhum passo. Sem teste `testthat` novo (este arquivo
+  não tem suíte dedicada — verificado só via app real, mesmo padrão já
+  usado pras fases anteriores do relatório); suíte completa (171
+  assertivas) e checagem de sintaxe seguem limpas.
 - [ ] **Fase 8** — corte do motor antigo (equilíbrio/estabilidade/
   trajetória-linear/robustez antiga saem da tela e do relatório) — mantém
   `self_regulation_diagonal()`/`build_interaction_matrix()`/
