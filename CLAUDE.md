@@ -231,6 +231,78 @@ Checagem rápida de sintaxe sem subir o app:
   seção "Response sufficiency" do relatório (`R/report.R`), pra um número
   nunca poder divergir entre tela e relatório exportado (mesmo raciocínio já
   usado por `R/scenario_plots.R` pros gráficos de trajetória/sensibilidade).
+- `R/temporal.R` → Revisão 1, Fase 4: motor **temporal opcional de janelas
+  discretas** — descoberto necessário numa conversa longa com o usuário
+  revisando `manuscrito/gnanapragasam_2026.pdf` (Gnanapragasam et al. 2026,
+  Marine Policy): a leitura estática de `sufficiency()` responde "a
+  resposta cobre a piora?" num único instante, mas o artigo mostra
+  auxílios pós-desastre (respostas a um Impacto de perda de renda) que,
+  janelas depois, viram eles mesmos uma força de pressão nova — um efeito
+  indireto invisível numa leitura de instante único. Deliberadamente
+  **opcional e aditivo**: não exige nenhum dado a mais do usuário pra quem
+  só quer a leitura estática, e não busca convergência/equilíbrio (ao
+  contrário do motor antigo) — roda um número fixo de janelas e reporta o
+  que aconteceu em cada uma, sem perguntar se a rede "se assenta".
+
+  Equação por nó $i$, por janela $t$:
+  $x_i(t{+}1) = x_i(t) + \text{growth\_rate}_i \cdot x_i(t) + \sum_j
+  \text{gate}_{ji}(t)\cdot W[i,j]\cdot x_j(t) + p_i(t)$ — `W =
+  build_interaction_matrix(g)` (`R/loop_analysis.R`, já inclui a
+  autorregulação na diagonal desde a Fase 9), então **não há termo
+  separado de autorregulação aqui**: somar de novo contaria o mesmo
+  efeito duas vezes. `growth_rate` é deliberadamente um termo à parte —
+  tendência exógena do próprio nó (crescimento populacional, tendência de
+  consumo), independente da estrutura do grafo, ao contrário da
+  autorregulação (que é sobre como o nó reage ao próprio desvio) e das
+  arestas (sobre como um nó reage a outro nó). `build_growth_rate_vector(g)`/
+  `build_reference_values(g)` leem `growth_rate`/`reference_value` (nós)
+  tolerantemente — a coluna ainda não existe no schema (chega só na Fase
+  5), então devolvem 0/1 pra todo mundo, comportamento idêntico ao de
+  hoje, mesmo padrão NULL-safe já usado por `self_regulation_diagonal()`.
+  `apply_threshold_gate()` reaproveita a mesma técnica vetorizada de
+  `simulate_trajectory_thresholded()` (replicar o estado da origem por
+  coluna, comparar contra a matriz de threshold), só que a comparação é
+  relativa ao `reference_value` da origem, não absoluta — e como
+  `reference_value` default é 1, o motor já nasce "pronto pra relativo"
+  sem mudança nenhuma quando a Fase 5 adicionar a coluna de verdade.
+  `simulate_temporal_pair(g, p_D, p_R, windows, mode_D, mode_R)` roda duas
+  rodadas lado a lado — baseline (só `p_D`) e cenário (`p_D+p_R` juntos,
+  **nunca** separados e somados depois: o threshold-gating quebra a
+  linearidade que a decomposição `worsening+mitigation` da leitura
+  estática depende) — cada perturbação podendo ser impulso (ativa só na
+  janela 1) ou permanente (ativa toda janela). `format_temporal_table()`
+  gera Impacto = $\max(0, x_i(t))$ por janela nas duas rodadas, com
+  veredito (Neutralized/Partial/Failure-worsened) comparando as duas.
+
+  **Achado real, testado antes de aceitar o design da Fase 5 (não
+  assumido)**: reaproveitar as magnitudes do autorregulação antigo
+  (`self_regulation_magnitudes()`, none=0/low=-0,5/medium=-1/high=-2)
+  direto nesta equação de diferença discreta **oscila em vez de decair**.
+  $x(t{+}1) = (1+sr)\cdot x(t)$ só decai suavemente quando $|1+sr|<1$; com
+  $sr=-2$ ("high"), $(1+sr)=-1$ exatamente — o estado flip-flopa de sinal
+  pra sempre na mesma magnitude, nunca decaindo rumo a zero (confirmado
+  rodando um impulso de -1 num nó com autorregulação "high": vira
+  -1,1,-1,1,-1,... eternamente). As magnitudes antigas foram calibradas
+  pro Euler *implícito* do motor antigo (`solve(I - step_size*A)`), não
+  pra uma diferença *explícita* direta — reforça, com número real e não
+  só preferência de UX, por que a Fase 5 precisa mesmo trocar
+  autorregulação pra uma fração contínua em $[0,1)$ aplicada como
+  `x(t+1) -= self_regulation*x(t)` (sempre negativada internamente), o
+  que garante decaimento geométrico limpo em vez de oscilação.
+
+  Testado via `scratchpad/test_temporal.R`/`test_temporal2.R` (standalone,
+  antes de virar teste permanente) contra uma rede de 5 nós construída à
+  mão (D1→P1→S1→I1, R1→S1 mitiga, R1→D1 fecha o ciclo "resposta vira nova
+  pressão", o mesmo padrão de fixture já usado no Marco A/D da Fase 5 pra
+  provar uma propriedade matemática específica em vez de depender de rede
+  de exemplo externa): com resposta em modo permanente, o benefício
+  relativo da resposta sobre o Impacto erode de neutralização total
+  (janela 2) pra mitigação só parcial (janela 8, razão cenário/baseline
+  subindo de 0 pra 0,6) — o "resposta virando nova pressão" reproduzido
+  numericamente, não só narrado. `tests/testthat/test-temporal.R` novo (21
+  assertivas, incluindo o achado da oscilação acima como teste de
+  regressão formal) — suíte completa limpa. App inalterado, zero mudança
+  de tela ainda (mesmo padrão da Fase 1 da suficiência estática).
 - `R/scenario_plots.R` → fast-follow "gráficos editáveis/baixáveis" (pedido do
   usuário ao revisar a aba Scenarios): `draw_trajectory_plot()`/
   `draw_sensitivity_plot()`, funções puras de desenho (base R
@@ -2062,14 +2134,32 @@ round-trip de `scenario_state` em `test-io.R` e dois testes das novas
 funções de formatação em `test-sufficiency.R` (98 assertivas no total);
 checagem de sintaxe limpa.
 
-**Revisão 1 em andamento — modelo de suficiência de resposta, na branch
-`fase-10-suficiencia`** (documento externo trazido pelo usuário, plano de
-6 fases em `.claude/plans/wondrous-cuddling-eclipse.md`, ver "Estado atual"
-acima pro achado que motivou a revisão — inversão de sinal real na rede de
-Mangi et al. 2007 sob o motor antigo). Substitui `press_perturbation()`
-(equilíbrio dinâmico, exige estabilidade) por `propagate()`
-(`R/sufficiency.R`, efeito propagado e descontado, sempre bem definido) como
-leitura principal da aba Scenarios:
+**Revisão 1, segunda onda — motor temporal de janelas discretas.** Depois
+da Fase 3, uma conversa longa com o usuário (trazendo
+`manuscrito/gnanapragasam_2026.pdf`, Gnanapragasam et al. 2026, Marine
+Policy) abriu um escopo maior do que o plano original de 6 fases previa —
+plano reescrito em `.claude/plans/wondrous-cuddling-eclipse.md` (a seção
+"Histórico" no fim do arquivo preserva o plano original das Fases 1-3, já
+executado). Decisões-chave dessa conversa: (1) State não deve carregar
+sinal no nome/rótulo — é variável neutra medida, sinal vem das arestas
+("Coral degradation" no exemplo do Mangi é na verdade um Impacto
+disfarçado de Estado, motivando trocar a rede de exemplo); (2)
+autorregulação vira fração contínua $[0,1)$ em vez de categórico
+none/low/medium/high, e **não** é removida do schema (reverte decisão
+anterior) — é reaproveitada pelo motor temporal novo; (3) dois atributos
+novos em Nós — `growth_rate` (tendência exógena própria do nó) e
+`reference_value` (escala de referência, torna `threshold` relativo em
+vez de absoluto); (4) `threshold` (aresta) passa a ser fração 0-1 do
+`reference_value` da origem, restrito a arestas com origem State; (5)
+`temporal_scale` aposentado (nunca entrou em cálculo nenhum, fica
+redundante com `growth_rate`/autorregulação agora numéricos);
+`uncertainty`/`controllability` ficam categóricos por ora. Rede de
+exemplo troca de Mangi et al. 2007 pra Gnanapragasam et al. 2026 — mostra
+um auxílio (Resposta a um Impacto de perda de renda) que, janelas depois,
+vira ele mesmo uma força de pressão nova (mais barcos entregues como
+auxílio → mais esforço de pesca), o efeito indireto que motivou todo o
+motor temporal.
+
 - [x] **Fase 1** — motor matemático (`R/sufficiency.R`), aditivo, zero
   mudança visível (concluído, ver acima).
 - [x] **Fase 2** — UI nova ("Pressure scenario" + controle de alcance + as
@@ -2080,12 +2170,45 @@ leitura principal da aba Scenarios:
   cenários + `c` no savepoint (concluído, ver acima — um bug real de `[[`
   em vetor atômico corrigido ao testar o carregamento de um savepoint com
   cenário salvo).
-- [ ] **Fase 4** — corte: remove UI/relatório do motor antigo, renomeia
-  `mod_responses.R`→`mod_scenarios.R`, remove `self_regulation` de
-  `schema.R`/`validate.R`/`mod_data.R`.
-- [ ] **Fase 5** — promove exemplo de Mangi a `docs/`, reescreve tutorial e
-  README pra "os dois empurrões", decide o que fazer com testes órfãos.
-- [ ] **Fase 6** — verificação final, `CLAUDE.md`, commit/push/merge.
+- [x] **Fase 4** — motor temporal (`R/temporal.R`, ver acima) — concluído,
+  aditivo, zero mudança de tela ainda. Achado real testado antes de aceitar
+  o design da Fase 5: reaproveitar as magnitudes antigas de autorregulação
+  (-0,5/-1/-2) na equação de diferença discreta nova **oscila em vez de
+  decair** (confirmado rodando um impulso com autorregulação "high": vira
+  -1,1,-1,1,... eternamente) — motivo real, não só preferência de UX, pra
+  Fase 5 converter autorregulação pra fração contínua $[0,1)$. 21
+  assertivas novas em `tests/testthat/test-temporal.R`, suíte completa
+  (147 assertivas) e checagem de sintaxe limpas.
+- [ ] **Fase 5** — schema/dados: `growth_rate`/`reference_value` opcionais
+  em Nós; `threshold` vira fração 0-1 restrita a arestas com origem State;
+  autorregulação vira `numericInput` 0-1 (era `selectInput`
+  none/low/medium/high), `self_regulation_magnitudes()` removida;
+  `temporal_scale` aposentado do formulário/schema/CSV (leitura tolerante
+  mantida pra savepoint antigo).
+- [ ] **Fase 6** — UI da leitura temporal na aba Scenarios: disclosure
+  opcional, nº de janelas, impulso/permanente por pressão/resposta,
+  indicador de progresso (`withProgress()`/`incProgress()`, pedido
+  explícito do usuário pra deixar claro que o app não travou) e uma
+  "prancha" de grafos por janela (`igraph::plot.igraph()`, mesmo layout
+  fixo em todas as janelas, cor/tamanho do nó variando por $x_i(t)$ — base
+  R, zero pacote novo, mesma filosofia de `R/scenario_plots.R`).
+- [ ] **Fase 7** — relatório: seção nova pra leitura temporal +
+  checkboxes pra escolher quais gráficos de cenário entram (hoje só
+  imagens do grafo têm essa seleção).
+- [ ] **Fase 8** — corte do motor antigo (equilíbrio/estabilidade/
+  trajetória-linear/robustez antiga saem da tela e do relatório) — mantém
+  `self_regulation_diagonal()`/`build_interaction_matrix()`/
+  `build_threshold_matrix()`, agora reaproveitadas pelo motor temporal.
+- [ ] **Fase 9** — exemplo Gnanapragasam (`data/`, `docs/`, savepoint,
+  tutorial, README) no lugar do Mangi.
+- [ ] **Fase 10** — verificação final, `CLAUDE.md`, commit/push/merge.
+
+Trilha operacional separada (independente, registrada no plano, encaixa
+quando quiser): arrastar nó livre no eixo X (`fixed.x` hardcoded em
+`R/graph.R`), layout circular não parece um círculo (suspeita de
+container retangular esticando a proporção, não confirmada ao vivo ainda),
+reordenar níveis do schema (`mod_data.R`'s "Add level" não tem edição
+nem tratamento de colisão pra um nível já existente).
 
 Pedido pelo usuário mas ainda não definido: "estrela"/"rosa" como layouts
 adicionais — precisa de uma conversa pra fixar o que cada termo significa
