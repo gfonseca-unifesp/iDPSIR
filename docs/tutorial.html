@@ -328,6 +328,23 @@
   table.fields tr:last-child td { border-bottom: none; }
   table.fields td.key { font-family: var(--font-mono); font-size: 13px; color: var(--accent-ink); white-space: nowrap; }
 
+  /* ---------- Figures ---------- */
+  .figure {
+    margin-top: 18px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--surface);
+    box-shadow: var(--shadow);
+    padding: 14px;
+  }
+  .figure img { display: block; width: 100%; height: auto; border-radius: 4px; }
+  .figure figcaption {
+    margin-top: 10px;
+    font-size: 13.5px;
+    color: var(--ink-muted);
+    line-height: 1.5;
+  }
+
   /* ---------- Schema table with real shapes ---------- */
   table.schema { width: 100%; border-collapse: collapse; font-size: 14px; background: var(--surface); }
   table.schema th, table.schema td { padding: 10px 14px; border-bottom: 1px solid var(--line); text-align: left; }
@@ -963,17 +980,24 @@ P1,S1,3,0.85,negative,monitoring</pre>
           <strong>fisher income loss</strong> — the human cost of a shrinking catch —
           not growing the fleet. This network takes that at face value: both aid
           programs (<strong>Response</strong>) link directly to Fisher income loss
-          (Impact), the thing they were actually designed to fix.</p>
-        <p>Separately, the number of fishers and boats on the water (Driver) has its
-          own, real, growing trend in the data — the paper doesn't pin down why, so
-          this network gives it a small standing <code>growth_rate</code> instead of
-          asserting a cause. That growth feeds fishing effort, depletes the fish stock,
-          and drives catch decline, income loss, and conflict with Indian fishermen — a
-          chain the aid, aimed only at compensating income directly, never touches. But
-          the aid isn't free of side effects either: replacement boats are
-          disproportionately motorized, and a growing motorized fleet accelerates the
+          (Impact), the thing they were actually designed to fix — and to <em>nothing
+          else</em>.</p>
+        <p>Everything else in the network is driven by the pressure side instead.
+          Fishing effort — pushed by population growth, demand growth, and the number
+          of fishers and boats (the latter given its own small standing
+          <code>growth_rate</code>, since the paper observes this trend without pinning
+          down a cause) — does two things: it depletes the fish stock (feeding catch
+          decline, income loss, and conflict with Indian fishermen), and it drives
+          fleet motorization directly, independent of any aid program. That growing
+          motorized fleet then compounds catch decline and conflict further, on top of
+          what the fish-stock route already causes, and separately accelerates the
           decline of traditional (non-motorized) fishing and the culture built around
-          it — an Impact the aid helps create by the very mechanism it uses to help.</p>
+          it. The result: the aid's own causal footprint and the pressure's causal
+          footprint don't overlap anywhere in this network.</p>
+        <figure class="figure">
+          <img src="example_gnanapragasam_network.png" alt="Network diagram of the Gnanapragasam example: Drivers on the left feeding Fishing effort, which feeds Fish stock and Fleet motorization, which together feed five Impacts; the two Response nodes link only to Fisher income loss.">
+          <figcaption><strong>Figure 1.</strong> The full network, colored by DPSIR category (see legend) and edge color by effect (red = positive, green = negative). Note how both Response nodes (purple, right) have exactly one outgoing edge each, both landing on Fisher income loss — nothing else in the diagram touches purple.</figcaption>
+        </figure>
         <div class="table-wrap">
           <table class="fields">
             <tr><th>Link</th><th>Effect</th><th>Confidence</th></tr>
@@ -981,24 +1005,24 @@ P1,S1,3,0.85,negative,monitoring</pre>
             <tr><td class="key">Fish demand growth → Fishing effort</td><td>positive</td><td>0.70</td></tr>
             <tr><td class="key">Fishers/boats → Fishing effort</td><td>positive</td><td>0.85</td></tr>
             <tr><td class="key">Fishing effort → Fish stock</td><td>negative</td><td>0.80</td></tr>
+            <tr><td class="key">Fishing effort → Fleet motorization</td><td>positive</td><td>0.60</td></tr>
             <tr><td class="key">Fish stock → Catch decline</td><td>negative</td><td>0.75</td></tr>
             <tr><td class="key">Fish stock → Fisher income loss</td><td>negative</td><td>0.65</td></tr>
             <tr><td class="key">Fish stock → Conflict with Indian fishermen</td><td>negative</td><td>0.50</td></tr>
+            <tr><td class="key">Fleet motorization → Catch decline</td><td>positive</td><td>0.50</td></tr>
+            <tr><td class="key">Fleet motorization → Conflict with Indian fishermen</td><td>positive</td><td>0.50</td></tr>
             <tr><td class="key">Fleet motorization → Traditional fishing decline</td><td>positive</td><td>0.60</td></tr>
             <tr><td class="key">Fleet motorization → Loss of traditional culture</td><td>positive</td><td>0.50</td></tr>
             <tr><td class="key">Aid (either program) → Fisher income loss</td><td>negative</td><td>0.60</td></tr>
-            <tr><td class="key">Aid (either program) → Fleet motorization</td><td>positive</td><td>0.50</td></tr>
           </table>
         </div>
         <p class="muted" style="font-size:14px; margin-top:10px">Both aid programs
-          (post-tsunami and post-war) link to the same two factors — Fisher income loss
-          directly, and fleet motorization as a side channel — with the post-war
-          program weighted slightly stronger on both links, reflecting it being the
-          larger of the two efforts. Neither aid program has any link into the number
-          of fishers/boats or the fish stock itself: that whole branch of the network,
-          and everything downstream of it, is completely outside what either program
-          can reach — by design, to keep the aid's own documented mechanism cleanly
-          separate from a growth trend the paper never attributes to it.</p>
+          (post-tsunami and post-war) link to exactly one factor — Fisher income loss —
+          with the post-war program weighted slightly stronger, reflecting it being the
+          larger of the two efforts. Neither aid program has any other link, direct or
+          indirect: everything else in the network (fishing effort, the fish stock, fleet
+          motorization, and the four other Impacts) is completely outside what either
+          program can reach, by construction.</p>
 
         <h3>Is the response enough?</h3>
         <p>The example savepoint already has this configured: a <strong>pressure
@@ -1011,25 +1035,24 @@ P1,S1,3,0.85,negative,monitoring</pre>
         <div class="table-wrap">
           <table class="fields">
             <tr><th>Impact</th><th>Worsening</th><th>Mitigation</th><th>Net</th><th>Neutralizes?</th></tr>
-            <tr><td class="key">Catch decline</td><td>1.500</td><td>0.000</td><td>1.500</td><td>No</td></tr>
+            <tr><td class="key">Catch decline</td><td>2.344</td><td>0.000</td><td>2.344</td><td>No</td></tr>
             <tr><td class="key">Fisher income loss</td><td>1.125</td><td>-2.250</td><td>-1.125</td><td><strong>Yes</strong> (x0.50)</td></tr>
-            <tr><td class="key">Conflict with Indian fishermen</td><td>0.750</td><td>0.000</td><td>0.750</td><td>No</td></tr>
-            <tr><td class="key">Traditional fishing decline</td><td>0.000</td><td>1.250</td><td>1.250</td><td>No</td></tr>
-            <tr><td class="key">Loss of traditional culture</td><td>0.000</td><td>0.938</td><td>0.938</td><td>No</td></tr>
+            <tr><td class="key">Conflict with Indian fishermen</td><td>1.313</td><td>0.000</td><td>1.313</td><td>No</td></tr>
+            <tr><td class="key">Traditional fishing decline</td><td>1.125</td><td>0.000</td><td>1.125</td><td>No</td></tr>
+            <tr><td class="key">Loss of traditional culture</td><td>0.844</td><td>0.000</td><td>0.844</td><td>No</td></tr>
           </table>
         </div>
-        <p>Three different stories in one table. <strong>Fisher income loss</strong> is
-          the only row with <em>negative</em> Mitigation — the aid genuinely helps, and
-          at these strengths it more than covers the worsening (Net negative,
-          Neutralizes: Yes, with half the combined strength already enough).
-          <strong>Catch decline</strong> and <strong>Conflict with Indian fishermen</strong>
-          show zero Mitigation — worsening carries straight through as Net, because
-          neither aid program has any causal path to them at all in this model: the
-          fish-stock branch is entirely outside their reach. And
-          <strong>Traditional fishing decline</strong> / <strong>Loss of traditional
-          culture</strong> show zero Worsening but <em>positive</em> Mitigation — the
-          pressure scenario above never touches them, they only move because the aid's
-          own side channel (fleet motorization) pushes them the wrong way.</p>
+        <p>Only one row has a non-zero Mitigation. <strong>Fisher income loss</strong>
+          is the response's sole target, and at these strengths it more than covers the
+          worsening (Net negative, Neutralizes: Yes, with half the combined strength
+          already enough). Every other Impact reads Mitigation exactly
+          <strong>0.000</strong>, not because the response fails against them, but
+          because it has no causal path to them at all — worsening carries straight
+          through as Net, untouched. Compare the Worsening column to the earlier design
+          of this same network (Catch decline 1.5, Conflict 0.75): both are noticeably
+          higher now, because Fleet motorization gives the pressure scenario a
+          <em>second</em> route into those two Impacts, on top of the Fish stock route
+          that was already there.</p>
 
         <div class="callout">
           <span class="dot"></span>
@@ -1038,8 +1061,9 @@ P1,S1,3,0.85,negative,monitoring</pre>
           sufficiency reading doesn't need one: the propagated effect above is still
           well-defined, which is exactly the point of building it this way. A response
           doesn't need to create a feedback loop for its effects to matter — and, as
-          the table above shows, a single response can help, be irrelevant, and hurt,
-          all in the same scenario, without any loop at all.</div>
+          the table above shows, a response can be a clean, unambiguous success on the
+          one thing it targets, while four other things get worse around it entirely
+          on their own.</div>
         </div>
 
         <h3>How confident is that, response by response?</h3>
@@ -1048,14 +1072,14 @@ P1,S1,3,0.85,negative,monitoring</pre>
           with Indian fishermen</strong>, <strong>Traditional fishing decline</strong>
           or <strong>Loss of traditional culture</strong> in any of 300 simulations
           that resample edge weights within their confidence range —
-          <strong>0%</strong> for all four, consistent with them being outside either
-          program's reach or actively worsened by it. <strong>Fisher income loss</strong>
-          is the only Impact where the two programs disagree with each other:</p>
+          <strong>0%</strong> for all four, consistent with the response having no path
+          to any of them. <strong>Fisher income loss</strong> is the only Impact either
+          program can touch at all, and they don't agree on how reliably:</p>
         <div class="table-wrap">
           <table class="fields">
             <tr><th>Response (alone, at 100%)</th><th>Neutralizes Fisher income loss</th></tr>
-            <tr><td class="key">Post-tsunami aid</td><td>25.7% of simulations</td></tr>
-            <tr><td class="key">Post-war aid</td><td>72.0% of simulations</td></tr>
+            <tr><td class="key">Post-tsunami aid</td><td>20.7% of simulations</td></tr>
+            <tr><td class="key">Post-war aid</td><td>68.3% of simulations</td></tr>
           </table>
         </div>
         <p>Post-war aid (the larger, more strongly-weighted program) is a substantially
@@ -1065,20 +1089,21 @@ P1,S1,3,0.85,negative,monitoring</pre>
           Fisher income loss reads <strong>Yes</strong> from c=0.2 up to c=0.65, then
           <strong>Borderline</strong> at c=0.8 — solid across most of the range, but not
           unconditionally. Every other Impact reads <strong>No</strong> at every
-          setting.</p>
+          setting, for the same structural reason as above.</p>
 
         <h3>Reach</h3>
-        <p>The same response, reaching two different places by two different routes:
-          <strong>4 factors reached, including 3 of 5 Impacts</strong> — Fisher income
-          loss directly (the intended target, one hop, nothing further downstream), and
-          Traditional fishing decline / Loss of traditional culture indirectly through
-          fleet motorization (the side channel, two hops). <strong>Catch decline</strong>
-          and <strong>Conflict with Indian fishermen</strong> are outside this response's
-          reach entirely — no combination of strength or "how far to trace the effect"
-          can ever make it touch them, because there is no edge, direct or indirect,
-          from either aid program into the fish-stock branch. That's not a limitation of
-          the analysis; it's the network telling you, precisely, what this response can
-          and cannot possibly influence, independent of magnitude.</p>
+        <p>This is where the redesigned network reads most starkly: <strong>1 factor
+          reached, including 1 of 5 Impacts</strong>. Not "reached weakly" or "reached
+          indirectly" — reached, full stop, and only that one. No combination of
+          strength or "how far to trace the effect" can ever make either aid program
+          touch Catch decline, Conflict with Indian fishermen, Traditional fishing
+          decline, or Loss of traditional culture, because there is no edge, direct or
+          indirect, from either Response node into anything but Fisher income loss.
+          That's not a limitation of the analysis; it's the network telling you,
+          precisely and quantitatively, what this response can and cannot possibly
+          influence, independent of magnitude — a response can be perfectly targeted
+          and still leave 80% of a system's problems completely unaddressed, simply
+          because nothing connects it to them.</p>
 
         <h3>Temporal simulation: does "Yes" last?</h3>
         <p>The sufficiency reading above is a single instant — everything happening at
@@ -1094,13 +1119,13 @@ P1,S1,3,0.85,negative,monitoring</pre>
           <table class="fields">
             <tr><th>Impact</th><th>Window 5 (baseline / scenario)</th><th>Window 10 (baseline / scenario)</th><th>Window 15 (baseline / scenario)</th></tr>
             <tr><td class="key">Fisher income loss</td><td>52.3 / 34.3</td><td>1,611.1 / 1,570.6</td><td>8,212.9 / 8,150.0</td></tr>
-            <tr><td class="key">Catch decline</td><td>54.8 / 54.8</td><td>2,133.2 / 2,133.2</td><td>10,935.6 / 10,935.6</td></tr>
-            <tr><td class="key">Conflict with Indian fishermen</td><td>34.9 / 34.9</td><td>1,074.1 / 1,074.1</td><td>5,475.3 / 5,475.3</td></tr>
-            <tr><td class="key">Traditional fishing decline</td><td>0.0 / 29.6</td><td>0.0 / 171.8</td><td>0.0 / 420.5</td></tr>
-            <tr><td class="key">Loss of traditional culture</td><td>0.0 / 22.2</td><td>0.0 / 128.9</td><td>0.0 / 315.4</td></tr>
+            <tr><td class="key">Catch decline</td><td>96.8 / 96.8</td><td>3,865.3 / 3,865.3</td><td>22,010.0 / 22,010.0</td></tr>
+            <tr><td class="key">Conflict with Indian fishermen</td><td>62.9 / 62.9</td><td>2,228.8 / 2,228.8</td><td>12,858.2 / 12,858.2</td></tr>
+            <tr><td class="key">Traditional fishing decline</td><td>56.0 / 56.0</td><td>2,309.5 / 2,309.5</td><td>14,765.8 / 14,765.8</td></tr>
+            <tr><td class="key">Loss of traditional culture</td><td>42.0 / 42.0</td><td>1,732.1 / 1,732.1</td><td>11,074.4 / 11,074.4</td></tr>
           </table>
         </div>
-        <p>Four distinct behaviors, all visible in the same table (values are abstract
+        <p>One row tells a different story than the other four (values are abstract
           model units, not real catch/income figures — what matters is the shape and
           the comparison, not the raw size). <strong>Fisher income loss</strong> starts
           strong — at window 5 the aid cuts it by about a third (34.3 against a
@@ -1109,17 +1134,21 @@ P1,S1,3,0.85,negative,monitoring</pre>
           income loss worse; it simply has a fixed, one-time effect against a driver
           (the growing fleet) that keeps compounding every window, so its relative
           contribution fades toward irrelevance without ever crossing back to "worse
-          than doing nothing." <strong>Catch decline</strong> and <strong>Conflict
-          with Indian fishermen</strong> are <em>identical</em> between baseline and
-          scenario at every single window — exactly what "outside this response's
-          reach" (above) predicts: the aid cannot touch them, not even by accident, no
-          matter how much time passes. <strong>Traditional fishing decline</strong> and
-          <strong>Loss of traditional culture</strong> are the mirror image: their
-          baseline column is <strong>exactly zero, every window</strong> — nothing in
-          the pressure scenario touches fleet motorization — so whatever appears in the
-          scenario column exists <em>purely</em> because of the aid, and it keeps
-          growing for as long as the simulation runs. Scroll down to the network
-          storyboard to watch all four patterns play out visually, window by window.</p>
+          than doing nothing." The other four — <strong>Catch decline</strong>,
+          <strong>Conflict with Indian fishermen</strong>, <strong>Traditional fishing
+          decline</strong>, and <strong>Loss of traditional culture</strong> — are all
+          <em>identical</em> between baseline and scenario, at every single window, and
+          they all grow (Traditional fishing decline and Loss of traditional culture
+          used to have a zero baseline in the network's earlier design, when the aid
+          still had a side channel into fleet motorization; now that channel is gone,
+          they're driven by the same pressure trend as everything else, so they're
+          never zero once fishing effort starts moving fleet motorization). The
+          storyboard below plots exactly this: four nodes reddening in lockstep, and
+          one node — Fisher income loss — visibly lagging behind them.</p>
+        <figure class="figure">
+          <img src="example_gnanapragasam_storyboard.png" alt="Storyboard of 16 panels (windows 0 through 15) showing the network's node colors shifting from white toward red as the simulation progresses, with the five Impact nodes reddening at different rates.">
+          <figcaption><strong>Figure 2.</strong> The same simulation as the table above, window by window, colored by how far each factor has moved from zero (red = increased, blue = decreased, scale on the right) and sized by magnitude. This is exactly what the app's own "Network storyboard" (in the temporal disclosure) produces for this scenario — generated here as a static image so it's visible without loading the app.</figcaption>
+        </figure>
 
         <div class="callout">
           <span class="dot"></span>
@@ -1128,19 +1157,20 @@ P1,S1,3,0.85,negative,monitoring</pre>
           demand, and the fishers/boats trend all keep compounding every window) — by
           design, so the shape of the trend is visible within a short, readable table.
           Treat this as a demonstration of <em>direction and relative comparison</em>
-          (is the gap closing or opening? is a row zero or not?), not a forecast of
-          real catch numbers over real years.</div>
+          (is the gap closing or opening? is a row identical across both columns or
+          not?), not a forecast of real catch numbers over real years.</div>
         </div>
 
         <h3>A threshold worth knowing about</h3>
         <p>The <strong>Fish stock → Catch decline</strong> edge has a
           <code>threshold</code> set: 0.15 of the stock's <code>reference_value</code>
-          (100 in this network) — so catch decline only starts responding once the
-          simulated stock loss passes 15 points, instead of scaling from the very first
-          unit of decline. That's a real fisheries phenomenon (a collapse threshold),
-          and it's part of why, in the table above, Catch decline reads exactly zero at
-          windows 0–3 even though the fish stock itself is already declining
-          underneath it.</p>
+          (100 in this network) — so that particular route into catch decline only
+          starts responding once the simulated stock loss passes 15 points, instead of
+          scaling from the very first unit of decline. That's a real fisheries
+          phenomenon (a collapse threshold). It only gates the Fish stock route,
+          though — the Fleet motorization route into Catch decline has no threshold, so
+          in the table above Catch decline is already moving by window 4, faster than
+          it would if the fish-stock route were carrying the whole effect alone.</p>
 
         <div class="callout warn">
           <span class="dot"></span>

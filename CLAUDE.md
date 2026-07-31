@@ -2788,6 +2788,95 @@ todas essas mudanças, ambas limpas. Passagem completa no navegador
 cobrindo o redesenho da rede + os 3 fixes + as 2 features do storyboard,
 sem erro no console do navegador nem do servidor em nenhum passo.
 
+**Segunda rodada no exemplo Gnanapragasam: canal lateral da resposta
+removido, e a rede ganha suporte gráfico direto no tutorial.** Pedido do
+usuário testando variações da rede ao vivo (ver sessão): desligar
+`R1→S2`/`R2→S2` (o aid deixa de ter QUALQUER ligação com a frota
+motorizada) e ligar três arestas novas — `Fishing effort→Fleet
+motorization` (positive, 1.5/0.6), `Fleet motorization→Catch decline`
+(positive, 1.5/0.5) e `Fleet motorization→Conflict with Indian
+fishermen` (positive, 1/0.5) — pra ver o efeito. Testado primeiro num
+script standalone antes de aceitar como oficial (mesmo padrão de toda
+mudança de rede nesta revisão): a suficiência estática de **Fisher
+income loss** não muda em nada (`-1.125` líquido, `Yes x0.50`) — seu
+único caminho causal continua intocado — mas **Catch decline** e
+**Conflict with Indian fishermen** pioram bem mais (1.5→2.344,
+0.75→1.313: `Fleet motorization` virou uma segunda rota pra esses dois
+Impactos, empilhada em cima da rota via `Fish stock` que já existia), e
+**Traditional fishing decline**/**Loss of traditional culture** passam a
+ter *worsening* não-zero (1.125/0.844) em vez de zero — deixaram de ser
+efeito colateral exclusivo da resposta e passaram a ser movidos pela
+mesma cadeia de pressão que tudo mais.
+
+A mudança mais forte é no **Reach**: caiu de "4 factors reached,
+including 3 of 5 Impacts" pra **"1 factor reached, including 1 of 5
+Impacts"** — sem nenhuma ligação lateral, a resposta só consegue
+influenciar Fisher income loss, nunca mais nada, independente de força
+ou do quanto "how far to trace the effect" for esticado. Confiança de
+sinal muda ligeiramente (Post-tsunami 25.7%→20.7%, Post-war 72%→68.3%)
+mesmo o caminho pra I2 sendo idêntico — esperado, não bug: `ρ(W)`
+(usado no `λ=c/ρ(W)` de `propagate()`) é uma propriedade **global** da
+matriz, então adicionar arestas em outro ramo desloca ligeiramente a
+escala usada em toda reamostragem, inclusive na de I2 (mesmo raciocínio
+já documentado pro item 6.4 sobre semente fixa × ordem das arestas —
+aqui é ordem das arestas × valor da confiança, não da semente).
+
+`data/gnanapragasam2026_edges.csv` editado (3 arestas trocadas por 3
+novas, mesma contagem de 14), `docs/example_gnanapragasam.idpsir.json`
+regenerado (mesmo `scenario_state` de antes — D1+D2 pressão/R1+R2
+resposta a 100%, `effect_horizon=0.5`; D3 continua de fora do savepoint
+de propósito, é um passo guiado só na seção temporal).
+
+**Suporte gráfico no tutorial**, pedido explícito do usuário ("acredito
+que seja interessante acrescentar um suporte gráfico da rede e da
+evolução da rede"): duas imagens estáticas novas, geradas por script
+(não a partir do pipeline `html2canvas` do navegador, que exige o app
+rodando) — `docs/example_gnanapragasam_network.png` (diagrama da rede
+via `igraph::plot.igraph()`, nós coloridos por categoria DPSIR via
+`schema_colors()`, arestas coloridas por `interaction_type` via
+`get_interaction_type_colors()` já existente em `R/graph.R`, legenda de
+categoria + legenda de efeito) e
+`docs/example_gnanapragasam_storyboard.png` (a prancha temporal de
+verdade — `draw_temporal_storyboard()`, `R/scenario_plots.R`, reaproveitada
+tal qual, mesmo cenário do tutorial: D1+D2+D3@30% permanente, R1+R2
+impulso, 15 janelas — "isso é exatamente o que o app mostra", não uma
+segunda implementação). `vertex.shape="circle"` em ambas as imagens pelo
+mesmo motivo já documentado em `draw_temporal_storyboard()`: os nomes de
+forma do schema (square/triangle/dot/diamond/star, vocabulário do
+vis.js) não são formas válidas de `igraph::plot.igraph()`. Nova classe
+CSS `.figure`/`figcaption` em `docs/tutorial.html` (não existia nenhum
+estilo de imagem no tutorial até agora), seguindo o mesmo padrão visual
+de `.table-wrap`/`.code-card` já usado no resto da página.
+
+Seção "Worked example" reescrita por completo com os números da rede
+nova: tabela de arestas, tabela de suficiência, tabela de confiança
+(20.7%/68.3%), seção Reach (1 de 5, não mais 4/3-de-5), tabela temporal
+completa (todas as 5 linhas agora batendo — 4 delas idênticas
+baseline=cenário em toda janela, só Fisher income loss diverge). Uma
+afirmação nova no texto ("Catch decline já se move na janela 4, mais
+rápido do que se a rota do estoque de peixe carregasse o efeito
+sozinha") foi **verificada antes de publicar**, não assumida: script
+comparando a rede com e sem a aresta `Fleet motorization→Catch decline`
+confirma que sem ela Catch decline fica em zero até a janela 4 (só
+começa na 5), com ela começa na própria janela 4 — a alegação bate.
+`README.md` (parágrafo do exemplo) atualizado no mesmo sentido.
+
+Verificado ponta a ponta rodando o app de verdade com o savepoint
+regenerado: "Everything is valid" nos 13 nós/14 arestas, cenário
+pré-configurado reproduzindo exatamente a Tabela 1 do tutorial
+(2.344/1.125/1.313/1.125/0.844 de worsening, só Fisher income loss com
+mitigação), confiança 21%/68% (arredondado na tela, bate com
+20.7%/68.3%), Reach mostrando "1 factor reached, including 1 of 5
+Impacts" com só Fisher income loss na tabela. Simulação temporal com D3
+a 30% e 15 janelas reproduzindo janela por janela os números do
+tutorial (janela 15: 22.009,949/12.858,203/14.765,826/11.074,369 idênticos
+baseline=cenário; Fisher income loss 8.212,935→8.149,935); storyboard
+renderizando na tela batendo visualmente com a imagem estática do
+tutorial. Relatório gerado com a seção temporal incluída, sem erro.
+Suíte `testthat` e checagem de sintaxe seguem limpas (nenhum teste
+depende dos pesos exatos deste exemplo). Sem erro no console do
+navegador nem do servidor em nenhum passo.
+
 Trilha operacional separada (independente, registrada no plano, encaixa
 quando quiser): layout circular não parece um círculo (suspeita de
 container retangular esticando a proporção, não confirmada ao vivo ainda —

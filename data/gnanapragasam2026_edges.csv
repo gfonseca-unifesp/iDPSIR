@@ -3,12 +3,13 @@ D1,P1,1.5,0.7,positive,expert_assessment,,
 D2,P1,1.5,0.7,positive,expert_assessment,,
 D3,P1,2.5,0.85,positive,monitoring,,
 P1,S1,2,0.8,negative,monitoring,,
+P1,S2,1.5,0.6,positive,expert_assessment,,"Illustrative: fishing effort itself pushes toward a more motorized fleet, independent of any aid program"
 S1,I1,2,0.75,negative,observational,0.15,
 S1,I2,1.5,0.65,negative,observational,,
 S1,I3,1,0.5,negative,expert_assessment,,
+S2,I1,1.5,0.5,positive,expert_assessment,,"Illustrative: a more motorized fleet also compounds catch decline, alongside the fish-stock route"
+S2,I3,1,0.5,positive,expert_assessment,,"Illustrative: a more motorized fleet also compounds conflict with Indian fishermen, alongside the fish-stock route"
 S2,I4,2,0.6,positive,expert_assessment,,
 S2,I5,1.5,0.5,positive,expert_assessment,,
 R1,I2,2,0.6,negative,expert_assessment,,"Aid's real, documented target per Gnanapragasam et al. 2026, Marine Policy - compensating lost fishing income, not fleet size"
 R2,I2,2.5,0.6,negative,expert_assessment,,"Aid's real, documented target per Gnanapragasam et al. 2026, Marine Policy - compensating lost fishing income, not fleet size"
-R1,S2,1,0.5,positive,expert_assessment,,
-R2,S2,1.5,0.5,positive,expert_assessment,,

@@ -132,12 +132,14 @@ configurable, so this order and vocabulary can be adjusted per project.
 
 A larger, annotated example — an artisanal-fisheries network adapted from
 Gnanapragasam et al. 2026 (Marine Policy), where a response that directly and
-sufficiently neutralizes its intended Impact still erodes over time against an
-independent driver trend it can't touch, while its own side channel quietly worsens
-two Impacts the pressure scenario never does — is at
+sufficiently neutralizes its one intended Impact still erodes over time against an
+independent driver trend it can't touch, while the other four Impacts in the network
+are driven entirely by the pressure side and sit completely outside what the response
+can ever reach (1 of 5 Impacts) — is at
 [`docs/example_gnanapragasam.idpsir.json`](docs/example_gnanapragasam.idpsir.json)
 (pressure and response scenario pre-configured); load it from the wizard's Start step
-(Load savepoint) or see the [tutorial](docs/tutorial.html) for a full walkthrough.
+(Load savepoint) or see the [tutorial](docs/tutorial.html) for a full walkthrough, now
+illustrated with a network diagram and a temporal storyboard image.
 
 ## Workflow
 
