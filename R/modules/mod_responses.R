@@ -4,107 +4,46 @@
 #
 # Lets a non-technical user build a "scenario" by turning on one or more
 # Response nodes (feedback-role categories) at a chosen implementation
-# strength, then see the before/after effect in plain language. No graph
-# jargon on screen: "Effect on each factor" shows Improves/Worsens/Stable,
-# not raw scores (those stay available, just hidden by default and still
-# in the CSV/Excel export).
+# strength, then see the effect in plain language.
 #
-# Fase 5 Marco B: the engine underneath is loop analysis (R/loop_analysis.R),
-# not apply_response() (R/responses.R, preserved but no longer called).
-# Activating a response at a given strength is a sustained "press"
-# perturbation on that response node; press_perturbation() propagates it
-# through the whole signed, weighted graph - including the feedback loop -
-# and returns both the one-step (immediate) and full-loop (equilibrium)
-# effect on every node. Combining responses is just summing more than one
-# node into the same press vector. The interface below is unchanged from
-# before Marco B (same tables, same Improves/Worsens/Stable language) -
-# only the numbers behind it are now correct.
+# Two readings, both driven by the same Pressure/Response scenario inputs:
+# - Sufficiency (R/sufficiency.R, Revisao 1 Fase 1-3): the primary reading.
+#   A static, discounted propagated effect - always well-defined, never
+#   requires the network to be "stable" - answering "does the response's
+#   mitigation cover the pressure's worsening on each Impact?" plus how
+#   confident that verdict is and whether it holds across how far the
+#   effect is traced.
+# - Temporal simulation (R/temporal.R, Revisao 1 Fase 4-7): an optional
+#   disclosure that runs the same two scenarios forward window by window
+#   (discrete time steps, no convergence/equilibrium assumption), showing a
+#   table of how each Impact changes over time and a "storyboard" of the
+#   network's state per window.
 #
-# Fase 5 Marco C: an optional, off-by-default "Show how the effect evolves
-# over time" disclosure plots simulate_trajectory() (base R matplot(), no
-# ggplot2) - useful even when the network is unstable (the equilibrium
-# table above is only a directional estimate then), since the trajectory
-# still runs for any finite number of steps and visibly diverges instead.
+# Reach (response_reach(), R/reach.R, Fase 9 item 9.2): how many factors - and
+# how many Impacts out of the total - the active response(s) can influence
+# via SOME causal path. Pure directed-graph traversal, no matrix involved,
+# independent of both readings above - computed eagerly in "Apply scenario"
+# so saved scenarios carry it into the comparison table/report.
 #
-# Fase 5 Marco D: an optional, off-by-default "Show robustness to
-# uncertainty" disclosure runs robustness_check() - the `confidence` the
-# user already fills in on each edge becomes a plausible variation range
-# for its weight, resampled N times, checking how often each factor's
-# direction held. Finally gives `confidence` a real use beyond dashing an
-# edge on the graph.
-#
-# Fast-follow (post-Fase 5): "Effect on each factor" says an Impact will
-# improve, but not when - a "When will Impacts be neutralized?" table
-# (summarize_neutralization(), R/loop_analysis.R) reuses simulate_trajectory()
-# to report how many steps until the response's effect on each Impact node
-# first reaches 90% of its equilibrium value. Deliberately does NOT require
-# the network to be stable (see R/loop_analysis.R for why that would make
-# this dead code in practice for any network built by the app) - it's the
-# same directional-estimate caveat as the equilibrium number itself, not a
-# guarantee of settling. Hidden entirely when there's no Impact node in the
-# built graph.
-#
-# Fast-follow (post-Fase 5): optional per-edge `threshold` (set in the Edges
-# form, R/modules/mod_data.R) makes the trajectory chart nonlinear - an edge
-# with a threshold contributes nothing until the source factor's simulated
-# change (in this scenario) crosses that value, then behaves as usual. Only
-# the trajectory chart uses it (`simulate_trajectory_thresholded()`); the
-# equilibrium/robustness/neutralization numbers above stay exactly as before
-# (the linear, small-perturbation regime) - a small `threshold_note` warns
-# when this divergence between the chart and the tables above applies.
-#
-# Roadmap item 7.1 ("sign determinacy", Dambacher et al. framing): every
-# prediction in "Effect on each factor" now carries a "Sign confidence (%)"
-# column, computed via sign_determinacy() (R/loop_analysis.R - a thin,
-# literature-named alias for the same robustness_check() resampling used
-# below) at a fixed N=100 every time a scenario is applied, not hidden
-# behind the optional disclosure. "Show robustness to uncertainty" stays as
-# the deeper-dive version, with an adjustable simulation count, for
-# double-checking a borderline result.
-#
-# Roadmap item 7.2 ("which edge matters most"): a "Show which edges matter
-# most (optional)" disclosure plots global_sensitivity() (R/loop_analysis.R)
-# - a horizontal bar chart (base R barplot(), no ggplot2, same reasoning as
-# the trajectory chart) ranking edges by how much bumping their weight up
-# 10% (one at a time) would move this scenario's equilibrium effect.
-# Computed eagerly in "Apply scenario" (like sign_confidence above) so a
-# saved scenario carries its own ranking into the report, not just on screen.
-#
-# Fase 9 item 9.2 ("response reach"): a "Reach" section, right under "Effect
-# on the network", shows how many factors - and how many Impacts out of the
-# total - the active response(s) can influence via SOME causal path
-# (response_reach(), R/reach.R). Pure directed-graph traversal, no matrix
-# involved - deliberately placed next to (not gated by) the stability
-# warning, since reach stays defined even when the equilibrium effect above
-# it doesn't. Computed eagerly in "Apply scenario", same as sign_confidence/
-# sensitivity, so saved scenarios carry it into the comparison table/report.
-#
-# Fase 9 item 9.1.4 ("self-regulation is a modeling assumption"): a note
-# next to the stability warning, hidden unless at least one node has
-# self-regulation set, reminding the user that the equilibrium/stability
-# result rests on that choice. A fourth optional disclosure, "Show
-# sensitivity to self-regulation" (also hidden unless the network uses the
-# feature at all), reuses the robustness-check pattern but perturbs each
-# self-regulated factor's own strength instead of edge weights
-# (self_regulation_sensitivity(), R/loop_analysis.R) - computed on demand
-# (like "robustness to uncertainty", not eagerly like sign_confidence),
-# since it's a deeper-dive diagnostic, not a headline number.
-#
-# Charts editability/download fast-follow (user request after reviewing the
-# tab): the trajectory and edge-sensitivity charts were static renderPlot()
-# images with no way to download them or configure them beyond what was
-# already there, and never appeared in the report at all - unlike the
-# network graph, which has its own capture-to-report pipeline. Both charts
-# are already plain base-R plots (matplot()/barplot()) drawn server-side,
-# so - unlike the graph, which is a live JS widget needing html2canvas -
-# they can be redrawn straight to a file with a standard Shiny
-# downloadHandler(), no browser-side capture needed. Drawing code moved to
-# R/scenario_plots.R (draw_trajectory_plot()/draw_sensitivity_plot()) so
-# the on-screen plot, the PNG/SVG download, and the report's embedded
-# image are all the exact same function call, not three implementations
-# that could drift apart. "Number of edges shown" is new (sensitivity
-# previously had zero configuration at all, fixed at top-10); trajectory's
-# "Number of steps" already existed.
+# Revisao 1, Fase 8 ("corte do motor antigo"): this tab used to show a SECOND,
+# older reading first ("Effect on each factor (older, equilibrium-based
+# reading)") built on loop analysis (R/loop_analysis.R): press_perturbation()
+# (-A^-1 x press, requiring network "stability" that no network this app can
+# build ever has - the schema forbids a node acting on itself, so the
+# interaction matrix's diagonal/trace/eigenvalue-sum is always zero), plus
+# everything derived from it - a linear trajectory chart, robustness-to-
+# uncertainty and sensitivity-to-self-regulation disclosures, sign
+# confidence, and a "which edges matter most" ranking. That whole reading is
+# cut here, superseded by sufficiency (which fixed exactly this fragility -
+# see R/sufficiency.R's header for the real inverted-sign bug that motivated
+# it) and temporal simulation. The underlying functions in
+# R/loop_analysis.R (press_perturbation(), check_stability(),
+# simulate_trajectory_thresholded(), robustness_check(), sign_determinacy(),
+# self_regulation_sensitivity(), global_sensitivity(), etc.) are left defined
+# and still covered by tests/testthat/test-loop_analysis.R - only the calls
+# from this file (and R/report.R) are removed, the same "superseded code
+# stays on disk, just stops being called" pattern already used throughout
+# this project (e.g. R/responses.R's apply_response()).
 plot_download_row <- function(ns, prefix) {
   fluidRow(
     column(6, downloadButton(ns(paste0("download_", prefix, "_png")), "Download PNG", class = "btn-sm")),
@@ -158,10 +97,7 @@ mod_responses_ui <- function(id) {
 
     # Revisao 1, Fase 2: two independent "pushes" the user builds - a
     # pressure scenario (what's getting worse) and a response scenario
-    # (what's being done about it) - shown side by side with the
-    # sufficiency reading below. Deliberately additive: the older
-    # equilibrium-based reading (further down, unchanged) stays fully
-    # functional alongside this while the new engine is validated.
+    # (what's being done about it) - read by the sufficiency reading below.
     p("Build two scenarios: what's pushing the system to get worse, and how you're responding to it. Then see whether the response is enough."),
 
     h5("Pressure scenario"),
@@ -187,11 +123,8 @@ mod_responses_ui <- function(id) {
     ),
 
     uiOutput(ns("sufficiency_result")),
-
-    tags$hr(),
-    h5("Effect on each factor (older, equilibrium-based reading)"),
-    p(class = "text-muted", "Being replaced by the sufficiency reading above - kept here for now while it's validated."),
-    uiOutput(ns("scenario_result")),
+    uiOutput(ns("reach_section")),
+    uiOutput(ns("temporal_and_save_section")),
 
     tags$hr(),
     h5("Saved scenarios"),
@@ -315,50 +248,8 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
     })
 
     # =================================================
-    # LOOP ANALYSIS ENGINE
+    # APPLY SCENARIO
     # =================================================
-    #
-    # The interaction matrix and its stability only depend on the built
-    # graph (weights/signs), not on which response is being tested - built
-    # once per graph and reused across every "Apply scenario" click.
-
-    interaction_matrix <- reactive({
-      req(graph())
-      build_interaction_matrix(graph())
-    })
-
-    network_stability <- reactive({
-      req(interaction_matrix())
-      check_stability(interaction_matrix())
-    })
-
-    # Optional per-edge threshold (see R/loop_analysis.R) - only used by the
-    # trajectory chart below. All-NA (the common case: no edge has one set)
-    # behaves identically to not passing it at all.
-    threshold_matrix <- reactive({
-      req(graph())
-      build_threshold_matrix(graph())
-    })
-
-    has_thresholds <- reactive({
-      any(!is.na(threshold_matrix()))
-    })
-
-    # Roadmap Fase 9 item 9.1.4: whether the equilibrium/stability results
-    # below rest on a self-regulation assumption at all - drives both the
-    # conditional note and whether the sensitivity-to-self-regulation
-    # disclosure is shown (hidden entirely when nobody's using the feature).
-    has_self_regulation <- reactive({
-      req(graph())
-      sr <- V(graph())$self_regulation
-      # Revisao 1, Fase 5: self_regulation stopped being categorical
-      # ("none"/"low"/...) and became numeric (0 by default) - comparing a
-      # numeric vector against the string "none" coerces to character and is
-      # always TRUE, which silently pinned this reactive to TRUE for every
-      # network (even one where nobody touched self-regulation at all) until
-      # caught here. `> 0` is the real "is anyone using it" check now.
-      !is.null(sr) && any(suppressWarnings(as.numeric(sr)) > 0, na.rm = TRUE)
-    })
 
     current_scenario <- reactiveVal(NULL)
 
@@ -379,15 +270,11 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
       }
 
       press <- build_press_vector(graph(), active_ids, strengths / 100)
-      result <- press_perturbation(interaction_matrix(), press)
-      sign_confidence <- suppressWarnings(sign_determinacy(graph(), press, n_simulations = 100))
-      sensitivity <- suppressWarnings(global_sensitivity(graph(), press))
       reach <- response_reach(graph(), active_ids)
 
-      # Revisao 1, Fase 2: the new sufficiency reading, computed alongside
-      # (not instead of) everything above. Pressure is optional - an
-      # inactive pressure scenario is just an all-zero press vector, which
-      # sufficiency() handles the same as any other (worsening = 0
+      # Revisao 1, Fase 2: the sufficiency reading. Pressure is optional -
+      # an inactive pressure scenario is just an all-zero press vector,
+      # which sufficiency() handles the same as any other (worsening = 0
       # everywhere, so "neutralized" trivially holds wherever the response
       # helps at all).
       pn <- pressure_nodes()
@@ -409,9 +296,6 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
         active = active_ids,
         strengths = strengths,
         press = press,
-        result = result,
-        sign_confidence = sign_confidence,
-        sensitivity = sensitivity,
         reach = reach,
         pressure_active = pressure_active_ids,
         pressure_strengths = pressure_strengths,
@@ -486,66 +370,28 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
       datatable(display, rownames = FALSE, options = list(dom = "t", pageLength = 10))
     })
 
-    output$scenario_result <- renderUI({
+    # Roadmap Fase 9 item 9.2: "reach" is pure graph traversal from what the
+    # active response(s) directly act on (R/reach.R) - always defined,
+    # independent of both readings above (sufficiency/temporal).
+    output$reach_section <- renderUI({
       req(current_scenario())
 
       tagList(
-        uiOutput(ns("stability_note")),
-        uiOutput(ns("self_regulation_note")),
-        h5("Effect on the network"),
-        DTOutput(ns("network_effect_table")),
         h5("Reach"),
         p(
           class = "text-muted",
-          "How far this response's influence travels through the DPSIR chain - always",
-          "calculable, regardless of the stability warning above (which only applies to",
-          "the equilibrium effect)."
+          "How far this response's influence travels through the DPSIR chain - pure graph traversal,",
+          "independent of the sufficiency reading above."
         ),
         uiOutput(ns("reach_summary")),
-        DTOutput(ns("reach_table")),
-        h5("Effect on each factor"),
-        DTOutput(ns("factor_effect_table")),
-        uiOutput(ns("neutralization_section")),
-        tags$hr(),
-        checkboxInput(ns("show_trajectory"), "Show how the effect evolves over time (optional)", value = FALSE),
-        conditionalPanel(
-          condition = sprintf("input['%s']", ns("show_trajectory")),
-          sliderInput(ns("trajectory_steps"), "Number of steps", min = 5, max = 60, value = 20, step = 5),
-          uiOutput(ns("threshold_note")),
-          plotOutput(ns("trajectory_plot"), height = "320px"),
-          plot_download_row(ns, "trajectory")
-        ),
-        tags$hr(),
-        checkboxInput(ns("show_robustness"), "Show robustness to uncertainty (optional)", value = FALSE),
-        conditionalPanel(
-          condition = sprintf("input['%s']", ns("show_robustness")),
-          sliderInput(ns("robustness_simulations"), "Number of simulations", min = 20, max = 500, value = 100, step = 20),
-          p(
-            class = "text-muted",
-            "The \"Sign confidence (%)\" column above already runs this check at 100",
-            "simulations. Each edge's weight is randomly varied within a range based on",
-            "its confidence (high confidence = little variation, low = a lot); use this",
-            "to try a different number of simulations, or see the full table sorted",
-            "from least to most reliable."
-          ),
-          DTOutput(ns("robustness_table"))
-        ),
-        tags$hr(),
-        checkboxInput(ns("show_sensitivity"), "Show which edges matter most (optional)", value = FALSE),
-        conditionalPanel(
-          condition = sprintf("input['%s']", ns("show_sensitivity")),
-          p(
-            class = "text-muted",
-            "Bumps each edge's weight up by 10%, one at a time, and measures how much",
-            "this scenario's overall equilibrium effect moves - the edges at the top",
-            "are the ones most worth double-checking your weight estimate for."
-          ),
-          sliderInput(ns("sensitivity_top_n"), "Number of edges shown", min = 3, max = 20, value = 10, step = 1),
-          plotOutput(ns("sensitivity_plot"), height = "320px"),
-          plot_download_row(ns, "sensitivity"),
-          DTOutput(ns("sensitivity_table"))
-        ),
-        uiOutput(ns("self_regulation_sensitivity_section")),
+        DTOutput(ns("reach_table"))
+      )
+    })
+
+    output$temporal_and_save_section <- renderUI({
+      req(current_scenario())
+
+      tagList(
         tags$hr(),
         checkboxInput(ns("show_temporal"), "Show temporal simulation across discrete time windows (optional)", value = FALSE),
         conditionalPanel(
@@ -583,177 +429,6 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
         tags$hr(),
         actionButton(ns("save_scenario"), "Save this scenario", icon = icon("save"), class = "btn-outline-primary")
       )
-    })
-
-    output$stability_note <- renderUI({
-      req(network_stability())
-      stab <- network_stability()
-
-      if (isTRUE(stab$stable)) {
-        tags$div(
-          class = "alert alert-success",
-          icon("check"),
-          " This network's feedback loops are stable: the equilibrium effect below is where the system settles over time."
-        )
-      } else {
-        tags$div(
-          class = "alert alert-warning",
-          icon("triangle-exclamation"),
-          " This network's feedback loops are not stable: treat the equilibrium effect below as a directional estimate, not a guaranteed outcome. The immediate (one-step) effect is still reliable."
-        )
-      }
-    })
-
-    # Roadmap Fase 9 item 9.1.4: self-regulation is a modeling assumption,
-    # not an observed edge property - shown regardless of whether the
-    # network came out stable or not, since either way the result rests on
-    # the self-regulation levels the user chose. Hidden entirely when no
-    # node has any (today's default, and the common case until the feature
-    # is actually used).
-    output$self_regulation_note <- renderUI({
-      req(isTRUE(has_self_regulation()))
-
-      tags$p(
-        class = "text-muted",
-        icon("circle-info"),
-        " This result assumes the self-regulation you set for the factors (Nodes step).",
-        "See how much it depends on that choice in \"Show sensitivity to self-regulation\" below."
-      )
-    })
-
-    output$threshold_note <- renderUI({
-      req(isTRUE(has_thresholds()))
-
-      tags$p(
-        class = "text-muted",
-        icon("bolt"),
-        " This network has one or more edges with a threshold set: their effect only",
-        "switches on once the source factor's simulated change crosses that value -",
-        "the equilibrium/robustness figures above don't account for this, only the",
-        "chart below does."
-      )
-    })
-
-    # Shared by the on-screen plot and both download handlers, so all three
-    # always show/export the exact same trajectory for the current live
-    # inputs (steps slider), not just the drawing code.
-    current_trajectory <- function(steps) {
-      sc <- current_scenario()
-      req(sc)
-      traj <- simulate_trajectory_thresholded(
-        interaction_matrix(), sc$press, Th = threshold_matrix(), steps = steps
-      )
-      labels <- V(graph())$label[match(colnames(traj), V(graph())$name)]
-      list(traj = traj, labels = labels)
-    }
-
-    output$trajectory_plot <- renderPlot({
-      req(isTRUE(input$show_trajectory))
-      tr <- current_trajectory(input$trajectory_steps)
-      draw_trajectory_plot(tr$traj, tr$labels)
-    })
-
-    output$download_trajectory_png <- downloadHandler(
-      filename = function() paste0("trajectory_", Sys.Date(), ".png"),
-      content = function(file) {
-        tr <- current_trajectory(input$trajectory_steps)
-        render_plot_png(function() draw_trajectory_plot(tr$traj, tr$labels), file)
-      }
-    )
-
-    output$download_trajectory_svg <- downloadHandler(
-      filename = function() paste0("trajectory_", Sys.Date(), ".svg"),
-      content = function(file) {
-        tr <- current_trajectory(input$trajectory_steps)
-        render_plot_svg(function() draw_trajectory_plot(tr$traj, tr$labels), file)
-      }
-    )
-
-    output$robustness_table <- renderDT({
-      sc <- current_scenario()
-      req(sc, isTRUE(input$show_robustness))
-
-      robustness_df <- sign_determinacy(graph(), sc$press, n_simulations = input$robustness_simulations)
-      effect_df <- summarize_scenario_effect(graph(), sc$result)
-
-      robustness_df$direction <- effect_df$direction[match(robustness_df$id, effect_df$id)]
-      robustness_df <- robustness_df[order(robustness_df$agreement_pct), ]
-      robustness_df <- robustness_df[, c("node", "category", "direction", "agreement_pct")]
-      names(robustness_df) <- c("Factor", "Category", "Effect", "Agreement (%)")
-
-      datatable(robustness_df, rownames = FALSE, options = list(dom = "t", pageLength = 10)) %>%
-        formatRound(columns = "Agreement (%)", digits = 0)
-    })
-
-    output$sensitivity_plot <- renderPlot({
-      sc <- current_scenario()
-      req(sc, isTRUE(input$show_sensitivity))
-      draw_sensitivity_plot(sc$sensitivity, top_n = input$sensitivity_top_n)
-    })
-
-    output$download_sensitivity_png <- downloadHandler(
-      filename = function() paste0("edge_sensitivity_", Sys.Date(), ".png"),
-      content = function(file) {
-        sc <- current_scenario()
-        req(sc)
-        render_plot_png(function() draw_sensitivity_plot(sc$sensitivity, top_n = input$sensitivity_top_n), file)
-      }
-    )
-
-    output$download_sensitivity_svg <- downloadHandler(
-      filename = function() paste0("edge_sensitivity_", Sys.Date(), ".svg"),
-      content = function(file) {
-        sc <- current_scenario()
-        req(sc)
-        render_plot_svg(function() draw_sensitivity_plot(sc$sensitivity, top_n = input$sensitivity_top_n), file)
-      }
-    )
-
-    output$sensitivity_table <- renderDT({
-      sc <- current_scenario()
-      req(sc, isTRUE(input$show_sensitivity))
-
-      df <- sc$sensitivity[, c("link", "weight", "confidence", "influence")]
-      names(df) <- c("Link", "Weight", "Confidence", "Influence")
-
-      datatable(df, rownames = FALSE, options = list(dom = "t", pageLength = 10)) %>%
-        formatRound(columns = c("Influence"), digits = 3)
-    })
-
-    output$self_regulation_sensitivity_section <- renderUI({
-      req(isTRUE(has_self_regulation()))
-
-      tagList(
-        tags$hr(),
-        checkboxInput(ns("show_self_regulation_sensitivity"), "Show sensitivity to self-regulation (optional)", value = FALSE),
-        conditionalPanel(
-          condition = sprintf("input['%s']", ns("show_self_regulation_sensitivity")),
-          p(
-            class = "text-muted",
-            "Nudges each self-regulated factor's strength up or down (not the edges - that's",
-            "\"robustness to uncertainty\" above) and measures how often the predicted",
-            "direction holds - a low percentage means the result depends heavily on the",
-            "self-regulation you assumed for that factor, not just on the network's links."
-          ),
-          DTOutput(ns("self_regulation_sensitivity_table"))
-        )
-      )
-    })
-
-    output$self_regulation_sensitivity_table <- renderDT({
-      sc <- current_scenario()
-      req(sc, isTRUE(input$show_self_regulation_sensitivity))
-
-      sens_df <- suppressWarnings(self_regulation_sensitivity(graph(), sc$press, n_simulations = 100))
-      effect_df <- summarize_scenario_effect(graph(), sc$result)
-
-      sens_df$direction <- effect_df$direction[match(sens_df$id, effect_df$id)]
-      sens_df <- sens_df[order(sens_df$agreement_pct), ]
-      sens_df <- sens_df[, c("node", "category", "direction", "agreement_pct")]
-      names(sens_df) <- c("Factor", "Category", "Effect", "Agreement (%)")
-
-      datatable(sens_df, rownames = FALSE, options = list(dom = "t", pageLength = 10)) %>%
-        formatRound(columns = "Agreement (%)", digits = 0)
     })
 
     # =================================================
@@ -849,20 +524,8 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
       }
     )
 
-    output$network_effect_table <- renderDT({
-      sc <- current_scenario()
-      req(sc)
-
-      df <- summarize_scenario_network_effect(sc$result)
-      names(df) <- c("Metric", "Immediate", "Equilibrium")
-
-      datatable(df, rownames = FALSE, options = list(dom = "t")) %>%
-        formatRound(columns = c("Immediate", "Equilibrium"), digits = 2)
-    })
-
     # Roadmap Fase 9 item 9.2: "reach" is pure graph traversal from what the
-    # active response(s) directly act on (R/reach.R) - always defined, unlike
-    # the equilibrium effect above, which depends on the network settling.
+    # active response(s) directly act on (R/reach.R).
     output$reach_summary <- renderUI({
       sc <- current_scenario()
       req(sc)
@@ -896,66 +559,6 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
       datatable(df, rownames = FALSE, options = list(dom = "t", pageLength = 10))
     })
 
-    # Fase 5 fast-follow: not just "does this response help", but "how long
-    # until it actually neutralizes the Impact" - the question that
-    # motivated the request. Hidden entirely when the network has no Impact
-    # nodes, instead of showing an empty table.
-    neutralization_df <- reactive({
-      sc <- current_scenario()
-      req(sc)
-      summarize_neutralization(graph(), sc$press)
-    })
-
-    output$neutralization_section <- renderUI({
-      req(nrow(neutralization_df()) > 0)
-
-      tagList(
-        h5("When will Impacts be neutralized?"),
-        p(
-          class = "text-muted",
-          "How many steps of \"Show how the effect evolves over time\" (below) it takes",
-          "for this response's effect on each Impact to first reach 90% of the equilibrium",
-          "effect shown above - treat this the same way as that equilibrium number: a",
-          "projection of where things are headed, not a guarantee the effect stays there",
-          "(check the trajectory chart if the stability warning above is showing)."
-        ),
-        DTOutput(ns("neutralization_table"))
-      )
-    })
-
-    output$neutralization_table <- renderDT({
-      df <- neutralization_df()[, c("node", "equilibrium_effect", "steps_to_neutralize", "note")]
-      names(df) <- c("Impact", "Equilibrium effect", "Steps to 90%", "Note")
-
-      datatable(df, rownames = FALSE, options = list(dom = "t")) %>%
-        formatRound(columns = "Equilibrium effect", digits = 3)
-    })
-
-    output$factor_effect_table <- renderDT({
-      sc <- current_scenario()
-      req(sc)
-
-      df <- summarize_scenario_effect(graph(), sc$result)
-      df$sign_confidence <- sc$sign_confidence$agreement_pct[match(df$id, sc$sign_confidence$id)]
-      df <- df[, c("node", "category", "direction", "sign_confidence", "id", "immediate", "equilibrium")]
-      names(df) <- c("Factor", "Category", "Effect", "Sign confidence (%)", "ID", "Immediate", "Equilibrium")
-
-      datatable(
-        df,
-        rownames = FALSE,
-        extensions = "Buttons",
-        options = list(
-          dom = "Bfrtip",
-          buttons = c("csv", "excel"),
-          columnDefs = list(list(visible = FALSE, targets = c(4, 5, 6))),
-          pageLength = 10,
-          scrollX = TRUE
-        )
-      ) %>%
-        formatRound(columns = "Sign confidence (%)", digits = 0) %>%
-        formatRound(columns = c("Immediate", "Equilibrium"), digits = 3)
-    })
-
     # =================================================
     # SAVE AND COMPARE SCENARIOS
     # =================================================
@@ -963,26 +566,28 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
     saved_scenarios <- reactiveValues(list = list())
     scenario_counter <- reactiveVal(1)
 
-    scenario_direction_counts <- function(sc) {
-      effect_df <- summarize_scenario_effect(graph(), sc$result)
-      table(factor(effect_df$direction, levels = c("Improves", "Worsens", "Stable")))
+    # Revisao 1, Fase 8: replaces the old Improves/Worsens/Stable summary
+    # (scenario_direction_counts(), built from the now-removed equilibrium
+    # reading) with a one-liner from the sufficiency reading instead - "how
+    # many of this network's Impacts does this scenario's response
+    # neutralize", the primary reading's own headline number.
+    scenario_sufficiency_summary <- function(sc) {
+      df <- sc$sufficiency_df
+      if (is.null(df) || nrow(df) == 0) {
+        return("No Impact factors")
+      }
+      sprintf("%d of %d Impacts neutralized", sum(df$neutralized), nrow(df))
     }
 
     observeEvent(input$save_scenario, {
       sc <- current_scenario()
       req(sc)
 
-      # Captured at save time (not apply time, when the trajectory slider
-      # may not exist yet on a first-ever "Apply scenario") so the report
-      # can redraw the same trajectory later without needing a live slider -
-      # same "what you configured is what gets saved" pattern already used
-      # for the response strengths themselves.
-      sc$trajectory_steps <- input$trajectory_steps %||% 20
-
-      # Revisao 1, Fase 7: same reasoning, for the temporal disclosure's own
-      # settings - the report (R/report.R) re-simulates from sc$p_D/sc$press
-      # rather than storing the whole windows x nodes history, so it needs
-      # to know how many windows and which impulse/permanent mode to use.
+      # Revisao 1, Fase 7: the temporal disclosure's own settings, captured
+      # at save time (not apply time) - the report (R/report.R) re-simulates
+      # from sc$p_D/sc$press rather than storing the whole windows x nodes
+      # history, so it needs to know how many windows and which
+      # impulse/permanent mode to use.
       sc$temporal_windows <- input$temporal_windows %||% 5
       sc$temporal_mode_pressure <- input$temporal_mode_pressure %||% "permanent"
       sc$temporal_mode_response <- input$temporal_mode_response %||% "impulse"
@@ -1009,11 +614,10 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
 
       df <- do.call(rbind, lapply(names(saved), function(scenario_name) {
         sc <- saved[[scenario_name]]
-        counts <- scenario_direction_counts(sc)
         data.frame(
           Name = scenario_name,
           Responses = paste(sc$active, collapse = ", "),
-          Summary = sprintf("%d improve, %d worsen, %d stable", counts[["Improves"]], counts[["Worsens"]], counts[["Stable"]]),
+          Summary = scenario_sufficiency_summary(sc),
           stringsAsFactors = FALSE
         )
       }))
@@ -1045,70 +649,13 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
 
       tagList(
         tags$hr(),
-        h5("Scenario comparison"),
-        DTOutput(ns("comparison_table")),
-        h5("Sign confidence per factor"),
+        h5("Reach per scenario"),
         p(
           class = "text-muted",
-          "How often each scenario's predicted direction held up across 100 simulations",
-          "that resampled every edge's weight within a range set by its confidence."
+          "How far each selected scenario's active response(s) can influence via some causal path."
         ),
-        DTOutput(ns("comparison_sign_confidence_table")),
-        h5("Reach per scenario"),
-        DTOutput(ns("comparison_reach_table")),
-        h5("Summary per scenario"),
-        DTOutput(ns("comparison_summary_table"))
+        DTOutput(ns("comparison_reach_table"))
       )
-    })
-
-    output$comparison_table <- renderDT({
-      names_sel <- selected_scenario_names()
-      saved <- saved_scenarios$list
-
-      scenario_results <- lapply(names_sel, function(scenario_name) saved[[scenario_name]]$result)
-      names(scenario_results) <- names_sel
-
-      baseline_result <- list(equilibrium = setNames(rep(0, vcount(graph())), V(graph())$name))
-      scenario_results <- c(list(Baseline = baseline_result), scenario_results)
-
-      df <- compare_scenario_effects(graph(), scenario_results)
-      df$id <- NULL
-      numeric_cols <- setdiff(names(df), c("node", "category"))
-      names(df)[names(df) == "node"] <- "Factor"
-      names(df)[names(df) == "category"] <- "Category"
-
-      datatable(df, rownames = FALSE, options = list(dom = "t")) %>%
-        formatRound(columns = numeric_cols, digits = 3)
-    })
-
-    output$comparison_sign_confidence_table <- renderDT({
-      names_sel <- selected_scenario_names()
-      saved <- saved_scenarios$list
-
-      scenario_sign_conf <- lapply(names_sel, function(scenario_name) saved[[scenario_name]]$sign_confidence)
-      names(scenario_sign_conf) <- names_sel
-
-      # Baseline's press is all-zero, so its equilibrium is exactly 0
-      # regardless of how edge weights are resampled (-A^-1 * 0 = 0 for any
-      # invertible A) - agreement is trivially 100% everywhere, computed
-      # directly instead of wastefully re-running simulations to confirm it.
-      baseline_sign_conf <- data.frame(
-        id = V(graph())$name,
-        node = if (!is.null(V(graph())$label)) V(graph())$label else V(graph())$name,
-        category = if (!is.null(V(graph())$dpsir_category)) V(graph())$dpsir_category else "",
-        agreement_pct = 100,
-        stringsAsFactors = FALSE
-      )
-      scenario_sign_conf <- c(list(Baseline = baseline_sign_conf), scenario_sign_conf)
-
-      df <- compare_scenario_sign_confidence(graph(), scenario_sign_conf)
-      df$id <- NULL
-      numeric_cols <- setdiff(names(df), c("node", "category"))
-      names(df)[names(df) == "node"] <- "Factor"
-      names(df)[names(df) == "category"] <- "Category"
-
-      datatable(df, rownames = FALSE, options = list(dom = "t")) %>%
-        formatRound(columns = numeric_cols, digits = 0)
     })
 
     output$comparison_reach_table <- renderDT({
@@ -1134,24 +681,6 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
       scenario_rows <- lapply(names_sel, function(scenario_name) reach_row(scenario_name, saved[[scenario_name]]$reach))
 
       datatable(do.call(rbind, c(list(baseline_row), scenario_rows)), rownames = FALSE, options = list(dom = "t"))
-    })
-
-    output$comparison_summary_table <- renderDT({
-      names_sel <- selected_scenario_names()
-      saved <- saved_scenarios$list
-
-      rows <- lapply(names_sel, function(scenario_name) {
-        counts <- scenario_direction_counts(saved[[scenario_name]])
-        data.frame(
-          Scenario = scenario_name,
-          Improves = as.integer(counts[["Improves"]]),
-          Worsens = as.integer(counts[["Worsens"]]),
-          Stable = as.integer(counts[["Stable"]]),
-          stringsAsFactors = FALSE
-        )
-      })
-
-      datatable(do.call(rbind, rows), rownames = FALSE, options = list(dom = "t"))
     })
 
     # Revisao 1, Fase 3: the *live* scenario builder state - read straight

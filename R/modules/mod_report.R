@@ -212,18 +212,8 @@ mod_report_ui <- function(id) {
         width = 4,
         h5("Scenarios"),
         p("Select saved scenarios to include (baseline - no response applied - is added automatically)."),
-        DTOutput(ns("scenarios_table"))
-      )
-    ),
-
-    fluidRow(
-      column(
-        width = 4,
-        h5("Scenario charts"),
-        p("Only applies to the scenarios selected above."),
-        checkboxInput(ns("include_trajectory_chart"), "How the effect evolves over time", value = TRUE),
-        checkboxInput(ns("include_sensitivity_chart"), "Which edges matter most", value = TRUE),
-        checkboxInput(ns("include_temporal_section"), "Temporal simulation (discrete windows)", value = FALSE)
+        DTOutput(ns("scenarios_table")),
+        checkboxInput(ns("include_temporal_section"), "Include temporal simulation (discrete windows)", value = FALSE)
       )
     ),
 
@@ -300,8 +290,6 @@ mod_report_server <- function(id, schema, nodes, edges, graph, saved_scenarios, 
           saved_scenarios = saved,
           selected_scenario_names = selected_scenario_names,
           include_reproducibility = isTRUE(input$include_reproducibility),
-          include_trajectory_chart = isTRUE(input$include_trajectory_chart),
-          include_sensitivity_chart = isTRUE(input$include_sensitivity_chart),
           include_temporal_section = isTRUE(input$include_temporal_section)
         )
 

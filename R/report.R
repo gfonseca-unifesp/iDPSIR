@@ -54,8 +54,6 @@ build_full_report_html <- function(
     saved_scenarios = list(),
     selected_scenario_names = character(),
     include_reproducibility = FALSE,
-    include_trajectory_chart = TRUE,
-    include_sensitivity_chart = TRUE,
     include_temporal_section = FALSE
 ) {
   # Sequential "Figure N"/"Table N" numbering across the whole report, plus
@@ -151,12 +149,11 @@ build_full_report_html <- function(
   }
 
   # Revisao 1, Fase 3: the sufficiency reading (R/sufficiency.R), one
-  # subsection per selected scenario - placed before "Scenarios compared"
-  # (the older equilibrium-based reading below) to match the on-screen
-  # ordering in mod_responses.R, where the new reading is shown first.
-  # format_sufficiency_table()/format_reach_over_c_table() are the exact
-  # same functions the Scenarios tab uses for its own tables, so a number
-  # here can never drift from what the user saw live.
+  # subsection per selected scenario - the primary reading, matching the
+  # on-screen ordering in mod_responses.R. format_sufficiency_table()/
+  # format_reach_over_c_table() are the exact same functions the Scenarios
+  # tab uses for its own tables, so a number here can never drift from what
+  # the user saw live.
   if (length(selected_scenario_names) > 0 && length(saved_scenarios) > 0) {
     sufficiency_scenario_sections <- lapply(selected_scenario_names, function(scenario_name) {
       sc <- saved_scenarios[[scenario_name]]
@@ -225,42 +222,20 @@ build_full_report_html <- function(
     }
   }
 
+  # Revisao 1, Fase 8: the old equilibrium-based reading (press_perturbation/
+  # check_stability and everything derived from it - sign confidence,
+  # global edge sensitivity, the linear trajectory chart) is cut from the
+  # report here, superseded by "Response sufficiency" (Fase 1-3) and
+  # "Temporal simulation" (Fase 4-7) above/below. Reach is the one part of
+  # the old "Scenarios compared" section kept - response_reach() is pure
+  # graph traversal, never depended on press_perturbation, and stays exactly
+  # as useful as before. The underlying functions (press_perturbation(),
+  # check_stability(), simulate_trajectory_thresholded(), etc., R/loop_analysis.R)
+  # are left defined and still covered by tests/testthat/test-loop_analysis.R -
+  # only the calls from here and mod_responses.R are removed, same
+  # "superseded code stays on disk, just stops being called" pattern already
+  # used throughout this project (e.g. R/responses.R's apply_response()).
   if (length(selected_scenario_names) > 0 && length(saved_scenarios) > 0) {
-    scenario_results <- lapply(selected_scenario_names, function(scenario_name) saved_scenarios[[scenario_name]]$result)
-    names(scenario_results) <- selected_scenario_names
-
-    baseline_result <- list(equilibrium = setNames(rep(0, vcount(graph)), V(graph)$name))
-    comparison_df <- compare_scenario_effects(graph, c(list(Baseline = baseline_result), scenario_results))
-    comparison_df$id <- NULL
-
-    # Baseline's press is all-zero, so its equilibrium is exactly 0 no
-    # matter how edge weights are resampled - agreement is trivially 100%
-    # everywhere, computed directly rather than re-running simulations.
-    baseline_sign_conf <- data.frame(
-      id = V(graph)$name,
-      node = if (!is.null(V(graph)$label)) V(graph)$label else V(graph)$name,
-      category = if (!is.null(V(graph)$dpsir_category)) V(graph)$dpsir_category else "",
-      agreement_pct = 100,
-      stringsAsFactors = FALSE
-    )
-    scenario_sign_conf <- lapply(selected_scenario_names, function(scenario_name) saved_scenarios[[scenario_name]]$sign_confidence)
-    names(scenario_sign_conf) <- selected_scenario_names
-    sign_conf_df <- compare_scenario_sign_confidence(graph, c(list(Baseline = baseline_sign_conf), scenario_sign_conf))
-    sign_conf_df$id <- NULL
-
-    summary_df <- do.call(rbind, lapply(selected_scenario_names, function(scenario_name) {
-      sc <- saved_scenarios[[scenario_name]]
-      effect_df <- summarize_scenario_effect(graph, sc$result)
-      counts <- table(factor(effect_df$direction, levels = c("Improves", "Worsens", "Stable")))
-      data.frame(
-        Scenario = scenario_name,
-        Improves = as.integer(counts[["Improves"]]),
-        Worsens = as.integer(counts[["Worsens"]]),
-        Stable = as.integer(counts[["Stable"]]),
-        stringsAsFactors = FALSE
-      )
-    }))
-
     total_impacts <- count_impacts_in_graph(graph)
     reach_row <- function(scenario_name, reach) {
       reached_impacts_row <- reach$by_category[reach$by_category$category == "Impact", "count"]
@@ -279,118 +254,15 @@ build_full_report_html <- function(
       lapply(selected_scenario_names, function(scenario_name) reach_row(scenario_name, saved_scenarios[[scenario_name]]$reach))
     ))
 
-    scenario_items <- lapply(selected_scenario_names, function(scenario_name) {
-      sc <- saved_scenarios[[scenario_name]]
-      responses_text <- paste(
-        sprintf("%s at %d%%", sc$active, round(sc$strengths[sc$active])),
-        collapse = ", "
-      )
-      tags$li(tags$strong(scenario_name), ": ", responses_text)
-    })
-
     sections <- c(sections, list(
-      tags$h2("Scenarios compared (older, equilibrium-based reading)"),
-      tags$p("Being replaced by the sufficiency reading above - kept here for now while it's validated."),
-      tags$p("Baseline: no response applied."),
-      tags$ul(scenario_items),
-      tags$h3("Equilibrium effect per factor"),
-      report_html_table(comparison_df),
-      caption_tag(
-        "Table", next_table_n(),
-        "Equilibrium effect of each scenario on every node, computed via loop analysis (press perturbation, -A^-1 x press) relative to the baseline (no response applied)."
-      ),
-      tags$h3("Sign confidence per factor"),
-      report_html_table(sign_conf_df),
-      caption_tag(
-        "Table", next_table_n(),
-        "Percentage of 100 resampled simulations (varying each edge's weight within a range set by its confidence) that agreed with the equilibrium effect's direction shown above - low values flag a prediction that a more confident estimate of the network could easily flip."
-      ),
-      tags$h3("Reach per scenario"),
+      tags$h2("Reach"),
+      tags$p("How far each scenario's active response(s) can influence via some causal path - pure graph traversal, independent of the sufficiency reading above."),
       report_html_table(reach_df),
       caption_tag(
         "Table", next_table_n(),
-        "How many factors - and how many Impacts out of the total in the network - each scenario's active response(s) can influence via some causal path. Pure graph traversal, defined even when the equilibrium effect above is not."
-      ),
-      tags$h3("Summary per scenario"),
-      report_html_table(summary_df),
-      caption_tag("Table", next_table_n(), "Count of nodes whose equilibrium effect improves, worsens, or stays stable under each scenario.")
+        "How many factors - and how many Impacts out of the total in the network - each scenario's active response(s) can influence via some causal path."
+      )
     ))
-
-    # Roadmap-adjacent fast-follow ("charts editability/download"): the
-    # trajectory and sensitivity charts previously had no presence in the
-    # report at all (or, for sensitivity, only its underlying table, not
-    # the chart itself) - draw_trajectory_plot()/draw_sensitivity_plot()
-    # (R/scenario_plots.R) are the exact same functions mod_responses.R
-    # uses on screen and for its own PNG/SVG downloads, so the report
-    # figure can never drift from what the user saw live.
-    #
-    # Revisao 1, Fase 7: each of these three scenario charts is now gated by
-    # its own checkbox (mod_report.R) - previously trajectory/sensitivity
-    # were always included whenever a scenario was selected, with no way to
-    # leave them out (the operational point that motivated this fase: "only
-    # the graph image has a which-charts-go-in-the-report control today").
-    # Defaults keep that prior always-on behavior for trajectory/sensitivity;
-    # the brand-new temporal section defaults off, same "opt-in" convention
-    # as every other disclosure introduced this revision.
-    if (isTRUE(include_trajectory_chart)) {
-      trajectory_sections <- lapply(selected_scenario_names, function(scenario_name) {
-        sc <- saved_scenarios[[scenario_name]]
-        steps <- sc$trajectory_steps %||% 20
-        traj <- simulate_trajectory_thresholded(
-          build_interaction_matrix(graph), sc$press, Th = build_threshold_matrix(graph), steps = steps
-        )
-        labels <- V(graph)$label[match(colnames(traj), V(graph)$name)]
-        img_uri <- plot_to_data_uri(function() draw_trajectory_plot(traj, labels))
-
-        tagList(
-          tags$h4(scenario_name),
-          tags$img(class = "report-graph-image", src = img_uri),
-          caption_tag(
-            "Figure", next_figure_n(),
-            sprintf(
-              "How \"%s\"'s effect evolves over %d simulated steps - useful mainly when the network's feedback loops aren't stable, since the equilibrium number alone is then only a directional estimate.",
-              scenario_name, steps
-            )
-          )
-        )
-      })
-
-      sections <- c(sections, list(
-        tags$h3("How the effect evolves over time"),
-        tagList(trajectory_sections)
-      ))
-    }
-
-    if (isTRUE(include_sensitivity_chart)) {
-      sensitivity_sections <- lapply(selected_scenario_names, function(scenario_name) {
-        sc <- saved_scenarios[[scenario_name]]
-        top <- utils::head(sc$sensitivity[order(-sc$sensitivity$influence), c("link", "weight", "confidence", "influence")], 5)
-        names(top) <- c("Link", "Weight", "Confidence", "Influence")
-        img_uri <- plot_to_data_uri(function() draw_sensitivity_plot(sc$sensitivity, top_n = 10))
-
-        tagList(
-          tags$h4(scenario_name),
-          tags$img(class = "report-graph-image", src = img_uri),
-          caption_tag(
-            "Figure", next_figure_n(),
-            sprintf("For \"%s\", which edges' weight would move its equilibrium effect the most if bumped up 10%% (top 10, ranked highest first).", scenario_name)
-          ),
-          report_html_table(top),
-          caption_tag(
-            "Table", next_table_n(),
-            sprintf(
-              "For \"%s\", the edges whose weight - if bumped up 10%% - would move its equilibrium effect the most, ranked highest first. Worth double-checking these estimates first if you're unsure about them.",
-              scenario_name
-            )
-          )
-        )
-      })
-
-      sections <- c(sections, list(
-        tags$h3("Which edges matter most (top 5 per scenario)"),
-        tagList(sensitivity_sections)
-      ))
-    }
 
     # Revisao 1, Fase 7: temporal simulation section - one storyboard + one
     # window-by-window table per selected scenario. Re-simulates from
@@ -504,13 +376,10 @@ build_full_report_html <- function(
       caption_tag("Table", next_table_n(), "R and package versions used to generate this report."),
       tags$h3("Analysis parameters"),
       tags$p(
-        "Sign confidence and robustness-to-uncertainty figures above resample every edge's weight ",
-        tags$code("n_simulations = 100"), " times within a range set by its confidence and ",
+        "\"How confident is that, response by response?\" resamples every edge's weight ",
+        tags$code("n_simulations = 300"), " times within a range set by its confidence and ",
         tags$code("spread = 0.5"), ", using a fixed random seed (", tags$code("seed = 42"), ") so that",
-        " regenerating this report from the same savepoint reproduces the exact same numbers.",
-        " Edge sensitivity ranks each edge by a one-at-a-time ", tags$code("+10%"),
-        " weight bump (", tags$code("relative_change = 0.1"), "), which involves no random sampling",
-        " and is already fully deterministic."
+        " regenerating this report from the same savepoint reproduces the exact same numbers."
       )
     ))
   }

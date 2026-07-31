@@ -2396,10 +2396,78 @@ motor temporal.
   não tem suíte dedicada — verificado só via app real, mesmo padrão já
   usado pras fases anteriores do relatório); suíte completa (171
   assertivas) e checagem de sintaxe seguem limpas.
-- [ ] **Fase 8** — corte do motor antigo (equilíbrio/estabilidade/
-  trajetória-linear/robustez antiga saem da tela e do relatório) — mantém
+- [x] **Fase 8 concluída** — corte do motor antigo. Removido da tela
+  (`R/modules/mod_responses.R`) e do relatório (`R/report.R`,
+  `R/modules/mod_report.R`) tudo que dependia de `press_perturbation()`/
+  `check_stability()`: o aviso de estabilidade, "Effect on the network",
+  "Effect on each factor" (Improves/Worsens/Stable + Sign confidence),
+  "When will Impacts be neutralized?", os disclosures "Show how the effect
+  evolves over time" (gráfico de trajetória), "Show robustness to
+  uncertainty", "Show which edges matter most" e "Show sensitivity to
+  self-regulation", a nota de auto-regulação, e a seção de relatório
+  "Scenarios compared (older, equilibrium-based reading)" inteira
+  (Equilibrium effect/Sign confidence/Summary per scenario). **Mantido**:
   `self_regulation_diagonal()`/`build_interaction_matrix()`/
-  `build_threshold_matrix()`, agora reaproveitadas pelo motor temporal.
+  `build_threshold_matrix()` (`R/loop_analysis.R`) — reaproveitadas pelo
+  motor temporal (Fase 4-7) — e **Reach** (`response_reach()`, `R/reach.R`),
+  travessia pura de grafo, nunca dependeu de `press_perturbation()`.
+  Relocado pra sua própria seção (`reach_section` na tela, `h2("Reach")`
+  no relatório) em vez de ficar dentro do bloco antigo removido. As
+  funções em si (`press_perturbation()`, `check_stability()`,
+  `simulate_trajectory_thresholded()`, `robustness_check()`,
+  `sign_determinacy()`, `self_regulation_sensitivity()`,
+  `global_sensitivity()`, `summarize_scenario_effect()`,
+  `summarize_scenario_network_effect()`, `compare_scenario_effects()`,
+  `compare_scenario_sign_confidence()`, `find_neutralization_step()`,
+  `summarize_neutralization()`) continuam definidas em
+  `R/loop_analysis.R` e cobertas por `tests/testthat/test-loop_analysis.R`
+  — só páram de ser chamadas pela UI/relatório, mesmo padrão já usado
+  pra `apply_response()` (`R/responses.R`).
+
+  Duas adaptações não pedidas explicitamente pelo roadmap, mas necessárias
+  pra não deixar funcionalidade existente quebrada: a coluna "Summary" da
+  tabela "Saved scenarios" (antes `"%d improve, %d worsen, %d stable"`,
+  calculada a partir do `sc$result` removido) virou
+  `scenario_sufficiency_summary()` — `"%d of %d Impacts neutralized"` a
+  partir de `sc$sufficiency_df$neutralized` (a leitura nova, já calculada
+  em "Apply scenario"). "Compare selected scenarios" perdeu as 3 tabelas
+  antigas (Equilibrium effect/Sign confidence/Summary per scenario) e
+  ficou só com "Reach per scenario" — deliberadamente **não** foi
+  inventada uma tabela de comparação de suficiência entre cenários pra
+  substituir as removidas (cada cenário salvo pode ter sido aplicado com
+  um `p_D` de pressão diferente, então não existe uma linha "Baseline"
+  única e correta pra essa comparação, ao contrário de Reach, que nunca
+  depende de pressão) — escopo deliberadamente contido ao que o roadmap
+  pediu (cortar o motor antigo), não uma feature nova.
+
+  Cabeçalho de `mod_responses.R` reescrito do zero pra refletir o estado
+  atual (duas leituras — suficiência e temporal — mais Reach independente),
+  em vez de descrever features que não existem mais na tela.
+
+  Testado ponta a ponta rodando o app de verdade contra
+  `docs/example_fisheries.idpsir.json`: aba Scenarios não mostra mais
+  nenhum vestígio do motor antigo antes ou depois de "Apply scenario"
+  (sem aviso de estabilidade, sem "Effect on each factor", sem
+  disclosures de trajetória/robustez/sensibilidade/auto-regulação);
+  "Reach" aparece como seção própria logo abaixo da suficiência,
+  mostrando "4 factors reached, including 1 of 1 Impact" como antes;
+  disclosure temporal continua funcionando (tabela + prancha, sem
+  regressão nos números já verificados na Fase 6); "Save this scenario"
+  grava "Scenario 1 | R1 | 0 of 1 Impacts neutralized" na tabela de
+  cenários salvos (bate com "Neutralizes? No" da tabela de suficiência);
+  "Compare selected scenarios" (Baseline + Scenario 1) mostra só "Reach
+  per scenario" (Baseline 0, Scenario 1 4 factors/1 of 1 Impact), sem as
+  3 tabelas antigas. Relatório gerado com o cenário selecionado e
+  "Include temporal simulation" ligado contém "Response sufficiency",
+  "Reach" e "Temporal simulation (discrete windows)", e **não** contém
+  "Scenarios compared"/"Equilibrium effect per factor"/"Sign confidence
+  per factor"/"Which edges matter most"/"How the effect evolves over
+  time" (confirmado varrendo o HTML por essas strings) — 1 Figure (só a
+  prancha temporal) e 6 Tables, contra as 3 Figures/10 Tables de antes do
+  corte. Sem erro no console do navegador nem do servidor em nenhum
+  passo. Suíte `testthat` completa (171 assertivas, nenhuma mudança —
+  `R/loop_analysis.R` em si não foi tocado) e checagem de sintaxe seguem
+  limpas.
 - [ ] **Fase 9** — exemplo Gnanapragasam (`data/`, `docs/`, savepoint,
   tutorial, README) no lugar do Mangi.
 - [ ] **Fase 10** — verificação final, `CLAUDE.md`, commit/push/merge.
