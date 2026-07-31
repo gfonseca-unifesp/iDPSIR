@@ -8,7 +8,7 @@ S1,I2,1.5,0.65,negative,observational,,
 S1,I3,1,0.5,negative,expert_assessment,,
 S2,I4,2,0.6,positive,expert_assessment,,
 S2,I5,1.5,0.5,positive,expert_assessment,,
-R1,D3,1.5,0.6,positive,expert_assessment,,"Adapted from the aid-driven fleet growth narrative in Gnanapragasam et al. 2026, Marine Policy - illustrative interpretation, not the paper's own quantitative model"
-R2,D3,2,0.6,positive,expert_assessment,,"Adapted from the aid-driven fleet growth narrative in Gnanapragasam et al. 2026, Marine Policy - illustrative interpretation, not the paper's own quantitative model"
+R1,I2,2,0.6,negative,expert_assessment,,"Aid's real, documented target per Gnanapragasam et al. 2026, Marine Policy - compensating lost fishing income, not fleet size"
+R2,I2,2.5,0.6,negative,expert_assessment,,"Aid's real, documented target per Gnanapragasam et al. 2026, Marine Policy - compensating lost fishing income, not fleet size"
 R1,S2,1,0.5,positive,expert_assessment,,
 R2,S2,1.5,0.5,positive,expert_assessment,,

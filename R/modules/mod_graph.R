@@ -96,7 +96,8 @@ mod_graph_ui <- function(id) {
         collapsible = TRUE, collapsed = TRUE,
         selectInput(ns("path_from_category"), "Pathway from category", choices = character()),
         selectInput(ns("path_to_category"), "Pathway to category", choices = character()),
-        selectInput(ns("path_highlight"), "Highlight pathway", choices = c("None" = "none"), width = "100%")
+        selectInput(ns("path_highlight"), "Highlight pathway", choices = c("None" = "none"), width = "100%"),
+        uiOutput(ns("path_status"))
       ),
 
       box(
@@ -177,6 +178,28 @@ mod_graph_server <- function(id, schema, nodes, edges, graph, positions, set_pos
         sprintf("%s (score %.2f)", candidates$nodes, candidates$score)
       )
       updateSelectInput(session, "path_highlight", choices = c("None" = "none", choices), selected = "none")
+    })
+
+    # "Highlight pathway" only ever offers "None" when path_candidates() is
+    # empty - correct (there's nothing to highlight), but indistinguishable
+    # from the dropdown being broken/unresponsive unless something says so.
+    # Confirmed live: the dropdown and highlight themselves work correctly
+    # end-to-end once a category pair with an actual path is picked - the
+    # empty case just needed an explanation, not a code fix to the reactive.
+    output$path_status <- renderUI({
+      candidates <- path_candidates()
+
+      if (nrow(candidates) > 0) {
+        return(NULL)
+      }
+
+      p(
+        class = "text-muted", style = "font-size: 13px; margin-top: 6px;",
+        sprintf(
+          "No pathway found from any %s to any %s in this network.",
+          input$path_from_category, input$path_to_category
+        )
+      )
     })
 
     highlighted_nodes <- reactive({

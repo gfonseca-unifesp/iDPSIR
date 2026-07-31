@@ -421,8 +421,10 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
           p(
             class = "text-muted",
             "Same layout in every panel - only color and size change. Redder = increased from zero in this scenario,",
-            "bluer = decreased; bigger = larger change. Watch how the pattern spreads or fades across windows."
+            "bluer = decreased; bigger = larger change (see the scale bar on the right). Watch how the pattern",
+            "spreads or fades across windows."
           ),
+          sliderInput(ns("storyboard_label_cex"), "Label size", min = 0.3, max = 1.5, value = 0.65, step = 0.05, width = "300px"),
           plotOutput(ns("temporal_storyboard"), height = "600px"),
           plot_download_row(ns, "temporal_storyboard")
         ),
@@ -500,7 +502,7 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
     output$temporal_storyboard <- renderPlot({
       tr <- temporal_result()
       req(tr)
-      draw_temporal_storyboard(graph(), temporal_layout(), tr$scenario)
+      draw_temporal_storyboard(graph(), temporal_layout(), tr$scenario, label_cex = input$storyboard_label_cex)
     })
 
     output$download_temporal_storyboard_png <- downloadHandler(
@@ -511,9 +513,10 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
         n_panels <- nrow(tr$scenario)
         ncol_grid <- ceiling(sqrt(n_panels))
         nrow_grid <- ceiling(n_panels / ncol_grid)
+        label_cex <- input$storyboard_label_cex
         render_plot_png(
-          function() draw_temporal_storyboard(graph(), temporal_layout(), tr$scenario),
-          file, width = 260 * ncol_grid, height = 260 * nrow_grid
+          function() draw_temporal_storyboard(graph(), temporal_layout(), tr$scenario, label_cex = label_cex),
+          file, width = 260 * (ncol_grid + 0.35), height = 260 * nrow_grid
         )
       }
     )
@@ -526,9 +529,10 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
         n_panels <- nrow(tr$scenario)
         ncol_grid <- ceiling(sqrt(n_panels))
         nrow_grid <- ceiling(n_panels / ncol_grid)
+        label_cex <- input$storyboard_label_cex
         render_plot_svg(
-          function() draw_temporal_storyboard(graph(), temporal_layout(), tr$scenario),
-          file, width = 2.7 * ncol_grid, height = 2.7 * nrow_grid
+          function() draw_temporal_storyboard(graph(), temporal_layout(), tr$scenario, label_cex = label_cex),
+          file, width = 2.7 * (ncol_grid + 0.35), height = 2.7 * nrow_grid
         )
       }
     )

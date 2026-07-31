@@ -50,8 +50,14 @@ draw_sensitivity_plot <- function(sensitivity, top_n = 10) {
 # color (not a "good/worse" judgement - that depends on what each factor
 # means) shows sign: redder = increased from zero, bluer = decreased;
 # size shows magnitude, both scaled to the largest |value| across every
-# window shown so panels are comparable to each other.
-draw_temporal_storyboard <- function(g, layout_df, hist_matrix) {
+# window shown so panels are comparable to each other. `label_cex` is
+# exposed (not hardcoded) so the on-screen slider in mod_responses.R can
+# make node labels readable regardless of how many panels end up in the
+# grid - a dense grid (many windows) needs smaller labels than a 2x2 one.
+# A narrow extra column renders the same red/blue scale as a color bar
+# (fast-follow requested after the storyboard shipped: the mapping was only
+# explained in the help text above the plot, not on the figure itself).
+draw_temporal_storyboard <- function(g, layout_df, hist_matrix, label_cex = 0.65) {
   idx <- match(igraph::V(g)$name, layout_df$id)
   layout_matrix <- as.matrix(layout_df[idx, c("x", "y")])
 
@@ -62,8 +68,15 @@ draw_temporal_storyboard <- function(g, layout_df, hist_matrix) {
   max_abs <- max(abs(hist_matrix), na.rm = TRUE)
   if (!is.finite(max_abs) || max_abs == 0) max_abs <- 1
 
-  old_par <- graphics::par(mfrow = c(nrow_grid, ncol_grid), mar = c(1, 0.5, 2, 0.5))
+  n_cells <- nrow_grid * ncol_grid
+  panel_ids <- c(seq_len(n_panels), rep(0L, n_cells - n_panels))
+  grid_mat <- matrix(panel_ids, nrow = nrow_grid, ncol = ncol_grid, byrow = TRUE)
+  legend_id <- n_panels + 1L
+  grid_mat <- cbind(grid_mat, rep(legend_id, nrow_grid))
+
+  old_par <- graphics::par(mar = c(1, 0.5, 2, 0.5))
   on.exit(graphics::par(old_par))
+  graphics::layout(grid_mat, widths = c(rep(1, ncol_grid), 0.35))
 
   node_order <- match(igraph::V(g)$name, colnames(hist_matrix))
   labels <- igraph::V(g)$label
@@ -91,7 +104,7 @@ draw_temporal_storyboard <- function(g, layout_df, hist_matrix) {
       vertex.color = node_color,
       vertex.size = node_size,
       vertex.label = labels,
-      vertex.label.cex = 0.65,
+      vertex.label.cex = label_cex,
       vertex.label.color = "black",
       vertex.label.dist = 1.3,
       edge.arrow.size = 0.3,
@@ -99,6 +112,35 @@ draw_temporal_storyboard <- function(g, layout_df, hist_matrix) {
       main = paste("Window", t)
     )
   }
+
+  draw_storyboard_color_scale(max_abs)
+}
+
+# Vertical gradient bar for the storyboard's last grid cell: red at the top
+# (increased from zero) through white (zero) to blue at the bottom
+# (decreased from zero), the same rgb() mapping used per-node above, with
+# axis ticks at -max_abs/0/max_abs so a reader can turn a panel's node color
+# back into an approximate value instead of only a direction.
+draw_storyboard_color_scale <- function(max_abs) {
+  graphics::par(mar = c(3, 1, 3, 3.5))
+
+  n_grad <- 100
+  grad_vals <- seq(max_abs, -max_abs, length.out = n_grad)
+  grad_intensity <- pmin(abs(grad_vals) / max_abs, 1)
+  grad_colors <- ifelse(
+    grad_vals >= 0,
+    grDevices::rgb(1, 1 - grad_intensity, 1 - grad_intensity),
+    grDevices::rgb(1 - grad_intensity, 1 - grad_intensity, 1)
+  )
+
+  graphics::plot(
+    NA, xlim = c(0, 1), ylim = c(-max_abs, max_abs),
+    xaxt = "n", yaxt = "n", xlab = "", ylab = "", bty = "n"
+  )
+  graphics::rasterImage(as.raster(matrix(grad_colors, ncol = 1)), 0, -max_abs, 1, max_abs)
+  graphics::axis(4, at = c(-max_abs, 0, max_abs), labels = round(c(-max_abs, 0, max_abs), 2), las = 1, cex.axis = 0.7)
+  graphics::mtext("increased", side = 3, line = 1, cex = 0.65, font = 2)
+  graphics::mtext("decreased", side = 1, line = 1, cex = 0.65, font = 2)
 }
 
 # Renders `draw_fn()` to a PNG/SVG file at `path` - used both by

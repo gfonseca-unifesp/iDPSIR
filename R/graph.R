@@ -387,7 +387,17 @@ build_network_visual <- function(
   # ===================================================
 
   layout <- compute_graph_layout(nodes, schema, layout_mode = layout_mode, x_spacing = x_spacing, y_spacing = y_spacing)
-  layout <- apply_manual_positions(layout, manual_positions)
+  # Manual drag positions only apply in layered mode - circular mode is a
+  # precise ring, and re-applying a position dragged while in layered mode
+  # would pull that one node off the ring, leaving it stranded outside the
+  # circle instead of taking its place among the other nodes (reported bug:
+  # switching to circular after dragging a node in layered view left that
+  # node behind at its old layered coordinates). The position itself is not
+  # lost - it stays in the savepoint/manual_positions and re-applies the next
+  # time layout_mode is "layered".
+  if (!identical(layout_mode, "circular")) {
+    layout <- apply_manual_positions(layout, manual_positions)
+  }
   nodes <- merge(nodes, layout, by = "id", sort = FALSE)
 
   # Circular mode is a precise ring - physics would only distort it, so
@@ -396,20 +406,21 @@ build_network_visual <- function(
   # nodes) EXCEPT for nodes the user has actually dragged, which get excluded
   # too so they stop drifting back under the solver.
   #
-  # Deliberately `physics = FALSE`, not `fixed.y = TRUE`: vis-network's own
-  # drag handler snapshots each node's fixed.x/fixed.y at the START of every
-  # drag gesture and only lets that axis follow the mouse if the snapshot
-  # says FALSE (see vis-network's onDragStart/onDrag). Since a node's very
-  # first drag round-trips through the server and re-renders the widget with
-  # fixed.y = TRUE baked into its initial options, any *second* drag on that
-  # same node would see yFixed = TRUE from the start and never move at all -
-  # confirmed by tracing vis-network's minified source, not guessed. `fixed.y`
-  # stays FALSE always instead, so every drag (not just the first) responds;
-  # `physics = FALSE` is what actually stops the node drifting between drags,
-  # and vis-network's drag handler never consults `physics` when deciding
-  # whether to move a node.
+  # Deliberately `physics = FALSE`, not `fixed.x/fixed.y = TRUE`: vis-network's
+  # own drag handler snapshots each node's fixed.x/fixed.y at the START of
+  # every drag gesture and only lets that axis follow the mouse if the
+  # snapshot says FALSE (see vis-network's onDragStart/onDrag). Since a
+  # node's very first drag round-trips through the server and re-renders the
+  # widget with fixed.x/fixed.y baked into its initial options, locking
+  # either axis there would make that axis unresponsive to drag from the very
+  # first gesture (reported bug: dragging only ever moved a node on Y, never
+  # X) - confirmed by tracing vis-network's minified source, not guessed.
+  # `fixed.x`/`fixed.y` stay FALSE always instead, so every drag (not just
+  # the first, and on both axes) responds; `physics = FALSE` is what actually
+  # stops a dragged/circular node drifting afterward, and vis-network's drag
+  # handler never consults `physics` when deciding whether to move a node.
   manually_placed <- if (!is.null(manual_positions) && nrow(manual_positions) > 0) manual_positions$id else character()
-  nodes$`fixed.x` <- TRUE
+  nodes$`fixed.x` <- FALSE
   nodes$`fixed.y` <- FALSE
   nodes$physics <- !(identical(layout_mode, "circular") | nodes$id %in% manually_placed)
 
@@ -580,14 +591,20 @@ build_community_visual <- function(
   nodes$shape <- "dot"
 
   layout <- compute_graph_layout(nodes, schema, layout_mode = layout_mode, x_spacing = x_spacing, y_spacing = y_spacing)
-  layout <- apply_manual_positions(layout, manual_positions)
+  # See build_network_visual() for why manual positions are skipped in
+  # circular mode (a position dragged in layered mode would otherwise strand
+  # that node off the ring).
+  if (!identical(layout_mode, "circular")) {
+    layout <- apply_manual_positions(layout, manual_positions)
+  }
   nodes <- merge(nodes, layout, by = "id", sort = FALSE)
 
-  # See build_network_visual() for why physics (not fixed.y) is what pins a
-  # dragged/circular node in place - fixed.y=TRUE would make it undraggable
-  # on any subsequent attempt (vis-network snapshots fixed.x/y at drag start).
+  # See build_network_visual() for why physics (not fixed.x/fixed.y) is what
+  # pins a dragged/circular node in place - fixed.x/fixed.y=TRUE would make
+  # that axis undraggable on any attempt (vis-network snapshots fixed.x/y at
+  # drag start).
   manually_placed <- if (!is.null(manual_positions) && nrow(manual_positions) > 0) manual_positions$id else character()
-  nodes$`fixed.x` <- TRUE
+  nodes$`fixed.x` <- FALSE
   nodes$`fixed.y` <- FALSE
   nodes$physics <- !(identical(layout_mode, "circular") | nodes$id %in% manually_placed)
 

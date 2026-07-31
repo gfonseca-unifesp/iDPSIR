@@ -131,11 +131,13 @@ Impact→Response, and Response→{Driver, Pressure, State, Impact}. The schema 
 configurable, so this order and vocabulary can be adjusted per project.
 
 A larger, annotated example — an artisanal-fisheries network adapted from
-Gnanapragasam et al. 2026 (Marine Policy), where a well-intentioned response ends up
-becoming a new pressure on the very system it was meant to help — is at
-[`docs/example_gnanapragasam.idpsir.json`](docs/example_gnanapragasam.idpsir.json);
-load it from the wizard's Start step (Load savepoint) or see the
-[tutorial](docs/tutorial.html) for a full walkthrough.
+Gnanapragasam et al. 2026 (Marine Policy), where a response that directly and
+sufficiently neutralizes its intended Impact still erodes over time against an
+independent driver trend it can't touch, while its own side channel quietly worsens
+two Impacts the pressure scenario never does — is at
+[`docs/example_gnanapragasam.idpsir.json`](docs/example_gnanapragasam.idpsir.json)
+(pressure and response scenario pre-configured); load it from the wizard's Start step
+(Load savepoint) or see the [tutorial](docs/tutorial.html) for a full walkthrough.
 
 ## Workflow
 

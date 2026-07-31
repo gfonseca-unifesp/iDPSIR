@@ -1,7 +1,7 @@
 id,label,dpsir_category,subsystem,uncertainty,controllability,self_regulation,growth_rate,reference_value
 D1,Coastal population growth,Driver,Northern Sri Lanka fisheries,medium,low,0,0.02,1
 D2,Fish demand and consumption growth,Driver,Northern Sri Lanka fisheries,medium,low,0,0.015,1
-D3,Number of fishers and boats,Driver,Northern Sri Lanka fisheries,medium,medium,0.1,0,1
+D3,Number of fishers and boats,Driver,Northern Sri Lanka fisheries,medium,medium,0.1,0.03,1
 P1,Fishing effort,Pressure,Northern Sri Lanka fisheries,medium,medium,0,0,1
 S1,Fish stock (CPUE),State,Northern Sri Lanka fisheries,high,low,0.35,0,100
 S2,Fleet motorization (% motorized),State,Northern Sri Lanka fisheries,medium,low,0.02,0,1

@@ -2651,14 +2651,151 @@ motor temporal.
   (`fase-10-suficiencia`), pronta pra revisão do usuário antes de
   push/merge em `main`.
 
+**Redesenho do exemplo Gnanapragasam (R1/R2→I2 direto + `growth_rate` em
+D3), substituindo o desenho da Fase 9 (R1/R2→D3).** Revisando o artigo
+mais de perto com o usuário: o auxílio pós-tsunami/pós-guerra (R1/R2) foi
+desenhado pelo próprio artigo pra compensar diretamente **Fisher income
+loss** (I2) — não pra aumentar a frota. A aresta R1/R2→D3 usada até aqui
+simplificava demais um efeito que o artigo trata como indireto. Testado
+antes de aceitar o redesenho (scripts standalone em `scratchpad/`, nunca
+assumido): removendo R1/R2→D3 e adicionando R1/R2→I2 (negative), o Driver
+"Number of fishers and boats" (D3) fica parado em 0 pra sempre no motor
+temporal — `growth_rate` é multiplicativo sobre o desvio **já existente**
+(`x(t+1) = x(t) + growth_rate*x(t) + ...`), não cria desvio a partir de
+repouso zero. Corrigido dando a D3 uma pequena semente própria via o
+cenário de pressão (D3 a 30%, em paralelo a D1/D2) — representando "esse
+crescimento está de fato acontecendo, por razões que o artigo não
+define", exatamente o que `growth_rate` foi desenhado pra expressar.
+
+Com D3 semeado, a leitura temporal reproduz a "erosão sem reversão"
+pedida pelo usuário: R1+R2 neutralizam Fisher income loss no início
+(janelas 0-3), mas a mitigação relativa erode de ~34% de corte (janela 5,
+34.3 vs. baseline 52.3) pra <1% (janela 15, 8150.0 vs. 8212.9) conforme o
+crescimento independente de D3 domina — nunca reverte pra "pior que sem
+resposta" (testado em varredura de `growth_rate`∈{0.03,0.05,0.08,0.12} ×
+semente∈{0.3,0.5,0.8} até 60 janelas, sempre assintótico, nunca cruza).
+Achado que corrigiu uma primeira leitura errada do usuário (confirmado
+por ele: "sim vc tem razao me expressei mal"): só **Fisher income loss**
+é de fato afetado pela resposta nesta rede — Catch decline/Conflict with
+Indian fishermen ficam **idênticos** entre baseline e cenário em toda
+janela (fora do alcance da resposta, `response_reach()` confirma: 4
+fatores alcançados, 3 de 5 Impactos — S2/I2/I4/I5, nunca I1/I3);
+Traditional fishing decline/Loss of traditional culture são genuinamente
+piorados pelo canal lateral da resposta (R1/R2→S2, fleet motorization),
+com baseline exatamente zero em toda janela.
+
+`data/gnanapragasam2026_edges.csv` (R1/R2→D3 removidas, R1/R2→I2
+adicionadas), `data/gnanapragasam2026_nodes.csv` (D3 `growth_rate` 0→0.03)
+editados; `docs/example_gnanapragasam.idpsir.json` regenerado via script
+(`build_savepoint()`/`write_savepoint()` de verdade, não editado à mão) —
+ganhou também `scenario_state` pré-configurado (pressão D1+D2 a 100%,
+resposta R1+R2 a 100%, `effect_horizon=0.5`; D3 fica de fora do savepoint
+de propósito — é um passo extra guiado só na seção temporal do tutorial,
+não faz parte do cenário "de largada"), o que a versão anterior do
+savepoint nunca tinha. `docs/tutorial.html` (seção "Worked example"
+inteira reescrita: nova tabela de arestas, nova tabela de suficiência,
+tabela de confiança por resposta [Post-tsunami 25.7% vs. Post-war 72% em
+Fisher income loss — as duas respostas discordam], tabela reach-over-c
+com "Borderline" em c=0.8, seção Reach reescrita pra mostrar as duas
+rotas da mesma resposta [direta em I2, indireta via S2→I4/I5] em vez de
+uma tabela hipotética, tabela temporal com as 4 assinaturas de
+comportamento) e `README.md` (parágrafo do exemplo) atualizados com os
+números verificados nesta sessão.
+
+Verificado ponta a ponta rodando o app de verdade: savepoint carregado,
+"Everything is valid" nos 13 nós/13 arestas, cenário pré-configurado
+aplicado reproduzindo exatamente a Tabela 1 do tutorial (Catch decline
+1.5/0/1.5/No; Fisher income loss 1.125/-2.25/-1.125/Yes x0.50; Conflict
+0.75/0/0.75/No; Traditional decline 0/1.25/1.25/No; Loss of culture
+0/0.938/0.938/No), confiança 26%/72%, reach "4 factors reached, including
+3 of 5 Impacts"; relatório HTML gerado com a seção temporal incluída (1
+figura, 6 tabelas) contendo os mesmos números. Suíte `testthat` e
+checagem de sintaxe seguem limpas.
+
+**Correções de UI apontadas pelo usuário ao revisar o app** (`R/graph.R`,
+`R/modules/mod_graph.R`, `R/scenario_plots.R`, `R/modules/mod_responses.R`):
+
+- **Arrastar nó só se movia no eixo Y, nunca em X.** `fixed.x` estava
+  fixo em `TRUE` (tanto em `build_network_visual` quanto em
+  `build_community_visual`) desde sempre — travava X pra manter a coluna
+  por categoria no layout em camadas, mas pelo mesmo motivo já documentado
+  pro fix de Y (vis-network tira uma "foto" de `fixed.x`/`fixed.y` no
+  início de cada gesto de arrastar), travava X em **todo** drag, não só
+  physics. Corrigido pro mesmo padrão já usado em Y: `fixed.x` sempre
+  `FALSE`, `physics=FALSE` é quem de fato imobiliza um nó arrastado/
+  circular entre um drag e outro. Trade-off aceito conscientemente: nós
+  não-arrastados em modo layered agora têm X tecnicamente livre pro
+  solver de física, não travado por `fixed.x=TRUE` — na prática o
+  `x_spacing` de 200px entre categorias e a repulsão do forceAtlas2Based
+  mantêm as colunas coerentes (confirmado ao vivo, sem distorção
+  visível). Verificado lendo o node do widget: `fixed:{x:false,y:false}`
+  num nó nunca arrastado, e a posição arrastada (`x=500,y=-300`)
+  persistindo corretamente após o drag.
+- **Nó arrastado em modo layered não voltava pro anel ao trocar pra
+  circular.** `apply_manual_positions()` sobrepunha a posição arrastada
+  em cima do layout computado **sem checar `layout_mode`** — em modo
+  circular, isso arrancava o nó do anel. Corrigido pulando
+  `apply_manual_positions()` inteiramente quando `layout_mode ==
+  "circular"` (nos dois construtores de visual, grafo e comunidades) — a
+  posição continua guardada em `positions`/savepoint, só não é reaplicada
+  nesse modo. Verificado ao vivo: nó arrastado pra `(500,-300)` em modo
+  layered, alternado pra circular — os 13 nós (incluindo o arrastado)
+  ficam todos a ~413px do centro (raio uniforme, confirmado via
+  `network.getPositions()`); voltando pra layered, a posição arrastada
+  reaparece exatamente onde foi deixada.
+- **"Highlight pathway" parecia travado em "None".** Investigado a fundo
+  (inclusive um susto real: `Rscript -e` com string multi-linha via este
+  Bash tool nesta máquina Windows segfaultava em qualquer chamada de
+  `all_simple_paths()` — reproduzido isoladamente, mas confirmado ser um
+  artefato do `-e` inline, não um bug do igraph: o mesmo código rodando de
+  um arquivo `.R` funciona perfeitamente). Com isso descartado, o reativo
+  (`path_candidates`/`observeEvent`) provou estar **correto**: testado ao
+  vivo trocando "Pathway to category" pra "Impact", o servidor computou e
+  enviou 9 candidatos corretamente — o valor só não aparecia no `<select>`
+  bruto porque o widget é `selectize.js`, que mantém sua própria lista
+  interna (`el.selectize.options`) sem espelhar de volta pro DOM
+  (inspecionar `el.options` sozinho, como fiz primeiro, é enganoso).
+  Abrindo o dropdown de verdade, os 9 caminhos apareciam e o destaque no
+  grafo funcionava. A causa real do "parece travado" pro usuário: o par
+  de categoria padrão (Driver→Response) genuinamente não tem nenhum
+  caminho nesta rede (nenhuma aresta entra num nó de Resposta) —
+  `nrow(candidates)==0` correto, mas sem nenhuma explicação na tela.
+  Corrigido não a lógica (que já funcionava), mas a UX: `output$path_status`
+  novo mostra "No pathway found from any X to any Y in this network." só
+  quando a lista de candidatos está vazia — verificado ao vivo aparecendo/
+  desaparecendo corretamente ao trocar a categoria.
+- **Legenda/tamanho de rótulo e escala de cor na prancha temporal
+  ("storyboard").** `draw_temporal_storyboard()` (`R/scenario_plots.R`)
+  ganhou `label_cex` (antes fixo em 0.65) — novo slider "Label size"
+  (0.3-1.5) em `mod_responses.R`, encadeado no `renderPlot()` e nos dois
+  `downloadHandler()`s (PNG/SVG), mesmo padrão de compartilhamento de
+  função já usado pelos outros gráficos da aba. Uma coluna extra
+  (`graphics::layout()` no lugar de `par(mfrow=...)`, já que agora precisa
+  de uma célula com formato diferente das demais) mostra uma barra de
+  gradiente vermelho-branco-azul com eixo rotulado (`-max_abs`/`0`/
+  `max_abs`) e "increased"/"decreased" nas pontas — a legenda de cor que
+  antes só existia como texto de ajuda acima do gráfico. Verificado
+  renderizando standalone (PNG de teste, barra e rótulos legíveis, sem
+  sobreposição) e ao vivo na app: imagem real (128 KB) presente no DOM,
+  aumentar o slider pra 1.4 visivelmente aumenta os rótulos dos nós no
+  screenshot, download PNG responde 200/`image/png`. Relatório
+  (`R/report.R`) usa o `label_cex` padrão (0.65) — não fica configurável
+  por cenário salvo, mesmo escopo mínimo já usado pelos demais parâmetros
+  só-de-tela desta aba.
+
+Suíte `testthat` completa e checagem de sintaxe re-rodadas depois de
+todas essas mudanças, ambas limpas. Passagem completa no navegador
+cobrindo o redesenho da rede + os 3 fixes + as 2 features do storyboard,
+sem erro no console do navegador nem do servidor em nenhum passo.
+
 Trilha operacional separada (independente, registrada no plano, encaixa
-quando quiser): arrastar nó livre no eixo X (`fixed.x` hardcoded em
-`R/graph.R`), layout circular não parece um círculo (suspeita de
-container retangular esticando a proporção, não confirmada ao vivo ainda),
-reordenar níveis do schema (`mod_data.R`'s "Add level" não tem edição
-nem tratamento de colisão pra um nível já existente). Nenhuma dessas foi
-endereçada na Revisão 1 — ficam registradas pra quando o usuário quiser
-retomá-las.
+quando quiser): layout circular não parece um círculo (suspeita de
+container retangular esticando a proporção, não confirmada ao vivo ainda —
+diferente do bug de posição arrastada não voltar ao anel, já corrigido
+acima), reordenar níveis do schema (`mod_data.R`'s "Add level" não tem
+edição nem tratamento de colisão pra um nível já existente). Nenhuma
+dessas foi endereçada ainda — ficam registradas pra quando o usuário
+quiser retomá-las.
 
 Pedido pelo usuário mas ainda não definido: "estrela"/"rosa" como layouts
 adicionais — precisa de uma conversa pra fixar o que cada termo significa
