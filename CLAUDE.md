@@ -2618,14 +2618,47 @@ motor temporal.
   corretos. Sem erro no console do navegador nem do servidor em nenhum
   passo, depois dos dois fixes. Suíte `testthat` completa (192 assertivas)
   e checagem de sintaxe seguem limpas.
-- [ ] **Fase 10** — verificação final, `CLAUDE.md`, commit/push/merge.
+- [x] **Fase 10 concluída — Revisão 1 completa (Fases 1-10).** Verificação
+  final: suíte `testthat` completa (192 assertivas) e checagem de sintaxe
+  de todos os arquivos `R/`, ambas limpas, rodadas de novo do zero nesta
+  fase (não reaproveitando o resultado das fases anteriores). Passagem
+  completa no navegador com o app rodando de verdade: (1) retrocompatibilidade
+  — `docs/example_fisheries.idpsir.json` (savepoint anterior à Fase 5, sem
+  `self_regulation`, ainda com `temporal_scale` gravado) carregado do
+  zero, avançado até Nodes (colunas corretas: sem `temporal_scale`,
+  `self_regulation`/`growth_rate`/`reference_value` default 0/0/1) e
+  construído sem erro — confirma que a normalização tolerante
+  (`normalize_dpsir_nodes()`) continua funcionando pra savepoint bem
+  antigo; (2) rede de Gnanapragasam (Fase 9) do zero: carregada,
+  construída, cenário (pressão D1+D2 + resposta R1+R2 a 100%) aplicado
+  reproduzindo os mesmos números já documentados na Fase 9, disclosure
+  temporal aberto com 10 janelas (paginação `Previous1234Next` confirmada
+  funcionando — fix da Fase 9), cenário salvo mostrando "0 of 5 Impacts
+  neutralized" (a nova coluna Summary baseada em suficiência); (3)
+  relatório completo gerado com **todas** as seções ligadas (general
+  metrics, centralities, descriptors, references, reproducibility,
+  response sufficiency, reach, temporal simulation) — confirmado por
+  busca de texto que as 8 seções esperadas estão presentes e que nenhum
+  vestígio do motor antigo (`Scenarios compared`/`Equilibrium effect per
+  factor`) aparece, 13 tabelas + 1 figura (a prancha temporal), versão do
+  R mencionada na seção de reprodutibilidade. Sem erro no console do
+  navegador nem do servidor em nenhum passo de toda a passagem.
+
+  Com isso, a Revisão 1 (suficiência de resposta + motor temporal de
+  janelas discretas + corte do motor de equilíbrio antigo + exemplo
+  Gnanapragasam) está **completa e mesclável** — 10 fases, cada uma
+  testada ao vivo e commitada separadamente nesta branch
+  (`fase-10-suficiencia`), pronta pra revisão do usuário antes de
+  push/merge em `main`.
 
 Trilha operacional separada (independente, registrada no plano, encaixa
 quando quiser): arrastar nó livre no eixo X (`fixed.x` hardcoded em
 `R/graph.R`), layout circular não parece um círculo (suspeita de
 container retangular esticando a proporção, não confirmada ao vivo ainda),
 reordenar níveis do schema (`mod_data.R`'s "Add level" não tem edição
-nem tratamento de colisão pra um nível já existente).
+nem tratamento de colisão pra um nível já existente). Nenhuma dessas foi
+endereçada na Revisão 1 — ficam registradas pra quando o usuário quiser
+retomá-las.
 
 Pedido pelo usuário mas ainda não definido: "estrela"/"rosa" como layouts
 adicionais — precisa de uma conversa pra fixar o que cada termo significa
