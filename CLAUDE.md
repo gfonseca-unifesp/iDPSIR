@@ -3060,6 +3060,68 @@ pra S1 — resolvido só no lado do script de teste, comparando headers
 `last-modified`; não afeta o app real, que nunca faz fetch client-side
 desse arquivo fora do `fileInput` de upload.)
 
+**README + dados de exemplo alinhados ao schema atual.** Um documento de
+instruções externo (`INSTRUCOES_README_iDPSIR.md`, trazido pelo usuário)
+apontou que `data/sample_nodes.csv` e `data/mangi2007_nodes.csv` ainda
+usavam o cabeçalho de nó **antigo** (com `temporal_scale`, sem
+`self_regulation`/`growth_rate`/`reference_value`/`activation_threshold`),
+enquanto o README já documentava o schema novo desde a rodada anterior —
+o app carrega os dois formatos sem erro (retrocompatibilidade), mas a
+inconsistência entre o que o README descreve e o que os CSVs de exemplo
+de fato têm era real. Migrados os dois pro cabeçalho atual (mesmo do
+`gnanapragasam2026_nodes.csv`): `temporal_scale` removido,
+`self_regulation`/`growth_rate` = 0 e `reference_value` = 1 em todos os
+nós de `sample_nodes.csv`; em `mangi2007_nodes.csv`, os quatro Estados
+que se recuperam naturalmente ganharam `self_regulation` não-zero (S1
+Coral degradation e S2 Fish stock decline = 0,3; S3 Loss of large
+high-trophic fish e S4 Biodiversity decline = 0,2, os demais em 0) —
+valor deliberadamente pequeno o bastante pra não mudar a leitura
+estática de suficiência (que zera a diagonal de qualquer forma via
+`build_signed_matrix()`), só dar amortecimento real pra quem ligar a
+simulação temporal opcional nessa rede. `docs/example_fisheries.idpsir.json`
+**não foi tocado** — continua de propósito no formato antigo, é a
+fixture que prova retrocompatibilidade em `test-loop_analysis.R`/
+`test-reach.R`/`test-metrics.R`.
+
+Três ajustes de texto no README, todos dentro do escopo pontual pedido
+(o documento foi explícito: "não reescrever" as seções já atualizadas na
+Revisão 1): (1) citação completa de Gnanapragasam et al. 2026 (autores,
+título, revista, volume, página) no lugar do "Gnanapragasam et al. 2026
+(Marine Policy)" abreviado, na seção Data format; (2) uma frase nova no
+bullet de Scenarios deixando explícito que a leitura de suficiência
+**ignora `self_regulation` de propósito** — só a simulação temporal
+opcional usa esse atributo (e `growth_rate`) — o Data format já dizia
+isso pro campo em si, faltava repetir no contexto de Scenarios pra quem
+lê só essa seção não achar que auto-regulação muda o veredito principal;
+(3) uma nota de que a simulação temporal é uma integração explícita de
+**horizonte curto**, não um forecast calibrado — em redes sem
+`self_regulation`/`growth_rate` ajustados pra amortecer, os valores
+crescem rápido janela a janela (comportamento já documentado e aceito
+em várias fases anteriores), então o recurso serve pra ler *direção* de
+um efeito indireto retardado, não magnitude absoluta. O texto das
+arestas do exemplo Gnanapragasam (`R1/R2→I2`: "compensating lost fishing
+income, not fleet size") foi conferido contra a ressalva do documento —
+o artigo de fato atribui ao auxílio uma contribuição indireta ao aumento
+do esforço de pesca, mas o texto da aresta não afirma nenhum número que
+o artigo não dê, só descreve o alvo direto documentado (renda) — mantido
+como estava.
+
+Verificado ao vivo rodando o app de verdade (não só lendo os CSVs): os
+dois arquivos migrados importados via "Import CSV files" (injeção de
+arquivo, `sample_nodes.csv`+`sample_edges.csv` primeiro — "Matrices
+imported: 10 nodes, 16 edges", sem aviso — depois `mangi2007_nodes.csv`+
+`mangi2007_edges.csv` — "18 nodes, 31 edges", sem aviso), tabela de Nós
+mostrando as colunas corretas nos dois casos (`self_regulation`/
+`growth_rate`/`reference_value`/`activation_threshold`/`descriptor`,
+sem `temporal_scale`), valores de auto-regulação de Mangi conferidos
+linha a linha (S1/S2=0,3, S3/S4=0,2, demais=0), "Everything is valid" e
+"Graph built successfully" pra rede de Mangi (18 nós/31 arestas). Sem
+erro no console do servidor em nenhum passo. Suíte `testthat` completa e
+checagem de sintaxe seguem limpas (nenhum teste do núcleo numérico lê
+`self_regulation`/`growth_rate`/`temporal_scale` desses dois arquivos
+especificamente, só `mangi2007_*.csv` como fixture de suficiência, que
+ignora esses campos por design).
+
 Trilha operacional separada (independente, registrada no plano, encaixa
 quando quiser): layout circular não parece um círculo (suspeita de
 container retangular esticando a proporção, não confirmada ao vivo ainda —

@@ -1,11 +1,11 @@
-id,label,dpsir_category,subsystem,uncertainty,controllability,temporal_scale
-D1,Urban and agricultural expansion,Driver,Land use,medium,low,long
-P1,Wastewater discharge,Pressure,Water,medium,medium,short
-P2,Overfishing,Pressure,Fisheries,medium,medium,short
-S1,Water quality decline,State,Water,medium,low,short
-S2,Fish stock decline,State,Fisheries,high,low,medium
-S3,Habitat degradation,State,Biodiversity,high,low,medium
-I1,Biodiversity loss,Impact,Biodiversity,high,low,long
-I2,Economic loss in fisheries,Impact,Economy,medium,medium,medium
-I3,Public health risk,Impact,Health,medium,medium,short
-R1,Fisheries management policy,Response,Governance,low,high,medium
+id,label,dpsir_category,subsystem,uncertainty,controllability,self_regulation,growth_rate,reference_value,activation_threshold
+D1,Urban and agricultural expansion,Driver,Land use,medium,low,0,0,1,
+P1,Wastewater discharge,Pressure,Water,medium,medium,0,0,1,
+P2,Overfishing,Pressure,Fisheries,medium,medium,0,0,1,
+S1,Water quality decline,State,Water,medium,low,0,0,1,
+S2,Fish stock decline,State,Fisheries,high,low,0,0,1,
+S3,Habitat degradation,State,Biodiversity,high,low,0,0,1,
+I1,Biodiversity loss,Impact,Biodiversity,high,low,0,0,1,
+I2,Economic loss in fisheries,Impact,Economy,medium,medium,0,0,1,
+I3,Public health risk,Impact,Health,medium,medium,0,0,1,
+R1,Fisheries management policy,Response,Governance,low,high,0,0,1,

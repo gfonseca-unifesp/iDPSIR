@@ -133,11 +133,16 @@ Impact→Response, and Response→{Driver, Pressure, State, Impact}. The schema 
 configurable, so this order and vocabulary can be adjusted per project.
 
 A larger, annotated example — an artisanal-fisheries network adapted from
-Gnanapragasam et al. 2026 (Marine Policy), where a response that directly and
-sufficiently neutralizes its one intended Impact still erodes over time against an
-independent driver trend it can't touch, while the other four Impacts in the network
-are driven entirely by the pressure side and sit completely outside what the response
-can ever reach (1 of 5 Impacts) — is at
+
+> Gnanapragasam, K., Ratnasiri, S., & Fleming, C. (2026). Sustainable small-scale
+> fisheries development: Integrating bioeconomic and DPSIR models for policy
+> insights. *Marine Policy*, 189, 107095.
+
+— where a response that directly and sufficiently neutralizes its one intended
+Impact still erodes over time against an independent driver trend it can't touch,
+while the other four Impacts in the network are driven entirely by the pressure
+side and sit completely outside what the response can ever reach (1 of 5 Impacts)
+— is at
 [`docs/example_gnanapragasam.idpsir.json`](docs/example_gnanapragasam.idpsir.json)
 (pressure and response scenario pre-configured); load it from the wizard's Start step
 (Load savepoint) or see the [tutorial](docs/tutorial.html) for a full walkthrough, now
@@ -167,15 +172,23 @@ has four tabs:
   confidence range, that agree on the neutralization verdict) and a check for whether
   the verdict holds up across how far the effect is traced. Unlike the network's own
   math, this reading never requires a "stable" network and never inverts a
-  prediction's sign. **Reach** always shows how many factors — and how many Impacts —
-  a response's influence can touch through some causal path, independent of the
-  reading above. An optional **temporal simulation** disclosure (`R/temporal.R`) runs
-  the same two scenarios forward window by window instead of reading a single instant
-  — useful when a response might, windows later, become a new pressure itself — with a
-  configurable number of windows, an impulse/permanent mode for each scenario, a table
-  of how each Impact changes window by window, a progress indicator while it computes,
-  and a "storyboard" plotting the network's state per window (downloadable as PNG/SVG,
-  and included as a figure in the report if selected). Save a scenario and compare
+  prediction's sign. The sufficiency reading above is deliberately static and ignores
+  a node's `self_regulation` on purpose — that attribute (and `growth_rate`) only
+  feeds the optional temporal simulation below, never the primary verdict. **Reach**
+  always shows how many factors — and how many Impacts — a response's influence can
+  touch through some causal path, independent of the reading above. An optional
+  **temporal simulation** disclosure (`R/temporal.R`) runs the same two scenarios
+  forward window by window instead of reading a single instant — useful when a
+  response might, windows later, become a new pressure itself — with a configurable
+  number of windows, an impulse/permanent mode for each scenario, a table of how each
+  Impact changes window by window, a progress indicator while it computes, and a
+  "storyboard" plotting the network's state per window (downloadable as PNG/SVG, and
+  included as a figure in the report if selected). It's an explicit short-horizon
+  integration, not a calibrated forecast: in networks without `self_regulation`/
+  `growth_rate` tuned to damp things down, values can grow quickly window over
+  window — read it for the *direction* of an indirect, delayed effect (does a
+  response's benefit hold up or erode; does it eventually feed a new pressure), not
+  for the absolute magnitude. Save a scenario and compare
   multiple saved scenarios' reach side by side. The older equilibrium-based reading
   (loop analysis / Levins 1974 — stability check, immediate vs. equilibrium effect,
   step-by-step trajectory, robustness and self-regulation-sensitivity checks, edge
