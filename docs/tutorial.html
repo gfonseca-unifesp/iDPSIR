@@ -990,13 +990,15 @@ P1,S1,3,0.85,negative,monitoring</pre>
 
         <h3>Mangi et al. 2007 — a real published network, and a real bug it caught</h3>
         <p>18 nodes, 31 edges — coral-reef fisheries management in a real paper
-          (Mangi, S.C., Roberts, C.M., &amp; Rawlinson, N.J.F. (2007). Reef fisheries
+          (Mangi, S.C., Roberts, C.M., &amp; Rodwell, L.D. (2007). Reef fisheries
           management in Kenya: Preliminary approach using the driver-pressure-state-
           impacts-response (DPSIR) scheme of indicators. <em>Ocean &amp; Coastal
-          Management</em>, 50(5-6), 463-480). This is the network that caught a real,
-          reproducible bug during development: the older equilibrium-based reading
-          this app used to show (removed since, see Scenarios above) reported <strong>
-          Gear restrictions</strong> as making <strong>Reef ecosystem degradation
+          Management</em>, 50(5-6), 463-480,
+          <a href="https://doi.org/10.1016/j.ocecoaman.2006.10.003" target="_blank">doi:10.1016/j.ocecoaman.2006.10.003</a>).
+          This is the network that caught a real, reproducible bug during
+          development: the older equilibrium-based reading this app used to show
+          (removed since, see Scenarios above) reported <strong>Gear
+          restrictions</strong> as making <strong>Reef ecosystem degradation
           worse</strong> — the wrong sign for a response explicitly meant to protect
           the reef. Loading this network and applying pressure from
           <strong>Coastal population growth</strong> + <strong>Market demand for reef
@@ -1009,6 +1011,20 @@ P1,S1,3,0.85,negative,monitoring</pre>
           14 of the other 17 factors, because Responses here loop back into several
           Drivers, Pressures and States at once, not just the one Impact they're aimed
           at.</p>
+        <p class="muted" style="font-size:14px; margin-top:10px">This network also
+          shows the modeling convention every example in this app follows: State
+          nodes are named as <strong>neutral measurements</strong> —
+          <strong>Fish stock</strong>, <strong>Coral cover</strong>,
+          <strong>Biodiversity</strong> — never pre-judged as "decline" or
+          "degradation". The value judgment belongs on the edges, not the node name:
+          Pressure→State edges here are <code>negative</code> (fishing effort
+          <em>reduces</em> the stock) and State→Impact edges are also
+          <code>negative</code> (a healthier stock <em>reduces</em> catch decline),
+          while Response→State edges are <code>positive</code> (a marine protected
+          area <em>increases</em> stock and coral cover). Naming a State after the
+          problem it's usually associated with (e.g. "Fish stock decline") quietly
+          bakes a sign assumption into the node itself, which can drift out of sync
+          with the edges — worth avoiding when you build your own network.</p>
         <div class="code-cluster two">
           <div class="code-card">
             <h4>Download the example</h4>
@@ -1316,7 +1332,7 @@ P1,S1,3,0.85,negative,monitoring</pre>
         <dl class="glossary">
           <div class="gloss-item"><dt>Driver</dt><dd>An underlying human activity or need, e.g. urban growth, tourism, agriculture.</dd></div>
           <div class="gloss-item"><dt>Pressure</dt><dd>What that activity puts on the environment, e.g. wastewater discharge, overfishing.</dd></div>
-          <div class="gloss-item"><dt>State</dt><dd>The resulting condition of the environment, e.g. water quality, fish stock levels.</dd></div>
+          <div class="gloss-item"><dt>State</dt><dd>The resulting condition of the environment, e.g. water quality, fish stock levels. Convention: name it as a neutral measurement ("Fish stock", not "Fish stock decline") — the direction (good/bad) belongs on the edges, see the Mangi example above.</dd></div>
           <div class="gloss-item"><dt>Impact</dt><dd>The consequence of that state, e.g. biodiversity loss, public health risk.</dd></div>
           <div class="gloss-item"><dt>Response</dt><dd>A policy or management action addressing any earlier stage in the chain.</dd></div>
           <div class="gloss-item"><dt>Density</dt><dd>How many of the possible connections in the network actually exist — higher means a more tightly linked system.</dd></div>

@@ -3,9 +3,9 @@
   "metadata": {
     "project_name": "Example: Coral reef fisheries (Mangi et al. 2007)",
     "author": "fonse",
-    "created_at": "2026-08-01 12:04:20.132684",
+    "created_at": "2026-08-01 16:40:22.883745",
     "notes": "",
-    "updated_at": "2026-08-01 12:04:20.132684"
+    "updated_at": "2026-08-01 16:40:22.883745"
   },
   "schema": [
     {
@@ -125,7 +125,7 @@
     },
     {
       "id": "S1",
-      "label": "Coral degradation",
+      "label": "Coral cover",
       "dpsir_category": "State",
       "subsystem": "Habitat",
       "uncertainty": "high",
@@ -138,7 +138,7 @@
     },
     {
       "id": "S2",
-      "label": "Fish stock decline",
+      "label": "Fish stock",
       "dpsir_category": "State",
       "subsystem": "Fisheries",
       "uncertainty": "high",
@@ -151,7 +151,7 @@
     },
     {
       "id": "S3",
-      "label": "Loss of large high-trophic fish",
+      "label": "Large high-trophic fish",
       "dpsir_category": "State",
       "subsystem": "Fisheries",
       "uncertainty": "high",
@@ -164,7 +164,7 @@
     },
     {
       "id": "S4",
-      "label": "Biodiversity decline",
+      "label": "Biodiversity",
       "dpsir_category": "State",
       "subsystem": "Biodiversity",
       "uncertainty": "high",
@@ -340,7 +340,7 @@
       "to": "S2",
       "weight": 3,
       "confidence": 0.85,
-      "interaction_type": "positive",
+      "interaction_type": "negative",
       "evidence_type": "monitoring",
       "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
     },
@@ -349,7 +349,7 @@
       "to": "S3",
       "weight": 2,
       "confidence": 0.8,
-      "interaction_type": "positive",
+      "interaction_type": "negative",
       "evidence_type": "monitoring",
       "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
     },
@@ -358,7 +358,7 @@
       "to": "S4",
       "weight": 2,
       "confidence": 0.65,
-      "interaction_type": "positive",
+      "interaction_type": "negative",
       "evidence_type": "observational",
       "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
     },
@@ -367,7 +367,7 @@
       "to": "S1",
       "weight": 3,
       "confidence": 0.85,
-      "interaction_type": "positive",
+      "interaction_type": "negative",
       "evidence_type": "monitoring",
       "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
     },
@@ -376,7 +376,7 @@
       "to": "S4",
       "weight": 2,
       "confidence": 0.7,
-      "interaction_type": "positive",
+      "interaction_type": "negative",
       "evidence_type": "observational",
       "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
     },
@@ -385,7 +385,7 @@
       "to": "I1",
       "weight": 3,
       "confidence": 0.8,
-      "interaction_type": "positive",
+      "interaction_type": "negative",
       "evidence_type": "observational",
       "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
     },
@@ -394,7 +394,7 @@
       "to": "I1",
       "weight": 2,
       "confidence": 0.7,
-      "interaction_type": "positive",
+      "interaction_type": "negative",
       "evidence_type": "observational",
       "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
     },
@@ -403,7 +403,7 @@
       "to": "I3",
       "weight": 2,
       "confidence": 0.7,
-      "interaction_type": "positive",
+      "interaction_type": "negative",
       "evidence_type": "expert_assessment",
       "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
     },
@@ -412,7 +412,7 @@
       "to": "I2",
       "weight": 3,
       "confidence": 0.8,
-      "interaction_type": "positive",
+      "interaction_type": "negative",
       "evidence_type": "observational",
       "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
     },
@@ -421,7 +421,7 @@
       "to": "I2",
       "weight": 2,
       "confidence": 0.75,
-      "interaction_type": "positive",
+      "interaction_type": "negative",
       "evidence_type": "observational",
       "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
     },
@@ -475,7 +475,7 @@
       "to": "S2",
       "weight": 3,
       "confidence": 0.8,
-      "interaction_type": "negative",
+      "interaction_type": "positive",
       "evidence_type": "monitoring",
       "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
     },
@@ -484,7 +484,7 @@
       "to": "S1",
       "weight": 2,
       "confidence": 0.65,
-      "interaction_type": "negative",
+      "interaction_type": "positive",
       "evidence_type": "monitoring",
       "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
     },

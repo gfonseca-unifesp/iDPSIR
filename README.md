@@ -132,6 +132,14 @@ DOI/URL/citation backing the link, listed in the report if included).
 Impact→Response, and Response→{Driver, Pressure, State, Impact}. The schema is
 configurable, so this order and vocabulary can be adjusted per project.
 
+**Modeling convention — State nodes are neutral measurements**, e.g. `Fish stock`,
+`Coral cover`, not `Fish stock decline`/`Coral degradation`. The direction (is more of
+it good or bad) belongs on the edges (`interaction_type`), not baked into the node's
+name — naming a State after the problem it's usually associated with quietly assumes
+a sign that can drift out of sync with the actual edges. All three example networks
+follow this; see the Mangi example in the tutorial for a worked illustration of what
+changes (and what doesn't) when a State is renamed neutrally.
+
 ## Example networks
 
 Three ready-to-load networks, from smallest to most complete — see the tutorial's

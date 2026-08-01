@@ -3202,6 +3202,64 @@ classe `two`. Sem erro no console do servidor em nenhum passo. Suíte
 `testthat` completa e checagem de sintaxe seguem limpas (nenhuma mudança
 tocou `R/` fora de `global.R`, que não tem teste dedicado).
 
+**Rede de Mangi corrigida: Estados neutros + citação certa.** Documento
+externo (`INSTRU~2.MD`, trazido pelo usuário, junto com `mangi2007_nodes.csv`/
+`mangi2007_edges.csv` já corrigidos) apontou duas coisas reais: (1) os
+quatro Estados da rede estavam nomeados como o problema em si (`Coral
+degradation`, `Fish stock decline`, `Loss of large high-trophic fish`,
+`Biodiversity decline`) em vez de como a variável neutra que medem — o
+mesmo anti-padrão já registrado como lição aprendida na Fase 9
+("'Coral degradation' no exemplo do Mangi é na verdade um Impacto
+disfarçado de Estado"), nunca de fato corrigido nesta rede até agora;
+(2) a citação completa do artigo no tutorial tinha o terceiro autor
+errado (`Rawlinson, N.J.F.` em vez de `Rodwell, L.D.`, confirmado contra
+o DOI `10.1016/j.ocecoaman.2006.10.003` que já vinha em toda `reference`
+de aresta desde a Fase 9 mas nunca tinha sido usado pra checar o nome).
+
+Renomear os quatro Estados pra `Coral cover`, `Fish stock`, `Large
+high-trophic fish`, `Biodiversity` inverte o sinal de duas famílias de
+aresta: `Pressure→State` (agora `negative` — mais esforço de pesca
+*reduz* o estoque, em vez de "aumentar o declínio") e `State→Impact`
+(agora também `negative` — mais estoque *reduz* a queda de captura);
+`Response→State` vira `positive` (mais AMP *aumenta* estoque/cobertura).
+**Verificado antes de aceitar, não assumido**: como as duas inversões
+(`Pressure→State` e `State→Impact`) ficam no mesmo caminho causal, elas
+se cancelam algebricamente — `sufficiency()` nos três Impactos dá
+exatamente os mesmos números de antes (Reef ecosystem degradation com
+R2/Gear restrictions: mitigação -0,069/44%, idêntico byte a byte ao já
+verificado com os nomes antigos) — só os valores intermediários de
+Estado mudam de sinal (conferido: estoque -0,204, biodiversidade -0,141
+sob a mesma pressão D1+D3, ambos corretamente negativos — o Estado
+"cai" sob pressão, como o nome neutro exige).
+
+Convenção registrada como padrão dos exemplos, não só corrigida na rede
+de Mangi: nova nota no tutorial (dentro da própria seção "Example
+networks", logo abaixo do parágrafo do Mangi — o lugar onde a convenção
+é demonstrada de verdade, não um aviso solto) e no README (parágrafo
+novo em Data format, ao lado da tabela de campos de Nó) explicando que
+Estado deve ser nomeado como medida neutra (`Fish stock`, não `Fish
+stock decline`) porque o juízo de valor pertence à aresta
+(`interaction_type`), não ao nome do nó — nomear pelo problema associado
+embute um sinal presumido que pode divergir silenciosamente das arestas
+de verdade. Glossário do tutorial (entrada "State") ganhou a mesma nota,
+resumida, com link de volta pro exemplo do Mangi.
+
+Testado ponta a ponta rodando o app de verdade: CSVs corrigidos
+carregados via "Import CSV files", "Everything is valid" nos 18 nós/31
+arestas sem nenhum aviso; savepoint `docs/example_mangi.idpsir.json`
+regenerado a partir dos novos CSVs (mesmo `scenario_state` de antes,
+D1+D3 pressão/R2 resposta) e recarregado — trocando a resposta pra R1
+(AMP) na tela, "Apply scenario" reproduz **exatamente** o critério
+"pronto quando" do documento: R1 neutraliza os três Impactos (Yes/Yes/Yes,
+força 66%/32%/49% — bate com "força ~0,3–0,66" das notas), confiança
+100%/100%/100% pra R1 nos três Impactos, R4 é a única resposta frágil no
+recife (20%, bate com "~23%" das notas — mesma ordem de grandeza), Reach
+mostra os nomes de Estado neutros corretos na tabela (`Fish stock`,
+`Coral cover`, etc.). Sem erro no console do servidor em nenhum passo.
+Suíte `testthat` completa (mesma contagem de antes — os testes de
+`test-sufficiency.R` usam Mangi como fixture mas não dependem do nome
+do Estado, só dos IDs `S1`-`S4`) e checagem de sintaxe seguem limpas.
+
 Trilha operacional separada (independente, registrada no plano, encaixa
 quando quiser): layout circular não parece um círculo (suspeita de
 container retangular esticando a proporção, não confirmada ao vivo ainda —
