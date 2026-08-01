@@ -72,6 +72,8 @@ mod_data_server <- function(id, seed = NULL) {
       scenario_state = NULL,
       loaded = !is.null(seed),
       start_message = "",
+      start_blocking = character(),
+      start_warnings = character(),
       graph = NULL,
       graph_message = ""
     )
@@ -151,7 +153,25 @@ mod_data_server <- function(id, seed = NULL) {
         ),
 
         if (nzchar(rv$start_message)) {
-          tags$div(class = "alert alert-info", style = "margin-top: 10px;", rv$start_message)
+          tags$div(
+            class = if (length(rv$start_blocking) > 0) "alert alert-danger" else "alert alert-info",
+            style = "margin-top: 10px;",
+            rv$start_message
+          )
+        },
+        if (length(rv$start_blocking) > 0) {
+          tags$div(
+            class = "alert alert-danger", style = "margin-top: -4px;",
+            tags$strong("What needs fixing:"),
+            tags$ul(lapply(rv$start_blocking, tags$li))
+          )
+        },
+        if (length(rv$start_warnings) > 0) {
+          tags$div(
+            class = "alert alert-warning", style = "margin-top: -4px;",
+            tags$strong("Imported, but note:"),
+            tags$ul(lapply(rv$start_warnings, tags$li))
+          )
         }
       )
     })
@@ -163,6 +183,8 @@ mod_data_server <- function(id, seed = NULL) {
       rv$positions <- NULL
       rv$scenario_state <- NULL
       rv$graph <- NULL
+      rv$start_blocking <- character()
+      rv$start_warnings <- character()
       rv$loaded <- TRUE
       rv$start_message <- "New project started with the default DPSIR schema."
     })
@@ -170,9 +192,30 @@ mod_data_server <- function(id, seed = NULL) {
     observeEvent(input$start_import, {
       req(input$import_nodes_file)
 
+      rv$start_blocking <- character()
+      rv$start_warnings <- character()
+
       tryCatch(
         {
           edges_path <- if (is.null(input$import_edges_file)) NULL else input$import_edges_file$datapath
+
+          nodes_raw <- data.table::fread(input$import_nodes_file$datapath)
+          edges_raw <- if (is.null(edges_path)) NULL else data.table::fread(edges_path)
+
+          # Preflight runs on the RAW columns/values, before
+          # normalize_dpsir_nodes()/normalize_dpsir_edges() silently fill in
+          # defaults for anything missing - a spreadsheet with a renamed
+          # column, an out-of-vocabulary value, or a non-numeric weight would
+          # otherwise be accepted as-is (or fail much later with a confusing
+          # graph-building error) instead of being caught right here.
+          preflight <- preflight_import(nodes_raw, edges_raw, get_default_dpsir_schema())
+
+          if (length(preflight$blocking) > 0) {
+            rv$start_blocking <- preflight$blocking
+            rv$start_message <- "Import blocked: the file(s) don't match the expected format."
+            return(invisible(NULL))
+          }
+
           imported <- import_matrices(input$import_nodes_file$datapath, edges_path)
 
           validate_dpsir_nodes(imported$nodes, get_default_dpsir_schema())
@@ -184,6 +227,7 @@ mod_data_server <- function(id, seed = NULL) {
           rv$scenario_state <- NULL
           rv$graph <- NULL
           rv$loaded <- TRUE
+          rv$start_warnings <- preflight$warnings
           rv$start_message <- paste0(
             "Matrices imported: ", nrow(imported$nodes), " nodes, ",
             nrow(imported$edges), " edges."
@@ -197,6 +241,9 @@ mod_data_server <- function(id, seed = NULL) {
 
     observeEvent(input$start_savepoint, {
       req(input$savepoint_file)
+
+      rv$start_blocking <- character()
+      rv$start_warnings <- character()
 
       tryCatch(
         {
@@ -222,6 +269,9 @@ mod_data_server <- function(id, seed = NULL) {
 
     observeEvent(input$start_merge, {
       files <- input$merge_files
+
+      rv$start_blocking <- character()
+      rv$start_warnings <- character()
 
       if (is.null(files) || nrow(files) < 2) {
         rv$start_message <- "Select at least two savepoint files to combine."

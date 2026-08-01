@@ -3260,6 +3260,77 @@ Suíte `testthat` completa (mesma contagem de antes — os testes de
 `test-sufficiency.R` usam Mangi como fixture mas não dependem do nome
 do Estado, só dos IDs `S1`-`S4`) e checagem de sintaxe seguem limpas.
 
+**Preflight de validação na importação de CSV** (item 3 do mesmo documento
+externo). Motivo: `import_matrices()` (`R/io.R`) sempre chamou
+`normalize_dpsir_nodes()`/`normalize_dpsir_edges()`, que preenchem
+default **silenciosamente** pra qualquer coluna ausente/renomeada — uma
+planilha fora do formato esperado podia ser aceita sem o usuário
+perceber, com resultado errado descoberto só bem depois (na aba
+Explorar, ou nunca). `R/validate.R` ganha `preflight_import_nodes()`/
+`preflight_import_edges()`/`preflight_import()`, chamadas em
+`mod_data.R`'s `observeEvent(input$start_import, ...)` **antes** de
+`import_matrices()` — rodam sobre as colunas/valores **brutos** do CSV
+(antes de qualquer normalização), separando dois tipos de achado:
+- **Bloqueante** (`blocking`, impede a importação): coluna obrigatória
+  ausente/renomeada (`id`/`label`/`dpsir_category` nos nós,
+  `from`/`to` nas arestas); valor fora do vocabulário
+  (`dpsir_category`, `interaction_type`, `uncertainty`/`controllability`);
+  fora de faixa (`self_regulation` fora de [0,1), `weight` ≤ 0,
+  `confidence` fora de [0,1], `activation_threshold` fora de [0,1] ou
+  presente num nó que não é State); tipo errado (peso/confiança/
+  self_regulation/activation_threshold não-numérico). Toda mensagem
+  aponta arquivo, coluna e **linha** (numerada como uma planilha real
+  veria — cabeçalho é a linha 1).
+- **Aviso** (`warnings`, não bloqueia): coluna desconhecida/obsoleta no
+  arquivo (`temporal_scale`, um typo, etc.) — ignorada; coluna
+  opcional conhecida ausente — cada linha assume o default (ex.:
+  "self_regulation ausente, assume 0 pra todo nó").
+
+`get_known_dpsir_node_fields()`/`get_known_dpsir_edge_fields()` novas
+(lista fechada de colunas reconhecidas, usada só pra decidir "desconhecida
+vs. conhecida-mas-ausente" — `get_required_dpsir_node_fields()`/
+`get_required_dpsir_edge_fields()` já existentes continuam sendo a
+sublista que bloqueia se faltar). `mod_data.R` ganha `rv$start_blocking`/
+`rv$start_warnings` (resetados no início de todo handler de Start, não só
+Import, pra uma mensagem de uma tentativa anterior não sobreviver ao
+trocar de modo) e a UI do passo Start ganha duas caixas condicionais
+abaixo da mensagem curta de sempre: `alert-danger` com a lista de
+bloqueios (import não acontece) ou `alert-warning` com a lista de avisos
+(import aconteceu normalmente, só sinalizando o que foi assumido).
+
+**Bug real, encontrado só ao testar contra um valor `NA` de verdade, não
+assumido**: a primeira versão detectava "célula em branco" checando
+`nzchar(trimws(as.character(valor)))` — mas `as.character(NA)` produz a
+string literal `"NA"` em R, que É `nzchar`-verdadeira, então uma célula
+genuinamente vazia (`activation_threshold` ausente pra um nó Driver, o
+caso mais comum de todos) era lida como "o usuário digitou o texto NA" e
+bloqueada como "not a number", derrubando até o próprio CSV de exemplo
+usado no teste. Corrigido com um helper único (`.pf_is_blank(x)`) que
+checa `is.na(x)` no valor **original** (antes de virar string) em vez do
+texto stringificado, usado consistentemente nos 7 campos verificados —
+o mesmo tipo de cuidado com `NA`/`nzchar` já registrado como lição
+aprendida na Fase 3 da Revisão 1 (`strengths[[node_id]]` em vetor
+atômico), agora numa forma diferente do mesmo erro de categoria.
+
+Testado com 10 casos via script standalone antes de escrever os testes
+permanentes (tabela válida incluindo um `NA` real numa coluna numérica
+opcional; coluna obrigatória ausente; `dpsir_category`/`uncertainty` fora
+do vocabulário; `activation_threshold` num nó não-State;
+`self_regulation` fora de faixa e não-numérico, separados; coluna
+desconhecida + coluna opcional ausente juntas; arestas com
+`interaction_type`/`weight`/`confidence` inválidos; aresta com coluna
+obrigatória ausente; `preflight_import()` combinando os dois). Todos os
+10 batendo, viraram 8 testes permanentes em `tests/testthat/test-validate.R`
+(16 assertivas novas, suíte de `validate` foi de 33 pra 49 dots). Testado
+também ao vivo rodando o app de verdade: (1) CSV com `dpsir_category`
+inválido — bloqueado, alerta vermelho com a linha certa, nada importado;
+(2) `data/sample_nodes.csv`/`sample_edges.csv` (já no schema atual) —
+importa limpo, só um aviso real (`descriptor` de fato não existe nesses
+CSVs, correto); (3) CSV mínimo (só `id`/`label`/`dpsir_category`) —
+importa normalmente com os 5 avisos esperados, um por coluna opcional
+ausente. Sem erro no console do servidor em nenhum dos três casos. Suíte
+completa e checagem de sintaxe seguem limpas.
+
 Trilha operacional separada (independente, registrada no plano, encaixa
 quando quiser): layout circular não parece um círculo (suspeita de
 container retangular esticando a proporção, não confirmada ao vivo ainda —

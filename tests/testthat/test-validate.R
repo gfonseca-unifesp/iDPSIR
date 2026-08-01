@@ -176,3 +176,111 @@ test_that("normalize_dpsir_nodes drops a retired temporal_scale column from an o
   expect_false("temporal_scale" %in% names(normalized))
   expect_equal(normalized$self_regulation, 0)
 })
+
+# =====================================================
+# preflight_import_nodes() / preflight_import_edges() (import-time
+# format/vocabulary preflight, separate from validate_dpsir_nodes()/
+# validate_dpsir_edges(), which run later at "Review and build")
+# =====================================================
+
+test_that("preflight_import_nodes finds nothing wrong with a well-formed table, including a real NA in an optional numeric column", {
+  nodes <- data.frame(
+    id = c("D1", "S1"), label = c("Driver 1", "State 1"),
+    dpsir_category = c("Driver", "State"), subsystem = c("", ""),
+    uncertainty = c("low", "medium"), controllability = c("high", "low"),
+    self_regulation = c(0, 0.3), growth_rate = c(0, 0),
+    reference_value = c(1, 1), activation_threshold = c(NA, 0.15),
+    descriptor = c("", ""), stringsAsFactors = FALSE
+  )
+
+  result <- preflight_import_nodes(nodes)
+
+  expect_length(result$blocking, 0)
+  expect_length(result$warnings, 0)
+})
+
+test_that("preflight_import_nodes blocks on a missing required column", {
+  nodes <- data.frame(id = "D1", label = "Driver 1", category = "Driver", stringsAsFactors = FALSE)
+
+  result <- preflight_import_nodes(nodes)
+
+  expect_true(any(grepl("missing required column 'dpsir_category'", result$blocking, fixed = TRUE)))
+})
+
+test_that("preflight_import_nodes blocks on out-of-vocabulary dpsir_category and uncertainty, with the right row number", {
+  nodes <- data.frame(
+    id = c("D1", "X1"), label = c("D1", "X1"),
+    dpsir_category = c("Driver", "Pressures"), uncertainty = c("low", "very high"),
+    stringsAsFactors = FALSE
+  )
+
+  result <- preflight_import_nodes(nodes)
+
+  expect_true(any(grepl("row 3: dpsir_category 'Pressures'", result$blocking, fixed = TRUE)))
+  expect_true(any(grepl("row 3: uncertainty 'very high'", result$blocking, fixed = TRUE)))
+})
+
+test_that("preflight_import_nodes blocks activation_threshold set on a non-State node", {
+  nodes <- data.frame(
+    id = "D1", label = "D1", dpsir_category = "Driver", activation_threshold = 0.2,
+    stringsAsFactors = FALSE
+  )
+
+  result <- preflight_import_nodes(nodes)
+
+  expect_true(any(grepl("not a State factor", result$blocking, fixed = TRUE)))
+})
+
+test_that("preflight_import_nodes blocks self_regulation outside [0,1) and non-numeric values separately", {
+  nodes <- data.frame(
+    id = c("S1", "S2"), label = c("S1", "S2"), dpsir_category = "State",
+    self_regulation = c("1.5", "abc"), stringsAsFactors = FALSE
+  )
+
+  result <- preflight_import_nodes(nodes)
+
+  expect_true(any(grepl("self_regulation 1.5 is outside", result$blocking, fixed = TRUE)))
+  expect_true(any(grepl("self_regulation 'abc' is not a number", result$blocking, fixed = TRUE)))
+})
+
+test_that("preflight_import_nodes warns (not blocks) on an unknown column and a missing optional column", {
+  nodes <- data.frame(
+    id = "D1", label = "D1", dpsir_category = "Driver", temporal_scale = "long",
+    stringsAsFactors = FALSE
+  )
+
+  result <- preflight_import_nodes(nodes)
+
+  expect_length(result$blocking, 0)
+  expect_true(any(grepl("'temporal_scale' is not a recognized field", result$warnings, fixed = TRUE)))
+  expect_true(any(grepl("'growth_rate' is missing", result$warnings, fixed = TRUE)))
+})
+
+test_that("preflight_import_edges blocks bad interaction_type, non-positive weight, and out-of-range confidence", {
+  edges <- data.frame(
+    from = c("D1", "D1"), to = c("S1", "S1"), weight = c(-1, 2), confidence = c(0.8, 1.5),
+    interaction_type = c("increases", "positive"), stringsAsFactors = FALSE
+  )
+
+  result <- preflight_import_edges(edges)
+
+  expect_true(any(grepl("interaction_type 'increases'", result$blocking, fixed = TRUE)))
+  expect_true(any(grepl("weight -1 must be greater than 0", result$blocking, fixed = TRUE)))
+  expect_true(any(grepl("confidence 1.5 is outside", result$blocking, fixed = TRUE)))
+})
+
+test_that("preflight_import_edges blocks on a missing required column", {
+  edges <- data.frame(source = "D1", to = "S1", stringsAsFactors = FALSE)
+
+  result <- preflight_import_edges(edges)
+
+  expect_true(any(grepl("missing required column 'from'", result$blocking, fixed = TRUE)))
+})
+
+test_that("preflight_import combines node and edge results, and an empty edges table produces no edge findings", {
+  nodes <- data.frame(id = "D1", label = "D1", dpsir_category = "Pressures", stringsAsFactors = FALSE)
+
+  result <- preflight_import(nodes, NULL)
+
+  expect_true(any(grepl("dpsir_category 'Pressures'", result$blocking, fixed = TRUE)))
+})

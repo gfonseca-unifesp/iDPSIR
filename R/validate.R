@@ -10,6 +10,268 @@ get_required_dpsir_edge_fields <- function() {
   c("from", "to")
 }
 
+get_known_dpsir_node_fields <- function() {
+  c(
+    "id", "label", "dpsir_category", "subsystem", "uncertainty", "controllability",
+    "self_regulation", "growth_rate", "reference_value", "activation_threshold", "descriptor"
+  )
+}
+
+get_known_dpsir_edge_fields <- function() {
+  c("from", "to", "weight", "confidence", "interaction_type", "evidence_type", "reference")
+}
+
+# =====================================================
+# IMPORT PREFLIGHT (CSV format/vocabulary check, run at import time -
+# before normalize_dpsir_nodes()/normalize_dpsir_edges() silently apply
+# defaults for anything missing, so a mis-shaped spreadsheet gets caught
+# right where it was uploaded instead of surfacing as a confusing error,
+# or worse, an accepted-but-wrong network, several steps later).
+#
+# Returns list(blocking = character(), warnings = character()) - blocking
+# messages mean the file should NOT be imported as-is (missing/renamed
+# required column, out-of-vocabulary value, non-numeric where a number is
+# expected); warnings are informational only (unknown column ignored, or
+# optional column absent so every row got the same default) and don't
+# stop the import. Row numbers count the header as row 1, matching what a
+# spreadsheet program shows.
+# =====================================================
+
+# A cell is "blank" if it's genuinely missing (NA - what an empty CSV cell
+# parses to) or an empty/whitespace-only string - never based on its
+# stringified form, which would turn a real NA into the text "NA" and
+# misread a blank cell as "the user typed the word NA" (confirmed as a real
+# bug while testing this: `as.character(NA)` %in% a values vector is a
+# false positive for "has a value").
+.pf_is_blank <- function(x) {
+  is.na(x) | trimws(as.character(x)) == ""
+}
+
+preflight_import_nodes <- function(nodes_raw, schema = get_default_dpsir_schema()) {
+  nodes_raw <- as.data.frame(nodes_raw, stringsAsFactors = FALSE)
+  blocking <- character()
+  warn <- character()
+
+  present <- names(nodes_raw)
+  missing_required <- setdiff(get_required_dpsir_node_fields(), present)
+  if (length(missing_required) > 0) {
+    blocking <- c(blocking, sprintf(
+      "Nodes file: missing required column '%s'.", missing_required
+    ))
+  }
+
+  unknown_cols <- setdiff(present, get_known_dpsir_node_fields())
+  if (length(unknown_cols) > 0) {
+    warn <- c(warn, sprintf(
+      "Nodes file: column '%s' is not a recognized field and was ignored.", unknown_cols
+    ))
+  }
+
+  optional_defaults <- c(
+    self_regulation = "0", growth_rate = "0", reference_value = "1",
+    activation_threshold = "blank (no threshold)", descriptor = "blank"
+  )
+  missing_optional <- setdiff(names(optional_defaults), present)
+  if (length(missing_optional) > 0) {
+    warn <- c(warn, sprintf(
+      "Nodes file: column '%s' is missing - every node defaults to %s.",
+      missing_optional, optional_defaults[missing_optional]
+    ))
+  }
+
+  if (length(missing_required) == 0 && nrow(nodes_raw) > 0) {
+    valid_categories <- schema_categories(schema)
+    category_vals <- trimws(as.character(nodes_raw$dpsir_category))
+    bad <- which(!.pf_is_blank(nodes_raw$dpsir_category) & !category_vals %in% valid_categories)
+    if (length(bad) > 0) {
+      blocking <- c(blocking, sprintf(
+        "Nodes file, row %d: dpsir_category '%s' is not one of %s.",
+        bad + 1, category_vals[bad], paste(valid_categories, collapse = ", ")
+      ))
+    }
+  }
+
+  if (nrow(nodes_raw) > 0) {
+    for (field in c("uncertainty", "controllability")) {
+      if (field %in% present) {
+        raw <- nodes_raw[[field]]
+        vals <- trimws(as.character(raw))
+        bad <- which(!.pf_is_blank(raw) & !vals %in% c("low", "medium", "high"))
+        if (length(bad) > 0) {
+          blocking <- c(blocking, sprintf(
+            "Nodes file, row %d: %s '%s' must be low, medium or high.",
+            bad + 1, field, vals[bad]
+          ))
+        }
+      }
+    }
+
+    if ("self_regulation" %in% present) {
+      raw <- nodes_raw$self_regulation
+      legacy_levels <- c("none", "low", "medium", "high") # pre-Revisao-1 vocabulary, still accepted
+      raw_chr <- trimws(as.character(raw))
+      blank <- .pf_is_blank(raw)
+      is_legacy <- raw_chr %in% legacy_levels
+      numeric_vals <- suppressWarnings(as.numeric(raw))
+      bad_type <- which(!blank & !is_legacy & is.na(numeric_vals))
+      if (length(bad_type) > 0) {
+        blocking <- c(blocking, sprintf(
+          "Nodes file, row %d: self_regulation '%s' is not a number.",
+          bad_type + 1, raw_chr[bad_type]
+        ))
+      }
+      bad_range <- which(!blank & !is_legacy & !is.na(numeric_vals) & (numeric_vals < 0 | numeric_vals >= 1))
+      if (length(bad_range) > 0) {
+        blocking <- c(blocking, sprintf(
+          "Nodes file, row %d: self_regulation %s is outside the valid range [0, 1).",
+          bad_range + 1, numeric_vals[bad_range]
+        ))
+      }
+    }
+
+    if ("activation_threshold" %in% present) {
+      raw <- nodes_raw$activation_threshold
+      raw_chr <- trimws(as.character(raw))
+      blank <- .pf_is_blank(raw)
+      numeric_vals <- suppressWarnings(as.numeric(raw))
+      bad_type <- which(!blank & is.na(numeric_vals))
+      if (length(bad_type) > 0) {
+        blocking <- c(blocking, sprintf(
+          "Nodes file, row %d: activation_threshold '%s' is not a number.",
+          bad_type + 1, raw_chr[bad_type]
+        ))
+      }
+      has_value <- !blank & !is.na(numeric_vals)
+      is_state <- if ("dpsir_category" %in% present) {
+        trimws(as.character(nodes_raw$dpsir_category)) == "State"
+      } else {
+        rep(TRUE, nrow(nodes_raw))
+      }
+      bad_category <- which(has_value & !is_state)
+      if (length(bad_category) > 0) {
+        blocking <- c(blocking, sprintf(
+          "Nodes file, row %d: activation_threshold is set but this node is not a State factor.",
+          bad_category + 1
+        ))
+      }
+      bad_range <- which(has_value & (numeric_vals < 0 | numeric_vals > 1))
+      if (length(bad_range) > 0) {
+        blocking <- c(blocking, sprintf(
+          "Nodes file, row %d: activation_threshold %s is outside the valid range [0, 1].",
+          bad_range + 1, numeric_vals[bad_range]
+        ))
+      }
+    }
+  }
+
+  list(blocking = blocking, warnings = warn)
+}
+
+preflight_import_edges <- function(edges_raw) {
+  edges_raw <- as.data.frame(edges_raw, stringsAsFactors = FALSE)
+  blocking <- character()
+  warn <- character()
+
+  if (nrow(edges_raw) == 0) {
+    return(list(blocking = blocking, warnings = warn))
+  }
+
+  present <- names(edges_raw)
+  missing_required <- setdiff(get_required_dpsir_edge_fields(), present)
+  if (length(missing_required) > 0) {
+    blocking <- c(blocking, sprintf(
+      "Edges file: missing required column '%s'.", missing_required
+    ))
+  }
+
+  unknown_cols <- setdiff(present, get_known_dpsir_edge_fields())
+  if (length(unknown_cols) > 0) {
+    warn <- c(warn, sprintf(
+      "Edges file: column '%s' is not a recognized field and was ignored.", unknown_cols
+    ))
+  }
+
+  optional_defaults <- c(
+    weight = "1", confidence = "1", interaction_type = "an uncolored/undashed edge",
+    evidence_type = "blank", reference = "blank"
+  )
+  missing_optional <- setdiff(names(optional_defaults), present)
+  if (length(missing_optional) > 0) {
+    warn <- c(warn, sprintf(
+      "Edges file: column '%s' is missing - every edge defaults to %s.",
+      missing_optional, optional_defaults[missing_optional]
+    ))
+  }
+
+  if (length(missing_required) == 0) {
+    if ("interaction_type" %in% present) {
+      raw <- edges_raw$interaction_type
+      vals <- trimws(as.character(raw))
+      bad <- which(!.pf_is_blank(raw) & !vals %in% c("positive", "negative"))
+      if (length(bad) > 0) {
+        blocking <- c(blocking, sprintf(
+          "Edges file, row %d: interaction_type '%s' must be positive or negative.",
+          bad + 1, vals[bad]
+        ))
+      }
+    }
+
+    if ("weight" %in% present) {
+      raw <- edges_raw$weight
+      raw_chr <- trimws(as.character(raw))
+      blank <- .pf_is_blank(raw)
+      numeric_vals <- suppressWarnings(as.numeric(raw))
+      bad_type <- which(!blank & is.na(numeric_vals))
+      if (length(bad_type) > 0) {
+        blocking <- c(blocking, sprintf(
+          "Edges file, row %d: weight '%s' is not a number.", bad_type + 1, raw_chr[bad_type]
+        ))
+      }
+      bad_range <- which(!blank & !is.na(numeric_vals) & numeric_vals <= 0)
+      if (length(bad_range) > 0) {
+        blocking <- c(blocking, sprintf(
+          "Edges file, row %d: weight %s must be greater than 0.", bad_range + 1, numeric_vals[bad_range]
+        ))
+      }
+    }
+
+    if ("confidence" %in% present) {
+      raw <- edges_raw$confidence
+      raw_chr <- trimws(as.character(raw))
+      blank <- .pf_is_blank(raw)
+      numeric_vals <- suppressWarnings(as.numeric(raw))
+      bad_type <- which(!blank & is.na(numeric_vals))
+      if (length(bad_type) > 0) {
+        blocking <- c(blocking, sprintf(
+          "Edges file, row %d: confidence '%s' is not a number.", bad_type + 1, raw_chr[bad_type]
+        ))
+      }
+      bad_range <- which(!blank & !is.na(numeric_vals) & (numeric_vals < 0 | numeric_vals > 1))
+      if (length(bad_range) > 0) {
+        blocking <- c(blocking, sprintf(
+          "Edges file, row %d: confidence %s is outside the valid range [0, 1].", bad_range + 1, numeric_vals[bad_range]
+        ))
+      }
+    }
+  }
+
+  list(blocking = blocking, warnings = warn)
+}
+
+preflight_import <- function(nodes_raw, edges_raw = NULL, schema = get_default_dpsir_schema()) {
+  nodes_result <- preflight_import_nodes(nodes_raw, schema)
+  edges_result <- if (is.null(edges_raw)) {
+    list(blocking = character(), warnings = character())
+  } else {
+    preflight_import_edges(edges_raw)
+  }
+
+  list(
+    blocking = c(nodes_result$blocking, edges_result$blocking),
+    warnings = c(nodes_result$warnings, edges_result$warnings)
+  )
+}
+
 normalize_dpsir_nodes <- function(nodes) {
   nodes <- as.data.frame(nodes, stringsAsFactors = FALSE)
   nodes$id <- trimws(as.character(nodes$id))
