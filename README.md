@@ -14,10 +14,10 @@ eventually become a new pressure itself) — and exporting a self-contained HTML
 report, all without requiring familiarity with graph theory.
 
 New to iDPSIR? See the [getting-started tutorial](docs/tutorial.html) — it walks
-through every step and includes a worked example with a downloadable savepoint
-([`docs/example_gnanapragasam.idpsir.json`](docs/example_gnanapragasam.idpsir.json)).
-The same tutorial is one click away from inside the running app too, via the "Help"
-link in the top-right corner.
+through every step and includes three downloadable example networks, from a
+five-node orientation loop to a full worked example (see
+[Example networks](#example-networks) below). The same tutorial is one click away
+from inside the running app too, via the "Help" link in the top-right corner.
 
 ## How to run
 
@@ -97,7 +97,7 @@ iDPSIR/
 │   ├── ui_main.R               # top-level UI (ina_ui)
 │   └── server_main.R           # top-level server (ina_server)
 ├── data/                      # example data (sample_nodes.csv, sample_edges.csv, mangi2007_*.csv, gnanapragasam2026_*.csv)
-├── docs/                      # getting-started tutorial (tutorial.html) and a worked-example savepoint (example_gnanapragasam.idpsir.json)
+├── docs/                      # getting-started tutorial (tutorial.html) and three example savepoints (example_fisheries/mangi/gnanapragasam.idpsir.json, see Example networks below)
 ├── tests/
 │   ├── testthat.R             # test runner: Rscript tests/testthat.R
 │   └── testthat/               # tests for the scientific core (loop_analysis, sufficiency, temporal, reach, metrics, io, validate)
@@ -132,21 +132,40 @@ DOI/URL/citation backing the link, listed in the report if included).
 Impact→Response, and Response→{Driver, Pressure, State, Impact}. The schema is
 configurable, so this order and vocabulary can be adjusted per project.
 
-A larger, annotated example — an artisanal-fisheries network adapted from
+## Example networks
 
-> Gnanapragasam, K., Ratnasiri, S., & Fleming, C. (2026). Sustainable small-scale
-> fisheries development: Integrating bioeconomic and DPSIR models for policy
-> insights. *Marine Policy*, 189, 107095.
+Three ready-to-load networks, from smallest to most complete — see the tutorial's
+[Example networks](docs/tutorial.html#examples) section for a full, numbers-backed
+explanation of each; the short version:
 
-— where a response that directly and sufficiently neutralizes its one intended
-Impact still erodes over time against an independent driver trend it can't touch,
-while the other four Impacts in the network are driven entirely by the pressure
-side and sit completely outside what the response can ever reach (1 of 5 Impacts)
-— is at
-[`docs/example_gnanapragasam.idpsir.json`](docs/example_gnanapragasam.idpsir.json)
-(pressure and response scenario pre-configured); load it from the wizard's Start step
-(Load savepoint) or see the [tutorial](docs/tutorial.html) for a full walkthrough, now
-illustrated with a network diagram and a temporal storyboard image.
+- **Fisheries** — 5 nodes, a single closed feedback loop (Driver → Pressure → State →
+  Impact → Response → back to Driver). No underlying CSV, just a savepoint; the
+  simplest way to get oriented with the wizard and the Graph/Scenarios tabs before
+  anything else adds complexity.
+  [`docs/example_fisheries.idpsir.json`](docs/example_fisheries.idpsir.json).
+- **Mangi et al. 2007** — 18 nodes, 31 edges, a real published coral-reef-fisheries
+  DPSIR network (*Ocean & Coastal Management*, 50(5-6), 463-480). This is the network
+  that caught a real bug during development: the app's older equilibrium-based
+  reading (removed since) showed a gear-restriction response making reef degradation
+  *worse* — wrong sign. The current sufficiency reading gets it right (see the
+  tutorial for the exact numbers).
+  [`docs/example_mangi.idpsir.json`](docs/example_mangi.idpsir.json) (pressure/response
+  pre-configured) or the underlying
+  [`data/mangi2007_nodes.csv`](data/mangi2007_nodes.csv) /
+  [`data/mangi2007_edges.csv`](data/mangi2007_edges.csv).
+- **Gnanapragasam et al. 2026** — 13 nodes, 14 edges, an artisanal-fisheries network
+  (*Marine Policy*, 189, 107095) where a response that directly and sufficiently
+  neutralizes its one intended Impact still erodes over time against an independent
+  driver trend it can't touch, while the other four Impacts sit entirely outside what
+  the response can ever reach. The app's main worked example — full walkthrough in the
+  tutorial, illustrated with a network diagram and a temporal storyboard image.
+  [`docs/example_gnanapragasam.idpsir.json`](docs/example_gnanapragasam.idpsir.json)
+  (pressure/response pre-configured) or the underlying
+  [`data/gnanapragasam2026_nodes.csv`](data/gnanapragasam2026_nodes.csv) /
+  [`data/gnanapragasam2026_edges.csv`](data/gnanapragasam2026_edges.csv).
+
+Load any of them from the wizard's Start step (Load savepoint), or via CSV import for
+the two that have plain tables.
 
 ## Workflow
 

@@ -559,9 +559,10 @@
             <li class="sub"><a href="#t-report">Report</a></li>
           </ol>
         </li>
-        <li><a href="#worked-example">4 · Worked example</a></li>
-        <li><a href="#savepoint">5 · Saving your work</a></li>
-        <li><a href="#glossary">6 · Glossary</a></li>
+        <li><a href="#examples">4 · Example networks</a></li>
+        <li><a href="#worked-example">5 · Worked example</a></li>
+        <li><a href="#savepoint">6 · Saving your work</a></li>
+        <li><a href="#glossary">7 · Glossary</a></li>
       </ol>
     </nav>
 
@@ -948,6 +949,104 @@ P1,S1,3,0.85,negative,monitoring</pre>
           <div><strong>Graph image needs the Graph tab open first.</strong> The
           snapshot is taken from what's on screen there — visit it once this session
           (it's the default tab, so usually you already have) before checking the box.</div>
+        </div>
+      </section>
+
+      <!-- ============ EXAMPLE NETWORKS ============ -->
+      <section class="block" id="examples">
+        <div class="kicker">Three networks, three sizes</div>
+        <h2>Example networks</h2>
+        <p class="lead">Three ready-to-load networks ship with the app, each making a
+          different point. Start with whichever matches what you need right now — a
+          five-minute orientation, a real published network, or the deepest example in
+          the app (covered in full in the next section).</p>
+
+        <h3>Fisheries — the smallest possible loop</h3>
+        <p>Five nodes, five edges, one closed feedback loop:
+          <strong>Coastal tourism growth</strong> (Driver) →
+          <strong>Overfishing</strong> (Pressure) → <strong>Fish stock decline</strong>
+          (State) → <strong>Fisher income loss</strong> (Impact) →
+          <strong>Fishing quota policy</strong> (Response) → back to Coastal tourism
+          growth. No subsystem filters, no temporal simulation needed to see what's
+          going on — this is the network to open first, just to get oriented with the
+          wizard and the Graph/Scenarios tabs before anything else adds complexity.
+          Turn on <strong>Coastal tourism growth</strong> as pressure and
+          <strong>Fishing quota policy</strong> as response, both at 100%: because it's
+          a genuine loop, the response's <strong>Reach</strong> covers all 4 other
+          factors — but at this network's edge weights, a single response this far
+          from the Impact isn't remotely enough on its own (Fisher income loss needs
+          <strong>649%</strong> strength to neutralize a 0.426 worsening with only
+          -0.066 of mitigation) — a quick, honest first look at what "Strength needed"
+          means when a response is badly outmatched.</p>
+        <div class="code-cluster">
+          <div class="code-card">
+            <h4>Download the example</h4>
+            <p class="muted">A ready-to-load savepoint. On the wizard's
+              <strong>Start</strong> step, choose <strong>Load savepoint</strong> and
+              pick this file.</p>
+            <pre><a href="example_fisheries.idpsir.json" download>example_fisheries.idpsir.json</a></pre>
+          </div>
+        </div>
+
+        <h3>Mangi et al. 2007 — a real published network, and a real bug it caught</h3>
+        <p>18 nodes, 31 edges — coral-reef fisheries management in a real paper
+          (Mangi, S.C., Roberts, C.M., &amp; Rawlinson, N.J.F. (2007). Reef fisheries
+          management in Kenya: Preliminary approach using the driver-pressure-state-
+          impacts-response (DPSIR) scheme of indicators. <em>Ocean &amp; Coastal
+          Management</em>, 50(5-6), 463-480). This is the network that caught a real,
+          reproducible bug during development: the older equilibrium-based reading
+          this app used to show (removed since, see Scenarios above) reported <strong>
+          Gear restrictions</strong> as making <strong>Reef ecosystem degradation
+          worse</strong> — the wrong sign for a response explicitly meant to protect
+          the reef. Loading this network and applying pressure from
+          <strong>Coastal population growth</strong> + <strong>Market demand for reef
+          fish</strong>, with <strong>Gear restrictions</strong> as the response, shows
+          the corrected sufficiency reading: Reef ecosystem degradation reads
+          worsening 0.03 / mitigation <strong>-0.069</strong> / net -0.039,
+          <strong>Yes</strong>, neutralized at 44% strength — mitigation with the
+          right sign, not the wrong one. It's also a good look at a densely
+          cross-linked network: this single response's <strong>Reach</strong> covers
+          14 of the other 17 factors, because Responses here loop back into several
+          Drivers, Pressures and States at once, not just the one Impact they're aimed
+          at.</p>
+        <div class="code-cluster two">
+          <div class="code-card">
+            <h4>Download the example</h4>
+            <p class="muted">A ready-to-load savepoint, pressure and response scenario
+              already configured.</p>
+            <pre><a href="example_mangi.idpsir.json" download>example_mangi.idpsir.json</a></pre>
+          </div>
+          <div class="code-card">
+            <h4>Or the underlying tables</h4>
+            <p class="muted">The same network as plain CSV — useful as a template for
+              your own CSV import.</p>
+            <pre><a href="../data/mangi2007_nodes.csv" download>mangi2007_nodes.csv</a></pre>
+            <pre><a href="../data/mangi2007_edges.csv" download>mangi2007_edges.csv</a></pre>
+          </div>
+        </div>
+
+        <h3>Gnanapragasam et al. 2026 — the deepest example in the app</h3>
+        <p>13 nodes, 14 edges, and the network the rest of this tutorial's worked
+          example is built on: a response that fully covers the one Impact it targets,
+          watch that success quietly erode over 15 simulated windows against a driver
+          it can't touch, while the same response's own side effect worsens two other
+          Impacts the pressure scenario never does — and two more Impacts sit
+          completely outside its reach no matter what. Continue to the next section
+          for the full walkthrough, with every table and both figures below generated
+          from this exact file.</p>
+        <div class="code-cluster two">
+          <div class="code-card">
+            <h4>Download the example</h4>
+            <p class="muted">Jump to <a href="#worked-example">the full walkthrough</a>
+              below for how to use it.</p>
+            <pre><a href="example_gnanapragasam.idpsir.json" download>example_gnanapragasam.idpsir.json</a></pre>
+          </div>
+          <div class="code-card">
+            <h4>Or the underlying tables</h4>
+            <p class="muted">The same network as plain CSV.</p>
+            <pre><a href="../data/gnanapragasam2026_nodes.csv" download>gnanapragasam2026_nodes.csv</a></pre>
+            <pre><a href="../data/gnanapragasam2026_edges.csv" download>gnanapragasam2026_edges.csv</a></pre>
+          </div>
         </div>
       </section>
 

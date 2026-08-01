@@ -3122,6 +3122,86 @@ checagem de sintaxe seguem limpas (nenhum teste do núcleo numérico lê
 especificamente, só `mangi2007_*.csv` como fixture de suficiência, que
 ignora esses campos por design).
 
+**"Example networks" — os três exemplos, lado a lado, no tutorial e no
+README.** Pedido do usuário ao perceber que o app já acumulava três
+savepoints de exemplo (`example_fisheries`, e agora `mangi2007_*.csv`
+migrado e `example_gnanapragasam`) sem nenhum lugar que os apresentasse
+juntos, explicasse a diferença entre eles, ou linkasse pras tabelas CSV
+por trás de cada um.
+
+- **`docs/example_mangi.idpsir.json` (novo)** — não existia savepoint
+  nenhum pra Mangi até agora, só os CSVs migrados na rodada anterior.
+  Gerado via `build_savepoint()`/`write_savepoint()` (mesmo script
+  padrão, nunca editado à mão), com `scenario_state` pré-configurado
+  reproduzindo o cenário exato que capturou o bug real de inversão de
+  sinal do motor antigo (documentado à exaustão em fases anteriores):
+  pressão D1 (crescimento populacional) + D3 (demanda de mercado) a
+  100%, resposta R2 (Gear restrictions) a 100%. **Verificado antes de
+  publicar**: `sufficiency()` sobre esse cenário dá Reef ecosystem
+  degradation com worsening 0,03 / mitigation **-0,069** / net -0,039 /
+  Yes (44%) — o sinal correto, contra o +0,81 (piora) que o motor antigo
+  reportava pra essa mesma rede — a mesma verificação já feita quando
+  `R/sufficiency.R` foi construído (Fase 1 da Revisão 1), agora com um
+  savepoint de verdade em vez de só um script standalone.
+- **`docs/tutorial.html`** ganha uma seção nova "Example networks" (novo
+  item 4 do sumário, empurrando Worked example/Saving/Glossary pra
+  5/6/7), com uma subseção por rede — Fisheries (5 nós, ciclo fechado
+  único, sem CSV por trás, só existe como savepoint — o ponto de partida
+  mais simples pra se orientar no wizard antes de qualquer complexidade),
+  Mangi et al. 2007 (18 nós/31 arestas, rede publicada de verdade, a
+  história do bug real contada de forma didática — citação completa da
+  revista incluída), e Gnanapragasam et al. 2026 (resumo/teaser de 1
+  parágrafo + link pra seção "Worked example" logo abaixo, que continua
+  sendo o mergulho fundo já existente — não duplicado aqui). Cada rede
+  tem seu próprio `.code-cluster` de download: savepoint sempre, mais as
+  duas tabelas CSV (`data/mangi2007_*.csv`/`gnanapragasam2026_*.csv`) pra
+  Mangi e Gnanapragasam, que têm CSV por trás — Fisheries não, porque
+  nunca teve (só foi gerada como savepoint desde a Fase 5 original).
+- **`R/global.R`** ganha `shiny::addResourcePath("data", "data")`,
+  espelhando o `addResourcePath("tutorial", "docs")` já existente —
+  **achado real ao testar, não assumido**: os links novos pras tabelas
+  CSV usam caminho relativo `../data/arquivo.csv` a partir de
+  `docs/tutorial.html`, que resolve certinho quando o arquivo é aberto
+  cru (GitHub, `file://`) mas quebra dentro do app rodando de verdade —
+  lá o tutorial é servido em `/tutorial/tutorial.html`, então
+  `../data/...` vira `/data/...`, uma rota que não existia até este
+  commit. Sem o resource path novo, os links de CSV dariam 404 pra
+  qualquer usuário abrindo o tutorial pelo link "Help" de dentro do app
+  (o caminho mais comum, não o raro) — confirmado reproduzindo o 404
+  antes do fix e o 200 depois, via `fetch()` direto nas duas URLs.
+- **`README.md`** ganha uma seção "## Example networks" própria (antes
+  só existia um parágrafo mencionando só o Gnanapragasam), uma entrada
+  por rede com o mesmo resumo do tutorial + link pra seção completa
+  (`docs/tutorial.html#examples`) pra quem quiser os números; a árvore de
+  arquivos (`docs/` na seção Structure) e o parágrafo de abertura
+  atualizados pra mencionar as três redes, não só uma.
+- **Achado de layout, corrigido só ao testar visualmente** (não ao ler o
+  HTML): os dois `.code-cluster`s novos com 2 cards (savepoint + CSVs)
+  renderizaram um EM CIMA do outro em vez de lado a lado — a classe CSS
+  que ativa o layout em grade de 2 colunas é `.code-cluster.two`
+  (`@media (min-width: 760px) { .code-cluster.two { grid-template-columns:
+  ... } }`, já definida no `<style>` desde a Fase 5 original, usada até
+  agora só implicitamente porque todo `.code-cluster` anterior tinha um
+  card só). Esqueci de adicionar a classe `two` nos dois clusters novos
+  de 2 cards; corrigido depois de medir `getBoundingClientRect()` dos
+  cards ao vivo no navegador (mesma largura e mesmo `top`, confirmando
+  lado a lado, em vez de larguras iguais à do cluster inteiro e `top`s
+  diferentes, que era o sintoma do bug).
+
+Testado ponta a ponta rodando o app de verdade: savepoint de Mangi
+carregado via injeção de arquivo, "Everything is valid"/"Graph built
+successfully" pros 18 nós/31 arestas, cenário pré-configurado (D1+D3
+pressão, R2 resposta) já vindo marcado ao entrar em Scenarios, "Apply
+scenario" reproduzindo exatamente os números documentados acima
+(incluindo a tabela de confiança — Gear restrictions 0%/100%/0% e Reach
+"14 factors reached, including 3 of 3 Impacts"); os dois `fetch()` de
+`/data/mangi2007_nodes.csv` e `/data/gnanapragasam2026_edges.csv`
+confirmados 200 depois do fix de `addResourcePath`; layout dos cards
+lado a lado confirmado via medição de bounding box depois do fix da
+classe `two`. Sem erro no console do servidor em nenhum passo. Suíte
+`testthat` completa e checagem de sintaxe seguem limpas (nenhuma mudança
+tocou `R/` fora de `global.R`, que não tem teste dedicado).
+
 Trilha operacional separada (independente, registrada no plano, encaixa
 quando quiser): layout circular não parece um círculo (suspeita de
 container retangular esticando a proporção, não confirmada ao vivo ainda —

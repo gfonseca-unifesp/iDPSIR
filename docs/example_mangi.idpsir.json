@@ -1,0 +1,584 @@
+{
+  "format_version": "1.0",
+  "metadata": {
+    "project_name": "Example: Coral reef fisheries (Mangi et al. 2007)",
+    "author": "fonse",
+    "created_at": "2026-08-01 12:04:20.132684",
+    "notes": "",
+    "updated_at": "2026-08-01 12:04:20.132684"
+  },
+  "schema": [
+    {
+      "name": "Driver",
+      "order": 1,
+      "color": "#1f77b4",
+      "shape": "square",
+      "role": null
+    },
+    {
+      "name": "Pressure",
+      "order": 2,
+      "color": "#d62728",
+      "shape": "triangle",
+      "role": null
+    },
+    {
+      "name": "State",
+      "order": 3,
+      "color": "#2ca02c",
+      "shape": "dot",
+      "role": null
+    },
+    {
+      "name": "Impact",
+      "order": 4,
+      "color": "#ff7f0e",
+      "shape": "diamond",
+      "role": null
+    },
+    {
+      "name": "Response",
+      "order": 5,
+      "color": "#9467bd",
+      "shape": "star",
+      "role": "feedback"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "D1",
+      "label": "Coastal population growth",
+      "dpsir_category": "Driver",
+      "subsystem": "Socioeconomic",
+      "uncertainty": "medium",
+      "controllability": "low",
+      "self_regulation": 0,
+      "growth_rate": 0,
+      "reference_value": 1,
+      "activation_threshold": null,
+      "descriptor": ""
+    },
+    {
+      "id": "D2",
+      "label": "Poverty and low fisher income",
+      "dpsir_category": "Driver",
+      "subsystem": "Socioeconomic",
+      "uncertainty": "medium",
+      "controllability": "low",
+      "self_regulation": 0,
+      "growth_rate": 0,
+      "reference_value": 1,
+      "activation_threshold": null,
+      "descriptor": ""
+    },
+    {
+      "id": "D3",
+      "label": "Market demand for reef fish",
+      "dpsir_category": "Driver",
+      "subsystem": "Economy",
+      "uncertainty": "medium",
+      "controllability": "low",
+      "self_regulation": 0,
+      "growth_rate": 0,
+      "reference_value": 1,
+      "activation_threshold": null,
+      "descriptor": ""
+    },
+    {
+      "id": "D4",
+      "label": "Lack of alternative livelihoods",
+      "dpsir_category": "Driver",
+      "subsystem": "Socioeconomic",
+      "uncertainty": "medium",
+      "controllability": "medium",
+      "self_regulation": 0,
+      "growth_rate": 0,
+      "reference_value": 1,
+      "activation_threshold": null,
+      "descriptor": ""
+    },
+    {
+      "id": "P1",
+      "label": "Fishing effort",
+      "dpsir_category": "Pressure",
+      "subsystem": "Fisheries",
+      "uncertainty": "medium",
+      "controllability": "medium",
+      "self_regulation": 0,
+      "growth_rate": 0,
+      "reference_value": 1,
+      "activation_threshold": null,
+      "descriptor": ""
+    },
+    {
+      "id": "P2",
+      "label": "Destructive and illegal gear use",
+      "dpsir_category": "Pressure",
+      "subsystem": "Fisheries",
+      "uncertainty": "medium",
+      "controllability": "medium",
+      "self_regulation": 0,
+      "growth_rate": 0,
+      "reference_value": 1,
+      "activation_threshold": null,
+      "descriptor": ""
+    },
+    {
+      "id": "S1",
+      "label": "Coral degradation",
+      "dpsir_category": "State",
+      "subsystem": "Habitat",
+      "uncertainty": "high",
+      "controllability": "low",
+      "self_regulation": 0.3,
+      "growth_rate": 0,
+      "reference_value": 1,
+      "activation_threshold": null,
+      "descriptor": ""
+    },
+    {
+      "id": "S2",
+      "label": "Fish stock decline",
+      "dpsir_category": "State",
+      "subsystem": "Fisheries",
+      "uncertainty": "high",
+      "controllability": "low",
+      "self_regulation": 0.3,
+      "growth_rate": 0,
+      "reference_value": 1,
+      "activation_threshold": null,
+      "descriptor": ""
+    },
+    {
+      "id": "S3",
+      "label": "Loss of large high-trophic fish",
+      "dpsir_category": "State",
+      "subsystem": "Fisheries",
+      "uncertainty": "high",
+      "controllability": "low",
+      "self_regulation": 0.2,
+      "growth_rate": 0,
+      "reference_value": 1,
+      "activation_threshold": null,
+      "descriptor": ""
+    },
+    {
+      "id": "S4",
+      "label": "Biodiversity decline",
+      "dpsir_category": "State",
+      "subsystem": "Biodiversity",
+      "uncertainty": "high",
+      "controllability": "low",
+      "self_regulation": 0.2,
+      "growth_rate": 0,
+      "reference_value": 1,
+      "activation_threshold": null,
+      "descriptor": ""
+    },
+    {
+      "id": "I1",
+      "label": "Catch decline (reduced CPUE)",
+      "dpsir_category": "Impact",
+      "subsystem": "Fisheries",
+      "uncertainty": "medium",
+      "controllability": "medium",
+      "self_regulation": 0,
+      "growth_rate": 0,
+      "reference_value": 1,
+      "activation_threshold": null,
+      "descriptor": ""
+    },
+    {
+      "id": "I2",
+      "label": "Reef ecosystem degradation",
+      "dpsir_category": "Impact",
+      "subsystem": "Biodiversity",
+      "uncertainty": "high",
+      "controllability": "low",
+      "self_regulation": 0,
+      "growth_rate": 0,
+      "reference_value": 1,
+      "activation_threshold": null,
+      "descriptor": ""
+    },
+    {
+      "id": "I3",
+      "label": "Food insecurity and income loss",
+      "dpsir_category": "Impact",
+      "subsystem": "Economy",
+      "uncertainty": "medium",
+      "controllability": "medium",
+      "self_regulation": 0,
+      "growth_rate": 0,
+      "reference_value": 1,
+      "activation_threshold": null,
+      "descriptor": ""
+    },
+    {
+      "id": "R1",
+      "label": "Marine protected areas (closures)",
+      "dpsir_category": "Response",
+      "subsystem": "Governance",
+      "uncertainty": "low",
+      "controllability": "high",
+      "self_regulation": 0,
+      "growth_rate": 0,
+      "reference_value": 1,
+      "activation_threshold": null,
+      "descriptor": ""
+    },
+    {
+      "id": "R2",
+      "label": "Gear restrictions",
+      "dpsir_category": "Response",
+      "subsystem": "Governance",
+      "uncertainty": "low",
+      "controllability": "high",
+      "self_regulation": 0,
+      "growth_rate": 0,
+      "reference_value": 1,
+      "activation_threshold": null,
+      "descriptor": ""
+    },
+    {
+      "id": "R3",
+      "label": "Enforcement and regulation",
+      "dpsir_category": "Response",
+      "subsystem": "Governance",
+      "uncertainty": "medium",
+      "controllability": "high",
+      "self_regulation": 0,
+      "growth_rate": 0,
+      "reference_value": 1,
+      "activation_threshold": null,
+      "descriptor": ""
+    },
+    {
+      "id": "R4",
+      "label": "Alternative livelihood programmes",
+      "dpsir_category": "Response",
+      "subsystem": "Socioeconomic",
+      "uncertainty": "medium",
+      "controllability": "high",
+      "self_regulation": 0,
+      "growth_rate": 0,
+      "reference_value": 1,
+      "activation_threshold": null,
+      "descriptor": ""
+    },
+    {
+      "id": "R5",
+      "label": "Community co-management",
+      "dpsir_category": "Response",
+      "subsystem": "Governance",
+      "uncertainty": "medium",
+      "controllability": "high",
+      "self_regulation": 0,
+      "growth_rate": 0,
+      "reference_value": 1,
+      "activation_threshold": null,
+      "descriptor": ""
+    }
+  ],
+  "edges": [
+    {
+      "from": "D1",
+      "to": "P1",
+      "weight": 3,
+      "confidence": 0.8,
+      "interaction_type": "positive",
+      "evidence_type": "expert_assessment",
+      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
+    },
+    {
+      "from": "D2",
+      "to": "P1",
+      "weight": 2,
+      "confidence": 0.65,
+      "interaction_type": "positive",
+      "evidence_type": "expert_assessment",
+      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
+    },
+    {
+      "from": "D2",
+      "to": "P2",
+      "weight": 2,
+      "confidence": 0.7,
+      "interaction_type": "positive",
+      "evidence_type": "expert_assessment",
+      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
+    },
+    {
+      "from": "D3",
+      "to": "P1",
+      "weight": 2,
+      "confidence": 0.7,
+      "interaction_type": "positive",
+      "evidence_type": "expert_assessment",
+      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
+    },
+    {
+      "from": "D4",
+      "to": "P1",
+      "weight": 2,
+      "confidence": 0.65,
+      "interaction_type": "positive",
+      "evidence_type": "expert_assessment",
+      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
+    },
+    {
+      "from": "D4",
+      "to": "P2",
+      "weight": 1,
+      "confidence": 0.55,
+      "interaction_type": "positive",
+      "evidence_type": "expert_assessment",
+      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
+    },
+    {
+      "from": "P1",
+      "to": "S2",
+      "weight": 3,
+      "confidence": 0.85,
+      "interaction_type": "positive",
+      "evidence_type": "monitoring",
+      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
+    },
+    {
+      "from": "P1",
+      "to": "S3",
+      "weight": 2,
+      "confidence": 0.8,
+      "interaction_type": "positive",
+      "evidence_type": "monitoring",
+      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
+    },
+    {
+      "from": "P1",
+      "to": "S4",
+      "weight": 2,
+      "confidence": 0.65,
+      "interaction_type": "positive",
+      "evidence_type": "observational",
+      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
+    },
+    {
+      "from": "P2",
+      "to": "S1",
+      "weight": 3,
+      "confidence": 0.85,
+      "interaction_type": "positive",
+      "evidence_type": "monitoring",
+      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
+    },
+    {
+      "from": "P2",
+      "to": "S4",
+      "weight": 2,
+      "confidence": 0.7,
+      "interaction_type": "positive",
+      "evidence_type": "observational",
+      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
+    },
+    {
+      "from": "S2",
+      "to": "I1",
+      "weight": 3,
+      "confidence": 0.8,
+      "interaction_type": "positive",
+      "evidence_type": "observational",
+      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
+    },
+    {
+      "from": "S3",
+      "to": "I1",
+      "weight": 2,
+      "confidence": 0.7,
+      "interaction_type": "positive",
+      "evidence_type": "observational",
+      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
+    },
+    {
+      "from": "S2",
+      "to": "I3",
+      "weight": 2,
+      "confidence": 0.7,
+      "interaction_type": "positive",
+      "evidence_type": "expert_assessment",
+      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
+    },
+    {
+      "from": "S1",
+      "to": "I2",
+      "weight": 3,
+      "confidence": 0.8,
+      "interaction_type": "positive",
+      "evidence_type": "observational",
+      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
+    },
+    {
+      "from": "S4",
+      "to": "I2",
+      "weight": 2,
+      "confidence": 0.75,
+      "interaction_type": "positive",
+      "evidence_type": "observational",
+      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
+    },
+    {
+      "from": "I1",
+      "to": "R1",
+      "weight": 2,
+      "confidence": 0.5,
+      "interaction_type": "positive",
+      "evidence_type": "policy_document",
+      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
+    },
+    {
+      "from": "I1",
+      "to": "R3",
+      "weight": 2,
+      "confidence": 0.5,
+      "interaction_type": "positive",
+      "evidence_type": "policy_document",
+      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
+    },
+    {
+      "from": "I2",
+      "to": "R1",
+      "weight": 2,
+      "confidence": 0.55,
+      "interaction_type": "positive",
+      "evidence_type": "policy_document",
+      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
+    },
+    {
+      "from": "I3",
+      "to": "R4",
+      "weight": 2,
+      "confidence": 0.5,
+      "interaction_type": "positive",
+      "evidence_type": "policy_document",
+      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
+    },
+    {
+      "from": "R1",
+      "to": "P1",
+      "weight": 2,
+      "confidence": 0.7,
+      "interaction_type": "negative",
+      "evidence_type": "management_plan",
+      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
+    },
+    {
+      "from": "R1",
+      "to": "S2",
+      "weight": 3,
+      "confidence": 0.8,
+      "interaction_type": "negative",
+      "evidence_type": "monitoring",
+      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
+    },
+    {
+      "from": "R1",
+      "to": "S1",
+      "weight": 2,
+      "confidence": 0.65,
+      "interaction_type": "negative",
+      "evidence_type": "monitoring",
+      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
+    },
+    {
+      "from": "R2",
+      "to": "P2",
+      "weight": 3,
+      "confidence": 0.75,
+      "interaction_type": "negative",
+      "evidence_type": "management_plan",
+      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
+    },
+    {
+      "from": "R3",
+      "to": "P1",
+      "weight": 2,
+      "confidence": 0.65,
+      "interaction_type": "negative",
+      "evidence_type": "management_plan",
+      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
+    },
+    {
+      "from": "R3",
+      "to": "P2",
+      "weight": 3,
+      "confidence": 0.75,
+      "interaction_type": "negative",
+      "evidence_type": "management_plan",
+      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
+    },
+    {
+      "from": "R4",
+      "to": "D4",
+      "weight": 2,
+      "confidence": 0.6,
+      "interaction_type": "negative",
+      "evidence_type": "management_plan",
+      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
+    },
+    {
+      "from": "R4",
+      "to": "D2",
+      "weight": 1,
+      "confidence": 0.55,
+      "interaction_type": "negative",
+      "evidence_type": "expert_assessment",
+      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
+    },
+    {
+      "from": "R4",
+      "to": "P1",
+      "weight": 2,
+      "confidence": 0.6,
+      "interaction_type": "negative",
+      "evidence_type": "expert_assessment",
+      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
+    },
+    {
+      "from": "R5",
+      "to": "P1",
+      "weight": 2,
+      "confidence": 0.6,
+      "interaction_type": "negative",
+      "evidence_type": "management_plan",
+      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
+    },
+    {
+      "from": "R5",
+      "to": "P2",
+      "weight": 2,
+      "confidence": 0.65,
+      "interaction_type": "negative",
+      "evidence_type": "management_plan",
+      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
+    }
+  ],
+  "positions": {},
+  "scenario_state": {
+    "pressure": [
+      {
+        "id": "D1",
+        "strength": 100
+      },
+      {
+        "id": "D3",
+        "strength": 100
+      }
+    ],
+    "response": [
+      {
+        "id": "R2",
+        "strength": 100
+      }
+    ],
+    "effect_horizon": 0.5
+  }
+}

@@ -52,10 +52,15 @@ options(
   shiny.maxRequestSize = 100 * 1024^2
 )
 
-# Serves docs/ (tutorial.html + the example savepoint) under /tutorial/... so
-# the running app can link straight to the same file used on GitHub, instead
-# of duplicating its content into a Shiny tab.
+# Serves docs/ (tutorial.html + the example savepoints/images) under
+# /tutorial/... so the running app can link straight to the same file used on
+# GitHub, instead of duplicating its content into a Shiny tab.
 shiny::addResourcePath("tutorial", "docs")
+
+# Serves data/ (example CSV tables) under /data/... so the tutorial's
+# "../data/*.csv" links resolve from inside the running app too, not just
+# when the page is viewed as a raw file (e.g. on GitHub).
+shiny::addResourcePath("data", "data")
 
 # =========================
 # NUCLEO (schema, validacao, grafo, metricas, io)
