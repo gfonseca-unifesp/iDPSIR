@@ -21,6 +21,8 @@ create_empty_nodes_table <- function() {
     self_regulation = numeric(),
     growth_rate = numeric(),
     reference_value = numeric(),
+    activation_threshold = numeric(),
+    descriptor = character(),
     stringsAsFactors = FALSE
   )
 }
@@ -33,7 +35,6 @@ create_empty_edges_table <- function() {
     confidence = numeric(),
     interaction_type = character(),
     evidence_type = character(),
-    threshold = numeric(),
     reference = character(),
     stringsAsFactors = FALSE
   )
@@ -383,7 +384,8 @@ mod_data_server <- function(id, seed = NULL) {
         id = "", label = "", dpsir_category = schema_categories(rv$schema)[1],
         subsystem = "", uncertainty = get_uncertainty_levels()[1],
         controllability = get_controllability_levels()[1],
-        self_regulation = 0, growth_rate = 0, reference_value = 1
+        self_regulation = 0, growth_rate = 0, reference_value = 1,
+        activation_threshold = NA_real_, descriptor = ""
       )
 
       modalDialog(
@@ -422,8 +424,24 @@ mod_data_server <- function(id, seed = NULL) {
         ),
         tags$p(
           class = "text-muted", style = "font-size: 12px;",
-          "Leave at 1 for most factors. Only relevant for a State factor with a threshold",
-          "set on one of its outgoing edges - the scale that threshold is a fraction of."
+          "Leave at 1 for most factors. Only relevant for a State factor with an activation",
+          "threshold set below - the scale that threshold is a fraction of."
+        ),
+        numericInput(
+          ns("nm_activation_threshold"), "Activation threshold (optional, 0-1, State factors only)",
+          value = d$activation_threshold, min = 0, max = 1, step = 0.05
+        ),
+        tags$p(
+          class = "text-muted", style = "font-size: 12px;",
+          "Leave blank for most factors. Only allowed for a State factor - the fraction of",
+          "its reference value it has to move (in a given scenario) before ALL of its",
+          "outgoing links switch on together, instead of always contributing proportionally",
+          "from the start (e.g. a fish stock collapse point)."
+        ),
+        textAreaInput(
+          ns("nm_descriptor"), "Descriptor (optional)",
+          value = d$descriptor %||% "", rows = 2,
+          placeholder = "A short, plain-language description of what this factor represents"
         ),
         footer = tagList(
           modalButton("Cancel"),
@@ -489,6 +507,22 @@ mod_data_server <- function(id, seed = NULL) {
         return()
       }
 
+      activation_threshold <- input$nm_activation_threshold
+      if (!is.null(activation_threshold) && !is.na(activation_threshold)) {
+        if (activation_threshold < 0 || activation_threshold > 1) {
+          showNotification("Activation threshold, if set, must be between 0 and 1.", type = "error")
+          return()
+        }
+
+        # Segunda rodada da Revisao 1: mesma restricao que existia do lado
+        # da aresta (so faz sentido pra uma variavel de estado ecologica),
+        # so que validada aqui contra a categoria do proprio no.
+        if (!identical(input$nm_category, "State")) {
+          showNotification("Activation threshold can only be set for a State factor.", type = "error")
+          return()
+        }
+      }
+
       new_row <- data.frame(
         id = new_id,
         label = input$nm_label,
@@ -499,6 +533,8 @@ mod_data_server <- function(id, seed = NULL) {
         self_regulation = self_regulation,
         growth_rate = input$nm_growth_rate %||% 0,
         reference_value = reference_value,
+        activation_threshold = if (is.null(activation_threshold)) NA_real_ else activation_threshold,
+        descriptor = trimws(input$nm_descriptor %||% ""),
         stringsAsFactors = FALSE
       )
 
@@ -564,7 +600,6 @@ mod_data_server <- function(id, seed = NULL) {
         weight = 1, confidence = 1,
         interaction_type = get_interaction_types()[1],
         evidence_type = get_evidence_types()[1],
-        threshold = NA_real_,
         reference = ""
       )
 
@@ -576,13 +611,6 @@ mod_data_server <- function(id, seed = NULL) {
         numericInput(ns("em_confidence"), "Confidence (0-1)", value = d$confidence, min = 0, max = 1, step = 0.05),
         selectInput(ns("em_interaction"), "Interaction type", choices = get_interaction_types(), selected = d$interaction_type),
         selectInput(ns("em_evidence"), "Evidence type", choices = get_evidence_types(), selected = d$evidence_type),
-        numericInput(ns("em_threshold"), "Threshold (optional, 0-1, State origin only)", value = d$threshold, min = 0, max = 1, step = 0.05),
-        tags$p(
-          class = "text-muted", style = "font-size: 13px;",
-          "Leave blank for most edges. Only allowed when \"From\" is a State factor - the",
-          "fraction of that factor's reference value it has to move (in this scenario)",
-          "before this edge switches on, instead of always contributing proportionally."
-        ),
         textInput(ns("em_reference"), "Reference (optional)", value = d$reference, placeholder = "DOI, URL, or citation"),
         tags$p(
           class = "text-muted", style = "font-size: 13px;",
@@ -639,26 +667,6 @@ mod_data_server <- function(id, seed = NULL) {
         return()
       }
 
-      threshold <- input$em_threshold
-      if (!is.null(threshold) && !is.na(threshold)) {
-        if (threshold < 0 || threshold > 1) {
-          showNotification("Threshold, if set, must be between 0 and 1.", type = "error")
-          return()
-        }
-
-        # Revisao 1, Fase 5: threshold restrito a arestas cuja origem e
-        # State - e uma propriedade de variavel de estado ecologica (ponto
-        # de virada), nao de Driver/Pressure/Impact/Response. Validado aqui
-        # em vez de escondido/desabilitado no formulario (o dropdown "From"
-        # nao e reativo dentro do modal, mesmo padrao ja usado por
-        # weight/confidence acima).
-        from_category <- rv$nodes$dpsir_category[rv$nodes$id == input$em_from]
-        if (length(from_category) == 0 || !identical(from_category, "State")) {
-          showNotification("Threshold can only be set when \"From\" is a State factor.", type = "error")
-          return()
-        }
-      }
-
       new_row <- data.frame(
         from = input$em_from,
         to = input$em_to,
@@ -666,7 +674,6 @@ mod_data_server <- function(id, seed = NULL) {
         confidence = input$em_confidence,
         interaction_type = input$em_interaction,
         evidence_type = input$em_evidence,
-        threshold = if (is.null(threshold)) NA_real_ else threshold,
         reference = trimws(input$em_reference %||% ""),
         stringsAsFactors = FALSE
       )

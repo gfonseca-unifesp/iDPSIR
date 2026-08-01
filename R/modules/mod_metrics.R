@@ -36,7 +36,14 @@ mod_metrics_ui <- function(id) {
         DTOutput(ns("matrix_table")),
         uiOutput(ns("gaps_summary")),
         h4("Average uncertainty/controllability by category (1=low, 2=medium, 3=high)"),
-        DTOutput(ns("averages_table"))
+        DTOutput(ns("averages_table")),
+        h4("All Driver-to-Impact pathways"),
+        p(
+          class = "text-muted",
+          "Every simple causal chain from a Driver to an Impact in this network, ranked by score (mean edge weight x mean confidence x number of links)."
+        ),
+        uiOutput(ns("pathways_note")),
+        DTOutput(ns("pathways_table"))
       )
     )
   )
@@ -109,6 +116,40 @@ mod_metrics_server <- function(id, schema, graph) {
         options = list(dom = "t")
       ) %>%
         formatRound(columns = c("avg_uncertainty", "avg_controllability"), digits = 2)
+    })
+
+    driver_impact_pathways <- reactive({
+      req(graph())
+      compute_all_driver_impact_pathways(graph(), schema())
+    })
+
+    output$pathways_note <- renderUI({
+      dp <- driver_impact_pathways()
+
+      if (!isTRUE(dp$available)) {
+        return(tags$p(class = "text-muted", "This schema doesn't have both a Driver and an Impact category."))
+      }
+
+      if (isTRUE(dp$truncated)) {
+        return(tags$p(
+          class = "text-warning",
+          sprintf("Showing the first %d pathways found - this network may have more; not all are listed.", nrow(dp$table))
+        ))
+      }
+
+      NULL
+    })
+
+    output$pathways_table <- renderDT({
+      dp <- driver_impact_pathways()
+
+      datatable(
+        dp$table[, c("nodes", "length", "score")],
+        colnames = c("Pathway", "Length (nodes)", "Score"),
+        rownames = FALSE,
+        options = list(pageLength = 10, scrollX = TRUE)
+      ) %>%
+        formatRound(columns = "score", digits = 3)
     })
 
     output$gaps_summary <- renderUI({

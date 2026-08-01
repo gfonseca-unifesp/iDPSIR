@@ -101,3 +101,28 @@ compute_critical_pathways <- function(g, paths, top_n = 10) {
   pathway_table <- pathway_table[order(-pathway_table$score), , drop = FALSE]
   head(pathway_table, top_n)
 }
+
+# Todos os caminhos causais de Driver a Impact (a cadeia classica do DPSIR,
+# nao um par de categoria escolhido caso a caso como o dropdown "Highlight
+# pathway" do Graph tab) - usado pela nova subsecao de Descriptors.
+# `max_paths` fica documentado, nao "sem limite algum": uma rede densa
+# poderia ter um numero combinatorialmente grande de caminhos simples, e um
+# limite explicito com aviso na UI e melhor que travar o app. `$truncated`
+# sinaliza quando o limite foi de fato atingido, pra tela/relatorio avisarem
+# em vez de mostrar uma lista silenciosamente incompleta como se fosse tudo.
+compute_all_driver_impact_pathways <- function(g, schema, max_paths = 500) {
+  stopifnot(inherits(g, "igraph"))
+
+  cats <- schema_categories(schema)
+  if (!("Driver" %in% cats) || !("Impact" %in% cats)) {
+    return(list(available = FALSE, truncated = FALSE, table = compute_critical_pathways(g, list(), top_n = 0)))
+  }
+
+  paths <- find_dpsir_paths(g, "Driver", "Impact", schema = schema, max_paths = max_paths)
+
+  list(
+    available = TRUE,
+    truncated = length(paths) >= max_paths,
+    table = compute_critical_pathways(g, paths, top_n = max_paths)
+  )
+}

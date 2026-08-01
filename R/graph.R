@@ -12,7 +12,6 @@ create_empty_graph_edges <- function() {
     to = character(),
     weight = numeric(),
     confidence = numeric(),
-    threshold = numeric(),
     reference = character(),
     arrows = character(),
     width = numeric(),
@@ -195,12 +194,20 @@ apply_manual_positions <- function(layout, manual_positions) {
 # =====================================================
 
 build_node_tooltip <- function(nodes) {
+  descriptor_line <- ifelse(
+    is.na(nodes$descriptor) | nodes$descriptor == "",
+    "",
+    paste0("<i>", nodes$descriptor, "</i><br>")
+  )
+
   glue::glue(
     "<b>{nodes$label}</b><br>",
+    "{descriptor_line}",
     "Category: {nodes$dpsir_category}<br>",
     "Subsystem: {ifelse(is.na(nodes$subsystem) | nodes$subsystem == '', '-', nodes$subsystem)}<br>",
     "Uncertainty: {ifelse(is.na(nodes$uncertainty) | nodes$uncertainty == '', '-', nodes$uncertainty)}<br>",
-    "Controllability: {ifelse(is.na(nodes$controllability) | nodes$controllability == '', '-', nodes$controllability)}"
+    "Controllability: {ifelse(is.na(nodes$controllability) | nodes$controllability == '', '-', nodes$controllability)}<br>",
+    "Activation threshold: {ifelse(is.na(nodes$activation_threshold), '-', nodes$activation_threshold)}"
   )
 }
 
@@ -211,7 +218,6 @@ build_edge_tooltip <- function(edges) {
     "Confidence: {ifelse(is.na(edges$confidence), '-', edges$confidence)}<br>",
     "Interaction: {ifelse(is.na(edges$interaction_type) | edges$interaction_type == '', '-', edges$interaction_type)}<br>",
     "Evidence: {ifelse(is.na(edges$evidence_type) | edges$evidence_type == '', '-', edges$evidence_type)}<br>",
-    "Threshold: {ifelse(is.na(edges$threshold), '-', edges$threshold)}<br>",
     "Reference: {ifelse(is.na(edges$reference) | edges$reference == '', '-', edges$reference)}"
   )
 }
@@ -222,8 +228,8 @@ build_edge_tooltip <- function(edges) {
 
 get_interaction_type_colors <- function() {
   c(
-    positive = "#d62728",
-    negative = "#2ca02c"
+    positive = "#2ca02c",
+    negative = "#d62728"
   )
 }
 

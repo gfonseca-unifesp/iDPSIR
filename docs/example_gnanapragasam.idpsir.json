@@ -3,9 +3,9 @@
   "metadata": {
     "project_name": "Example: Sri Lanka artisanal fisheries (Gnanapragasam et al. 2026)",
     "author": "fonse",
-    "created_at": "2026-07-31 19:22:36.257276",
+    "created_at": "2026-08-01 10:17:16.843067",
     "notes": "",
-    "updated_at": "2026-07-31 19:22:36.257276"
+    "updated_at": "2026-08-01 10:17:16.843067"
   },
   "schema": [
     {
@@ -54,7 +54,8 @@
       "controllability": "low",
       "self_regulation": 0,
       "growth_rate": 0.02,
-      "reference_value": 1
+      "reference_value": 1,
+      "activation_threshold": null
     },
     {
       "id": "D2",
@@ -65,7 +66,8 @@
       "controllability": "low",
       "self_regulation": 0,
       "growth_rate": 0.015,
-      "reference_value": 1
+      "reference_value": 1,
+      "activation_threshold": null
     },
     {
       "id": "D3",
@@ -76,7 +78,8 @@
       "controllability": "medium",
       "self_regulation": 0.1,
       "growth_rate": 0.03,
-      "reference_value": 1
+      "reference_value": 1,
+      "activation_threshold": null
     },
     {
       "id": "P1",
@@ -87,7 +90,8 @@
       "controllability": "medium",
       "self_regulation": 0,
       "growth_rate": 0,
-      "reference_value": 1
+      "reference_value": 1,
+      "activation_threshold": null
     },
     {
       "id": "S1",
@@ -98,7 +102,8 @@
       "controllability": "low",
       "self_regulation": 0.35,
       "growth_rate": 0,
-      "reference_value": 100
+      "reference_value": 100,
+      "activation_threshold": 0.15
     },
     {
       "id": "S2",
@@ -109,7 +114,8 @@
       "controllability": "low",
       "self_regulation": 0.02,
       "growth_rate": 0,
-      "reference_value": 1
+      "reference_value": 1,
+      "activation_threshold": null
     },
     {
       "id": "I1",
@@ -120,7 +126,8 @@
       "controllability": "medium",
       "self_regulation": 0,
       "growth_rate": 0,
-      "reference_value": 1
+      "reference_value": 1,
+      "activation_threshold": null
     },
     {
       "id": "I2",
@@ -131,7 +138,8 @@
       "controllability": "medium",
       "self_regulation": 0,
       "growth_rate": 0,
-      "reference_value": 1
+      "reference_value": 1,
+      "activation_threshold": null
     },
     {
       "id": "I3",
@@ -142,7 +150,8 @@
       "controllability": "low",
       "self_regulation": 0,
       "growth_rate": 0,
-      "reference_value": 1
+      "reference_value": 1,
+      "activation_threshold": null
     },
     {
       "id": "I4",
@@ -153,7 +162,8 @@
       "controllability": "medium",
       "self_regulation": 0,
       "growth_rate": 0,
-      "reference_value": 1
+      "reference_value": 1,
+      "activation_threshold": null
     },
     {
       "id": "I5",
@@ -164,7 +174,8 @@
       "controllability": "low",
       "self_regulation": 0,
       "growth_rate": 0,
-      "reference_value": 1
+      "reference_value": 1,
+      "activation_threshold": null
     },
     {
       "id": "R1",
@@ -175,7 +186,8 @@
       "controllability": "high",
       "self_regulation": 0,
       "growth_rate": 0,
-      "reference_value": 1
+      "reference_value": 1,
+      "activation_threshold": null
     },
     {
       "id": "R2",
@@ -186,7 +198,8 @@
       "controllability": "high",
       "self_regulation": 0,
       "growth_rate": 0,
-      "reference_value": 1
+      "reference_value": 1,
+      "activation_threshold": null
     }
   ],
   "edges": [
@@ -197,7 +210,6 @@
       "confidence": 0.7,
       "interaction_type": "positive",
       "evidence_type": "expert_assessment",
-      "threshold": null,
       "reference": ""
     },
     {
@@ -207,7 +219,6 @@
       "confidence": 0.7,
       "interaction_type": "positive",
       "evidence_type": "expert_assessment",
-      "threshold": null,
       "reference": ""
     },
     {
@@ -217,7 +228,6 @@
       "confidence": 0.85,
       "interaction_type": "positive",
       "evidence_type": "monitoring",
-      "threshold": null,
       "reference": ""
     },
     {
@@ -227,7 +237,6 @@
       "confidence": 0.8,
       "interaction_type": "negative",
       "evidence_type": "monitoring",
-      "threshold": null,
       "reference": ""
     },
     {
@@ -237,7 +246,6 @@
       "confidence": 0.6,
       "interaction_type": "positive",
       "evidence_type": "expert_assessment",
-      "threshold": null,
       "reference": "Illustrative: fishing effort itself pushes toward a more motorized fleet, independent of any aid program"
     },
     {
@@ -247,7 +255,6 @@
       "confidence": 0.75,
       "interaction_type": "negative",
       "evidence_type": "observational",
-      "threshold": 0.15,
       "reference": ""
     },
     {
@@ -257,7 +264,6 @@
       "confidence": 0.65,
       "interaction_type": "negative",
       "evidence_type": "observational",
-      "threshold": null,
       "reference": ""
     },
     {
@@ -267,7 +273,6 @@
       "confidence": 0.5,
       "interaction_type": "negative",
       "evidence_type": "expert_assessment",
-      "threshold": null,
       "reference": ""
     },
     {
@@ -277,7 +282,6 @@
       "confidence": 0.5,
       "interaction_type": "positive",
       "evidence_type": "expert_assessment",
-      "threshold": null,
       "reference": "Illustrative: a more motorized fleet also compounds catch decline, alongside the fish-stock route"
     },
     {
@@ -287,7 +291,6 @@
       "confidence": 0.5,
       "interaction_type": "positive",
       "evidence_type": "expert_assessment",
-      "threshold": null,
       "reference": "Illustrative: a more motorized fleet also compounds conflict with Indian fishermen, alongside the fish-stock route"
     },
     {
@@ -297,7 +300,6 @@
       "confidence": 0.6,
       "interaction_type": "positive",
       "evidence_type": "expert_assessment",
-      "threshold": null,
       "reference": ""
     },
     {
@@ -307,7 +309,6 @@
       "confidence": 0.5,
       "interaction_type": "positive",
       "evidence_type": "expert_assessment",
-      "threshold": null,
       "reference": ""
     },
     {
@@ -317,7 +318,6 @@
       "confidence": 0.6,
       "interaction_type": "negative",
       "evidence_type": "expert_assessment",
-      "threshold": null,
       "reference": "Aid's real, documented target per Gnanapragasam et al. 2026, Marine Policy - compensating lost fishing income, not fleet size"
     },
     {
@@ -327,7 +327,6 @@
       "confidence": 0.6,
       "interaction_type": "negative",
       "evidence_type": "expert_assessment",
-      "threshold": null,
       "reference": "Aid's real, documented target per Gnanapragasam et al. 2026, Marine Policy - compensating lost fishing income, not fleet size"
     }
   ],

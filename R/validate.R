@@ -58,6 +58,32 @@ normalize_dpsir_nodes <- function(nodes) {
     nodes$reference_value[is.na(nodes$reference_value) | nodes$reference_value == 0] <- 1
   }
 
+  # Descricao livre e opcional do no (uma frase explicando o que o fator
+  # representa) - pedido do usuario pra documentar a rede pra um leitor
+  # que nao participou da modelagem. Mesmo padrao ja usado por outros
+  # campos de texto livre (reference nas arestas): default "", nunca NA,
+  # sem validacao de formato.
+  if (!"descriptor" %in% names(nodes)) {
+    nodes$descriptor <- ""
+  } else {
+    nodes$descriptor[is.na(nodes$descriptor)] <- ""
+    nodes$descriptor <- trimws(as.character(nodes$descriptor))
+  }
+
+  # Segunda rodada da Revisao 1: threshold deixou de ser atributo de
+  # ARESTA e virou atributo de NO (renomeado `activation_threshold`) - um
+  # unico gatilho por State, disparando TODAS as suas arestas de saida
+  # juntas, em vez de um gatilho independente por aresta individual (ver
+  # R/loop_analysis.R's build_threshold_matrix()). Mesmo padrao opcional
+  # de sempre: ausente/NA e o caso normal ("sempre ligado", comportamento
+  # de hoje), so significativo pra um no de categoria State - validado no
+  # formulario (mod_data.R), nao aqui.
+  if (!"activation_threshold" %in% names(nodes)) {
+    nodes$activation_threshold <- NA_real_
+  } else {
+    nodes$activation_threshold <- suppressWarnings(as.numeric(nodes$activation_threshold))
+  }
+
   # `temporal_scale` foi aposentado (ver R/schema.R) - removida aqui, nao
   # so ignorada, se um savepoint/CSV antigo ainda trouxer a coluna.
   #
@@ -98,17 +124,13 @@ normalize_dpsir_edges <- function(edges) {
     edges$confidence <- as.numeric(edges$confidence)
   }
 
-  # Optional: the State value (or, more precisely, the simulated deviation of
-  # the source node) that switches an edge on during trajectory simulation -
-  # see R/loop_analysis.R. Most edges won't have one, so it defaults to NA
-  # (meaning "always on", today's behavior) rather than being required -
-  # missing entirely from older savepoints/CSVs is the normal case, not an
-  # error.
-  if (!"threshold" %in% names(edges)) {
-    edges$threshold <- NA_real_
-  } else {
-    edges$threshold <- suppressWarnings(as.numeric(edges$threshold))
-  }
+  # `threshold` foi movido de aresta pra no (ver normalize_dpsir_nodes()'s
+  # `activation_threshold`) - removida aqui, nao so ignorada, pelo mesmo
+  # motivo real ja documentado pra `temporal_scale`: manter `rv$edges`
+  # sempre com o mesmo conjunto de colunas que o formulario produz (que
+  # nao pergunta mais por isso), evitando o bug de atribuicao posicional
+  # `rv$edges[idx, ] <- new_row` deslocar valores pra coluna errada.
+  edges$threshold <- NULL
 
   # Optional free-text citation for the edge (DOI, URL, or a plain reference
   # like "Smith et al. 2020") - deliberately not format-validated, the same

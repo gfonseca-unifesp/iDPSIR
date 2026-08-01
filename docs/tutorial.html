@@ -655,9 +655,11 @@ cd iDPSIR</pre>
                     <tr><td class="key">subsystem</td><td>Optional grouping</td></tr>
                     <tr><td class="key">uncertainty</td><td>low / medium / high</td></tr>
                     <tr><td class="key">controllability</td><td>low / medium / high</td></tr>
+                    <tr><td class="key">descriptor</td><td>Optional free-text description of what this factor represents</td></tr>
                     <tr><td class="key">self_regulation</td><td>Optional number in [0, 1), default 0 — only used by the optional temporal simulation (see Scenarios below)</td></tr>
                     <tr><td class="key">growth_rate</td><td>Optional number, default 0 — a factor's own exogenous trend per time window, independent of any edge</td></tr>
-                    <tr><td class="key">reference_value</td><td>Optional number, default 1 — the scale a factor's change is measured against by an outgoing edge's threshold (see Edges below)</td></tr>
+                    <tr><td class="key">reference_value</td><td>Optional number, default 1 — the scale a factor's change is measured against by its own activation_threshold, if set</td></tr>
+                    <tr><td class="key">activation_threshold</td><td>Optional number in [0, 1], leave blank for most factors — only allowed for a State factor (see Scenarios below)</td></tr>
                   </table>
                 </div>
                 <pre>id,label,dpsir_category,subsystem,uncertainty,controllability
@@ -677,7 +679,6 @@ S1,Water quality decline,State,Water,medium,low</pre>
                     <tr><td class="key">confidence</td><td>0–1</td></tr>
                     <tr><td class="key">interaction_type</td><td>positive / negative</td></tr>
                     <tr><td class="key">evidence_type</td><td>e.g. observational, monitoring</td></tr>
-                    <tr><td class="key">threshold</td><td>Optional, leave blank for most edges — only allowed when "from" is a State factor (see Scenarios below)</td></tr>
                     <tr><td class="key">reference</td><td>Optional citation (DOI, URL, or plain text) backing this link</td></tr>
                   </table>
                 </div>
@@ -733,9 +734,11 @@ P1,S1,3,0.85,negative,monitoring</pre>
                 <tr><td class="key">subsystem</td><td>Optional grouping (e.g. "Fisheries", "Water") — lets you filter the Graph tab down to one part of the network.</td></tr>
                 <tr><td class="key">uncertainty</td><td>low / medium / high — how confident you are this node is described correctly. Thickens the node's border on the graph.</td></tr>
                 <tr><td class="key">controllability</td><td>low / medium / high — how much a manager can influence this factor directly.</td></tr>
+                <tr><td class="key">descriptor</td><td>Optional — a short, plain-language description of what this factor represents. Purely documentation: not read by any calculation, just there so someone reading the network later (including a future you) doesn't have to guess what a node means.</td></tr>
                 <tr><td class="key">self_regulation</td><td>Optional number in [0, 1), default 0. The fraction of this factor's simulated deviation that reverts each time window (e.g. a recovering habitat) — only used by the Scenarios tab's optional temporal simulation, see the worked example.</td></tr>
                 <tr><td class="key">growth_rate</td><td>Optional number, default 0. This factor's own exogenous trend per time window (e.g. population growth), independent of any edge — also only used by the temporal simulation.</td></tr>
-                <tr><td class="key">reference_value</td><td>Optional number, default 1. The scale this factor's simulated change is measured against when one of its outgoing edges has a threshold set (Edges step).</td></tr>
+                <tr><td class="key">reference_value</td><td>Optional number, default 1. The scale this factor's simulated change is measured against when it has an activation threshold set below.</td></tr>
+                <tr><td class="key">activation_threshold</td><td>Optional number in [0, 1], leave blank for most factors. Only allowed for a State factor: a fraction of its own reference value it has to move, in a given scenario, before ALL of its outgoing links switch on together — instead of always contributing proportionally from the start. Only affects the Scenarios tab's optional temporal simulation; the sufficiency reading and the graph itself ignore it.</td></tr>
               </table>
             </div>
           </div>
@@ -756,7 +759,6 @@ P1,S1,3,0.85,negative,monitoring</pre>
                 <tr><td class="key">confidence</td><td>0–1, how sure you are this link is real. Below the Graph tab's threshold, the line is drawn dashed.</td></tr>
                 <tr><td class="key">interaction_type</td><td><code>positive</code> (the link increases its target) or <code>negative</code> (it decreases/mitigates it) — colors the edge red or green and appears in its tooltip.</td></tr>
                 <tr><td class="key">evidence_type</td><td>e.g. observational, expert_assessment, monitoring — where the link comes from, shown on hover.</td></tr>
-                <tr><td class="key">threshold</td><td>Optional — leave blank for most edges. Only allowed when "from" is a State factor: a fraction 0–1 of that factor's <code>reference_value</code> (Nodes step) it has to move, in a given scenario, before this edge switches on — instead of always contributing proportionally from the start. Only affects the Scenarios tab's optional temporal simulation; the sufficiency reading and the graph itself ignore it.</td></tr>
                 <tr><td class="key">reference</td><td>Optional — a DOI, URL, or plain citation backing this specific link. Shown on hover and, if you check "Edge references" on the Report tab, listed in a References section so a reader can trace any prediction back to its evidence.</td></tr>
               </table>
             </div>
@@ -973,6 +975,20 @@ P1,S1,3,0.85,negative,monitoring</pre>
           </div>
         </div>
 
+        <div class="callout warn">
+          <span class="dot"></span>
+          <div><strong>This example is illustrative, not the paper's own model.</strong>
+          The weights, thresholds, growth rate, and self-regulation values here are the
+          author's reasoned interpretation of the qualitative story in Gnanapragasam et
+          al. 2026 — including giving the fishers/boats trend a standing growth rate
+          instead of a cause, which the paper itself leaves open — not numbers
+          extracted from the paper's own bioeconomic model, which fits real
+          catch/effort data with methods this app doesn't attempt to reproduce. Treat
+          this network the way you'd treat any DPSIR diagram you build yourself: one
+          useful, structured lens on the system, worth checking against expert judgment
+          before acting on it.</div>
+        </div>
+
         <h3>The story</h3>
         <p>After the 2004 tsunami and, later, the end of a long civil war, aid programs
           replaced fishing boats and gear lost by coastal communities in northern Sri
@@ -1118,9 +1134,9 @@ P1,S1,3,0.85,negative,monitoring</pre>
         <div class="table-wrap">
           <table class="fields">
             <tr><th>Impact</th><th>Window 5 (baseline / scenario)</th><th>Window 10 (baseline / scenario)</th><th>Window 15 (baseline / scenario)</th></tr>
-            <tr><td class="key">Fisher income loss</td><td>52.3 / 34.3</td><td>1,611.1 / 1,570.6</td><td>8,212.9 / 8,150.0</td></tr>
+            <tr><td class="key">Fisher income loss</td><td>41.1 / 23.1</td><td>1,599.9 / 1,559.4</td><td>8,201.7 / 8,138.7</td></tr>
             <tr><td class="key">Catch decline</td><td>96.8 / 96.8</td><td>3,865.3 / 3,865.3</td><td>22,010.0 / 22,010.0</td></tr>
-            <tr><td class="key">Conflict with Indian fishermen</td><td>62.9 / 62.9</td><td>2,228.8 / 2,228.8</td><td>12,858.2 / 12,858.2</td></tr>
+            <tr><td class="key">Conflict with Indian fishermen</td><td>55.4 / 55.4</td><td>2,221.3 / 2,221.3</td><td>12,850.7 / 12,850.7</td></tr>
             <tr><td class="key">Traditional fishing decline</td><td>56.0 / 56.0</td><td>2,309.5 / 2,309.5</td><td>14,765.8 / 14,765.8</td></tr>
             <tr><td class="key">Loss of traditional culture</td><td>42.0 / 42.0</td><td>1,732.1 / 1,732.1</td><td>11,074.4 / 11,074.4</td></tr>
           </table>
@@ -1128,8 +1144,8 @@ P1,S1,3,0.85,negative,monitoring</pre>
         <p>One row tells a different story than the other four (values are abstract
           model units, not real catch/income figures — what matters is the shape and
           the comparison, not the raw size). <strong>Fisher income loss</strong> starts
-          strong — at window 5 the aid cuts it by about a third (34.3 against a
-          baseline of 52.3) — but the gap steadily narrows: by window 15 the scenario
+          strong — at window 5 the aid cuts it by over 40% (23.1 against a
+          baseline of 41.1) — but the gap steadily narrows: by window 15 the scenario
           is within 1% of the baseline. The aid never reverses and never actually makes
           income loss worse; it simply has a fixed, one-time effect against a driver
           (the growing fleet) that keeps compounding every window, so its relative
@@ -1162,29 +1178,25 @@ P1,S1,3,0.85,negative,monitoring</pre>
         </div>
 
         <h3>A threshold worth knowing about</h3>
-        <p>The <strong>Fish stock → Catch decline</strong> edge has a
-          <code>threshold</code> set: 0.15 of the stock's <code>reference_value</code>
-          (100 in this network) — so that particular route into catch decline only
-          starts responding once the simulated stock loss passes 15 points, instead of
-          scaling from the very first unit of decline. That's a real fisheries
-          phenomenon (a collapse threshold). It only gates the Fish stock route,
-          though — the Fleet motorization route into Catch decline has no threshold, so
-          in the table above Catch decline is already moving by window 4, faster than
-          it would if the fish-stock route were carrying the whole effect alone.</p>
-
-        <div class="callout warn">
-          <span class="dot"></span>
-          <div><strong>This example is illustrative, not the paper's own model.</strong>
-          The weights, thresholds, growth rate, and self-regulation values here are the
-          author's reasoned interpretation of the qualitative story in Gnanapragasam et
-          al. 2026 — including giving the fishers/boats trend a standing growth rate
-          instead of a cause, which the paper itself leaves open — not numbers
-          extracted from the paper's own bioeconomic model, which fits real
-          catch/effort data with methods this app doesn't attempt to reproduce. Treat
-          this network the way you'd treat any DPSIR diagram you build yourself: one
-          useful, structured lens on the system, worth checking against expert judgment
-          before acting on it.</div>
-        </div>
+        <p>The <strong>Fish stock</strong> factor has an
+          <code>activation threshold</code> set: 0.15 of its own
+          <code>reference_value</code> (100 in this network). Once the simulated stock
+          loss passes 15 points, <em>all three</em> of its outgoing links — to Catch
+          decline, Fisher income loss, and Conflict with Indian fishermen — switch on
+          together, instead of each scaling from the very first unit of decline. That's
+          a real fisheries phenomenon (a collapse threshold), and setting it on the
+          State factor itself, rather than choosing it separately for each link, keeps
+          all three targets waiting for the same collapse point rather than three
+          independently-picked ones.</p>
+        <p>The threshold's effect shows up unevenly in the table above, though, and
+          that's worth understanding rather than mistaking for an inconsistency:
+          <strong>Catch decline</strong> and <strong>Conflict with Indian fishermen</strong>
+          each have a <em>second</em>, ungated route in — from Fleet motorization, which
+          has no threshold of its own — so both are already moving by window 4 from
+          that route alone. <strong>Fisher income loss</strong> has no such alternative;
+          the Fish stock link is its only route in, so it stays at exactly zero through
+          window 4 and only starts moving at window 5, the moment Fish stock's own
+          threshold is finally crossed.</p>
       </section>
 
       <!-- ============ SAVEPOINT ============ -->

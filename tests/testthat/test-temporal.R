@@ -200,9 +200,11 @@ test_that("on_step callback fires once per window with (t, windows), for the pro
 
 test_that("threshold gating (relative to reference_value) blocks an edge until the source crosses it, then it stays on", {
   g <- build_test_network()
-  # S1 -> I1 gets a threshold: only contributes once |S1| >= 2 (reference_value
-  # defaults to 1 pre-Fase-5, so this is an absolute magnitude for now).
-  E(g)[which(tail_of(g, E(g))$name == "S1" & head_of(g, E(g))$name == "I1")]$threshold <- 2
+  # S1 -> I1 gets an activation threshold on S1 itself (second round of
+  # Revisao 1: threshold moved from edge to node): only contributes once
+  # |S1| >= 2 (reference_value defaults to 1 pre-Fase-5, so this is an
+  # absolute magnitude for now).
+  V(g)[V(g)$name == "S1"]$activation_threshold <- 2
 
   p_D <- build_press_vector(g, active_ids = "D1", strengths = c(D1 = 1))
   zero_p <- zero_press(g)

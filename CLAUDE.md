@@ -2877,6 +2877,189 @@ Suíte `testthat` e checagem de sintaxe seguem limpas (nenhum teste
 depende dos pesos exatos deste exemplo). Sem erro no console do
 navegador nem do servidor em nenhum passo.
 
+**Terceira rodada de polimento, 8 pontos levantados pelo usuário revisando o
+app.** Todos aditivos/de UI, sem tocar no núcleo numérico exceto o item 2
+abaixo (que é uma relocação de atributo, não uma mudança de fórmula).
+
+1. **Callout "illustrative" movido pro início do Worked example**
+   (`docs/tutorial.html`) — antes ficava no fim da seção inteira, só depois
+   de todas as tabelas/figuras; agora aparece logo após o card de download,
+   antes de "The story", pra quem só lê o topo já saber que os números são
+   uma interpretação do autor, não do artigo.
+
+2. **Threshold movido de aresta pra nó (`activation_threshold`).** Decisão
+   confirmada com o usuário antes de implementar: um único threshold por
+   State, disparando **todas** as suas arestas de saída juntas — não mais
+   um gatilho independente por aresta individual. Faz mais sentido
+   conceitualmente (é uma propriedade da variável de estado, não de um link
+   causal específico) e casa com o padrão real de uso (nesta sessão, cada
+   State só tinha threshold numa de suas arestas de qualquer forma).
+   `R/validate.R`: `normalize_dpsir_nodes()` ganha `activation_threshold`
+   (default `NA`, mesmo padrão opcional de `growth_rate`/`reference_value`);
+   `normalize_dpsir_edges()` **remove** `threshold` (não só ignora — mesmo
+   motivo já documentado pra `temporal_scale`: evita corrupção de coluna
+   por atribuição posicional se `rv$edges` e o formulário tiverem contagens
+   de coluna diferentes). `R/loop_analysis.R`'s `build_threshold_matrix()`
+   reescrita pra ler `V(g)$activation_threshold` em vez de `E(g)$threshold`
+   — itera as arestas do grafo mas busca o valor no nó de origem, então
+   toda aresta saindo do mesmo State pega o mesmo gatilho. `R/graph.R`:
+   `create_empty_graph_edges()` perde a coluna; `build_edge_tooltip()`
+   perde "Threshold", `build_node_tooltip()` ganha "Activation threshold".
+   `mod_data.R`: formulário de aresta perde o campo inteiro; formulário de
+   nó ganha `numericInput` "Activation threshold (optional, 0-1, State
+   factors only)" com a mesma validação que a aresta tinha antes (0-1, só
+   permitido se a categoria for State), agora checada contra a categoria do
+   próprio nó em vez da categoria do "From" de uma aresta.
+
+   **Achado real, descoberto só ao migrar o exemplo Gnanapragasam**: como
+   S1 (Fish stock) tem 3 arestas de saída (→I1, →I2, →I3) mas só a aresta
+   →I1 tinha threshold antes, mover pro nó significa que **todas as três**
+   passam a esperar o mesmo gatilho agora — um comportamento genuinamente
+   diferente, não só uma relocação de onde o dado mora. Testado antes de
+   aceitar como correto: script comparando `propagate()` (usa
+   `build_signed_matrix()`, nunca lê threshold) confirma a leitura estática
+   de suficiência **não muda nada** (threshold só afeta a simulação
+   temporal, como já documentado); a tabela temporal mudou só pra Fisher
+   income loss (I2: janela5 41.06/23.06, antes 52.3/34.3) e Conflict with
+   Indian fishermen (I3: janela5 55.39, antes 62.9) — Catch decline (I1)
+   ficou **idêntico** (já era a única aresta com threshold antes). Um
+   segundo achado, ao depurar por que I1 "furava" o gatilho antes da hora
+   enquanto I2 não: I1 e I3 têm uma **segunda** rota de entrada sem
+   threshold nenhum (via S2/Fleet motorization, adicionada na sessão
+   anterior), então já se moviam a partir da janela 4 só por essa rota,
+   mesmo com a rota-S1 ainda desligada (confirmado rodando com/sem a
+   aresta S2→I1: sem ela, I1 fica em zero até a janela 4 igual I2) — Fisher
+   income loss não tem essa segunda rota, então é a única que realmente
+   fica visivelmente "presa" esperando o threshold de S1 abrir na janela 5.
+   Isso virou o novo texto de "A threshold worth knowing about" no
+   tutorial, mais rico que a versão anterior (que só falava de uma aresta).
+   `data/gnanapragasam2026_nodes.csv` (S1 ganha `activation_threshold=0.15`)/
+   `_edges.csv` (coluna `threshold` removida), savepoint e as duas imagens
+   estáticas regeneradas. Números de suficiência estática, confiança e
+   reach **inalterados** (confirmado byte a byte contra os já verificados).
+   Testes: os 2 testes de threshold em `test-validate.R` viraram testes de
+   `activation_threshold` em nós (mais um par novo pra edges sem a coluna);
+   `test-temporal.R`'s teste de gating passou a setar
+   `V(g)[V(g)$name=="S1"]$activation_threshold <- 2` em vez de `E(g)$threshold`
+   — mesmo resultado exato (a fixture de teste só tinha 1 aresta saindo de
+   S1 mesmo, então não expõe a diferença de "gatilha todas juntas").
+
+3. **Slider "?" sem função removido do cabeçalho.** Investigado ao vivo, não
+   assumido: o cabeçalho tinha 3 elementos além do link "Help" — confirmado
+   inspecionando o DOM que são `#help_switch` (toggle "modo de ajuda" que o
+   bs4Dash injeta sozinho), `#theme_switch` (toggle claro/escuro) e um botão
+   de control-sidebar já `display:none`. Clicar em `#help_switch` produz
+   **zero mudança no DOM** (confirmado comparando `innerHTML.length` antes/
+   depois) — nunca teve efeito porque este app nunca usa o parâmetro
+   `help=` de `bs4Dash::box()`. `#theme_switch` **é** funcional (confirmado
+   clicando: adiciona a classe `dark-mode` no `<body>`) — mantido.
+   `bs4Dash::dashboardPage(help=FALSE)`/`dashboardHeader()` não têm um
+   parâmetro que desliga só esse switch especificamente (os dois elementos
+   são sempre renderizados, `help=`/`dark=` só parecem controlar o estado
+   inicial do toggle, não se ele existe) — corrigido escondendo via um
+   `tags$script` inline (`$('#help_switch').closest('.custom-control').hide()`)
+   colocado em `dashboardBody()`, **não** em `rightUi` — `dashboardHeader()`
+   valida (`tagAssert`) que todo tag de nível superior em `rightUi` é um
+   `<li class="dropdown">` (o mesmo bug já documentado quando o link "Help"
+   foi adicionado), e um `<script>` solto ali quebraria o app inteiro no
+   startup.
+
+4. **Coluna "Descriptor" opcional em Nós.** Texto livre, sem validação de
+   formato (mesmo padrão de `reference` nas arestas) — pro usuário
+   documentar em uma frase o que um fator representa, útil pra quem lê a
+   rede depois sem ter participado da modelagem. `R/validate.R`
+   (`normalize_dpsir_nodes()`, default `""`), `mod_data.R`
+   (`create_empty_nodes_table()`, `textAreaInput` no formulário, `new_row`),
+   `R/graph.R`'s `build_node_tooltip()` mostra em itálico logo abaixo do
+   label **só quando preenchido** (`ifelse` vetorizado, mesmo truque já
+   usado pros outros campos opcionais do tooltip) — não polui o tooltip de
+   nós sem descrição.
+
+5. **Cores de aresta trocadas: positivo=verde, negativo=vermelho** (antes
+   era o oposto). Mudança de uma linha em `get_interaction_type_colors()`
+   (`R/graph.R`) — como toda cor de aresta (grafo, legenda, e as duas
+   figuras estáticas do tutorial) já vinha dessa única função, a troca se
+   propaga sozinha sem precisar tocar em mais nada. As duas imagens do
+   tutorial (`docs/example_gnanapragasam_network.png`/
+   `_storyboard.png`) regeneradas pelo mesmo script de sempre — a primeira
+   pela cor, a segunda pelos números corrigidos do item 2.
+
+6. **Tabela "All Driver-to-Impact pathways" em Descriptors.** Nova
+   subseção na aba Metrics → DPSIR descriptors (e espelhada no relatório,
+   dentro do bloco `include_descriptors` já existente) listando **todo**
+   caminho causal simples de Driver a Impact na rede, não só o par
+   escolhido no dropdown "Highlight pathway" da aba Graph. Reaproveita
+   `find_dpsir_paths()`/`compute_critical_pathways()` (`R/pathways.R`) já
+   existentes via uma função nova, `compute_all_driver_impact_pathways(g,
+   schema, max_paths=500)` — `max_paths` é um limite **documentado**, não
+   "sem limite algum": uma rede densa poderia ter uma quantidade
+   combinatorialmente grande de caminhos simples, e um teto explícito com
+   aviso na tela (`$truncated`) é melhor que travar o app tentando listar
+   todos. Testado na rede de Gnanapragasam: 21 caminhos, nenhum truncamento
+   (bem abaixo do teto), ordenados por score, batendo entre tela e
+   relatório (`D3 -> P1 -> S1 -> I1`, score 5.20, no topo dos dois).
+
+7. **Indicador de progresso em "Apply scenario".** Único ponto de cômputo
+   pesado sem nenhum feedback visual até agora: `build_confidence_matrix()`
+   roda 300 simulações **por resposta existente na rede** (não só as
+   ativas), perceptível numa rede maior — o disclosure de simulação
+   temporal já tinha `withProgress()`/`incProgress()` desde a Fase 6, esse
+   era o único buraco. Envolvido o corpo do `observeEvent(input$apply_scenario)`
+   inteiro num `withProgress()` com 4 incrementos grosseiros (Reach →
+   Sufficiency → Confidence → Done), não granular por simulação — checado
+   antes que fosse necessário: `sufficiency()`/`sufficiency_reach_over_c()`/
+   `response_reach()` são todos rápidos (poucos `propagate()`/travessia de
+   grafo, sem amostragem), só `build_confidence_matrix()` justifica um
+   indicador. Verificado que `shiny::withProgress(expr, ..., env=parent.frame())`
+   avalia no frame do chamador (lido o código-fonte do pacote, não
+   assumido) — as atribuições `reach <-`/`suff_df <-`/etc. dentro do bloco
+   continuam visíveis depois dele, sem precisar reestruturar o retorno.
+
+8. **Aba Scenarios reorganizada em caixas colapsáveis.** Era uma coluna
+   única e longa (Pressure/Response/Resultados/Temporal/Salvos tudo
+   empilhado); reorganizada em `bs4Dash::box(collapsible=TRUE)` por tópico
+   — mesmo padrão já usado pela aba Graph — "Pressure scenario"/"Response
+   scenario"/"Results" abertos por padrão (fluxo principal), "Temporal
+   simulation"/"Saved scenarios" fechados por padrão (avançado/secundário).
+   Como todo conteúdo já vinha de `uiOutput()`s renderizados no servidor,
+   a reorganização foi só de onde os placeholders ficam na UI estática —
+   zero mudança de lógica server-side, exceto um ponto: "Save this
+   scenario" vivia dentro do mesmo `renderUI` do disclosure temporal
+   (`temporal_and_save_section`) só por conveniência de código, não por
+   relação lógica — colocá-lo dentro da caixa "Temporal simulation" (fechada
+   por padrão) o esconderia de quem nunca abre esse disclosure. Separado
+   num `output$save_scenario_section` próprio, movido pra dentro da caixa
+   "Results" (onde faz mais sentido - salva o que "Results" está
+   mostrando), mantendo a mesma guarda `req(current_scenario())`.
+
+Verificado ponta a ponta rodando o app de verdade contra o savepoint
+regenerado do Gnanapragasam: header sem o switch morto (`#help_switch`
+oculto, `#theme_switch` funcional, confirmado programaticamente via
+`closest('.custom-control').offsetParent`); tabela de Nós mostrando as
+colunas `activation_threshold`/`descriptor` na posição certa; editar S1
+(descriptor preenchido) e salvar preserva `activation_threshold=0.15`
+intacto (sem a corrupção de coluna já vista em bugs anteriores desta
+revisão); tentar setar `activation_threshold` num nó Driver (D1) rejeitado
+corretamente, linha inalterada; formulário de aresta sem campo de
+threshold algum; cores da aresta confirmadas via
+`network.body.data.edges.get()` (`positive: "#2ca02c"`, `negative:
+"#d62728"`); Metrics → DPSIR descriptors mostrando "All Driver-to-Impact
+pathways" com 21 linhas; Scenarios com as 5 caixas colapsáveis, "Apply
+scenario" reproduzindo exatamente os números já verificados (2.344/1.125/
+1.313/1.125/0.844 de worsening, confiança 21%/68%, Reach "1 factor... 1 of
+5 Impacts"), "Save this scenario" visível dentro de "Results" sem precisar
+abrir "Temporal simulation"; relatório com "Descriptors" ligado contendo a
+mesma tabela de pathways, mesmos números da tela. Sem erro no console do
+navegador nem do servidor em nenhum passo. Suíte `testthat` completa e
+checagem de sintaxe seguem limpas.
+
+(Achado colateral, não um bug do app: `fetch()` sem `{cache:'no-store'}`
+no console do navegador devolvia uma versão em cache do savepoint mais
+antiga que a recém-regenerada, mostrando `activation_threshold` ausente
+pra S1 — resolvido só no lado do script de teste, comparando headers
+`last-modified`; não afeta o app real, que nunca faz fetch client-side
+desse arquivo fora do `fileInput` de upload.)
+
 Trilha operacional separada (independente, registrada no plano, encaixa
 quando quiser): layout circular não parece um círculo (suspeita de
 container retangular esticando a proporção, não confirmada ao vivo ainda —

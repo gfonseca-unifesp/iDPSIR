@@ -146,6 +146,30 @@ build_full_report_html <- function(
       report_html_table(d$averages_by_category),
       caption_tag("Table", next_table_n(), "Mean uncertainty and controllability score per DPSIR category, coded as 1 (low), 2 (medium), 3 (high).")
     ))
+
+    dp <- compute_all_driver_impact_pathways(graph, schema)
+    if (isTRUE(dp$available)) {
+      truncated_note <- if (isTRUE(dp$truncated)) {
+        sprintf(" Showing the first %d pathways found - this network may have more.", nrow(dp$table))
+      } else {
+        ""
+      }
+
+      pathways_df <- dp$table[, c("nodes", "length", "score")]
+      names(pathways_df) <- c("Pathway", "Length (nodes)", "Score")
+
+      sections <- c(sections, list(
+        tags$h3("All Driver-to-Impact pathways"),
+        report_html_table(pathways_df),
+        caption_tag(
+          "Table", next_table_n(),
+          paste0(
+            "Every simple causal chain from a Driver to an Impact in this network, ranked by score ",
+            "(mean edge weight x mean confidence x number of links).", truncated_note
+          )
+        )
+      ))
+    }
   }
 
   # Revisao 1, Fase 3: the sufficiency reading (R/sufficiency.R), one

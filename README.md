@@ -117,14 +117,16 @@ window, e.g. a fish stock that partially replenishes; only used by the optional
 temporal simulation, see Scenarios below), `growth_rate` (optional, default 0 — a
 factor's own exogenous trend per time window, e.g. population growth, independent of
 any edge), `reference_value` (optional, default 1 — the scale a factor's simulated
-change is measured against when an outgoing edge has a `threshold`, see below).
+change is measured against when it has an `activation_threshold` set),
+`activation_threshold` (optional, blank for most factors; a fraction 0-1 of the
+factor's own `reference_value` it has to move before ALL of its outgoing edges switch
+on together — only allowed when the factor is State), `descriptor` (optional
+free-text description of what the factor represents — documentation only, not read by
+any calculation).
 
 **Edges** (`data/sample_edges.csv`): `from`, `to`, `weight`, `confidence` (0-1),
-`interaction_type` (positive/negative), `evidence_type`, `threshold` (optional,
-blank for most edges; a fraction 0-1 of the source factor's `reference_value` it
-must move before this edge switches on — only allowed when the source is a State
-factor), `reference` (optional DOI/URL/citation backing the link, listed in the
-report if included).
+`interaction_type` (positive/negative), `evidence_type`, `reference` (optional
+DOI/URL/citation backing the link, listed in the report if included).
 
 **Default DPSIR connections:** Driver→Pressure, Pressure→State, State→Impact,
 Impact→Response, and Response→{Driver, Pressure, State, Impact}. The schema is

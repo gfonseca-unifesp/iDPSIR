@@ -132,10 +132,21 @@ simulate_trajectory <- function(A, press, steps = 10, step_size = 0.5) {
   simulate_trajectory_thresholded(A, press, Th = NULL, steps = steps, step_size = step_size)
 }
 
-# Extrai o threshold de cada aresta (opcional, ver R/validate.R) numa matriz
-# no mesmo formato de A (Th[to, from]) - NA onde a aresta nao tem threshold
-# definido, valor numerico onde tem. Passada pra simulate_trajectory_thresholded()
-# como o "gatilho" que liga/desliga cada aresta durante a simulacao.
+# Extrai o `activation_threshold` de cada no (opcional, ver R/validate.R)
+# numa matriz no mesmo formato de A (Th[to, from]) - NA onde o no de
+# origem nao tem threshold definido, valor numerico onde tem. Passada pra
+# simulate_trajectory_thresholded() como o "gatilho" que liga/desliga
+# cada aresta durante a simulacao.
+#
+# Segunda rodada da Revisao 1: threshold deixou de ser escolhido aresta a
+# aresta e virou um unico valor por no de origem - toda aresta que sai de
+# um no com `activation_threshold` definido é gatilhada pelo MESMO
+# valor (o desvio simulado desse no de origem), nao mais uma aresta
+# individual podendo esperar um gatilho e a aresta-irma do mesmo State
+# ficando sempre ligada. Simplifica o modelo mental ("a partir de X% de
+# desvio, esse fator passa a afetar tudo que ele alimenta") e casa com o
+# proprio motivo do threshold existir: e uma propriedade da variavel de
+# estado (um ponto de virada ecologico), nao de um link causal especifico.
 build_threshold_matrix <- function(g) {
   stopifnot(inherits(g, "igraph"))
 
@@ -143,18 +154,21 @@ build_threshold_matrix <- function(g) {
   n <- length(node_names)
   Th <- matrix(NA_real_, nrow = n, ncol = n, dimnames = list(node_names, node_names))
 
-  if (ecount(g) == 0 || is.null(E(g)$threshold)) {
+  if (ecount(g) == 0 || is.null(V(g)$activation_threshold)) {
     return(Th)
   }
 
+  node_threshold <- suppressWarnings(as.numeric(V(g)$activation_threshold))
+  names(node_threshold) <- node_names
+
   edge_ends <- ends(g, E(g), names = TRUE)
-  threshold <- suppressWarnings(as.numeric(E(g)$threshold))
 
   for (k in seq_len(nrow(edge_ends))) {
-    if (is.na(threshold[k])) next
     from_node <- edge_ends[k, 1]
     to_node <- edge_ends[k, 2]
-    Th[to_node, from_node] <- threshold[k]
+    th <- node_threshold[[from_node]]
+    if (is.na(th)) next
+    Th[to_node, from_node] <- th
   }
 
   Th

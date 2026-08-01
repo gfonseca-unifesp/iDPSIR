@@ -89,49 +89,64 @@ build_confidence_matrix <- function(g, p_D, response_nodes_df, c, n_simulations 
 mod_responses_ui <- function(id) {
   ns <- NS(id)
 
-  box(
-    width = 12,
-    title = "Scenarios",
-    status = "primary",
-    solidHeader = TRUE,
-
+  tagList(
     # Revisao 1, Fase 2: two independent "pushes" the user builds - a
     # pressure scenario (what's getting worse) and a response scenario
     # (what's being done about it) - read by the sufficiency reading below.
+    # Second round of Revisao 1: split into collapsible boxes (same pattern
+    # already used by the Graph tab's left column) instead of one long
+    # single-box column - easier to scan/collapse a section you're not
+    # currently using than to scroll past it.
     p("Build two scenarios: what's pushing the system to get worse, and how you're responding to it. Then see whether the response is enough."),
 
-    h5("Pressure scenario"),
-    p(class = "text-muted", "Optional. Turn on the Drivers/Pressures you expect to worsen, and how strongly."),
-    uiOutput(ns("pressure_controls")),
-
-    tags$hr(),
-    h5("Response scenario"),
-    p(class = "text-muted", "Turn on the responses you want to test, and how strongly each is implemented."),
-    uiOutput(ns("response_controls")),
-
-    tags$hr(),
-    uiOutput(ns("effect_horizon_ui")),
-    p(
-      class = "text-muted",
-      "Lower values focus almost entirely on short, direct causal chains; higher values let longer, indirect chains",
-      "contribute more. \"Sensitivity to this setting\" below shows whether your conclusions change across this range."
+    box(
+      width = 12, title = "Pressure scenario", status = "primary", solidHeader = TRUE,
+      collapsible = TRUE,
+      p(class = "text-muted", "Optional. Turn on the Drivers/Pressures you expect to worsen, and how strongly."),
+      uiOutput(ns("pressure_controls"))
     ),
 
-    fluidRow(
-      column(width = 6, textInput(ns("scenario_name"), "Scenario name", value = "Scenario 1")),
-      column(width = 6, br(), actionButton(ns("apply_scenario"), "Apply scenario", icon = icon("play"), class = "btn-success", width = "100%"))
+    box(
+      width = 12, title = "Response scenario", status = "primary", solidHeader = TRUE,
+      collapsible = TRUE,
+      p(class = "text-muted", "Turn on the responses you want to test, and how strongly each is implemented."),
+      uiOutput(ns("response_controls")),
+      tags$hr(),
+      uiOutput(ns("effect_horizon_ui")),
+      p(
+        class = "text-muted",
+        "Lower values focus almost entirely on short, direct causal chains; higher values let longer, indirect chains",
+        "contribute more. \"Sensitivity to this setting\" below shows whether your conclusions change across this range."
+      ),
+      fluidRow(
+        column(width = 6, textInput(ns("scenario_name"), "Scenario name", value = "Scenario 1")),
+        column(width = 6, br(), actionButton(ns("apply_scenario"), "Apply scenario", icon = icon("play"), class = "btn-success", width = "100%"))
+      )
     ),
 
-    uiOutput(ns("sufficiency_result")),
-    uiOutput(ns("reach_section")),
-    uiOutput(ns("temporal_and_save_section")),
+    box(
+      width = 12, title = "Results", status = "primary", solidHeader = TRUE,
+      collapsible = TRUE,
+      uiOutput(ns("sufficiency_result")),
+      uiOutput(ns("reach_section")),
+      tags$hr(),
+      uiOutput(ns("save_scenario_section"))
+    ),
 
-    tags$hr(),
-    h5("Saved scenarios"),
-    p("Save a scenario, then select two or more (the baseline - no response applied - is always included) to compare them side by side."),
-    DTOutput(ns("saved_scenarios_table")),
-    actionButton(ns("compare_scenarios"), "Compare selected scenarios", icon = icon("balance-scale")),
-    uiOutput(ns("comparison_result"))
+    box(
+      width = 12, title = "Temporal simulation", status = "primary", solidHeader = TRUE,
+      collapsible = TRUE, collapsed = TRUE,
+      uiOutput(ns("temporal_and_save_section"))
+    ),
+
+    box(
+      width = 12, title = "Saved scenarios", status = "primary", solidHeader = TRUE,
+      collapsible = TRUE, collapsed = TRUE,
+      p("Save a scenario, then select two or more (the baseline - no response applied - is always included) to compare them side by side."),
+      DTOutput(ns("saved_scenarios_table")),
+      actionButton(ns("compare_scenarios"), "Compare selected scenarios", icon = icon("balance-scale")),
+      uiOutput(ns("comparison_result"))
+    )
   )
 }
 
@@ -270,7 +285,6 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
       }
 
       press <- build_press_vector(graph(), active_ids, strengths / 100)
-      reach <- response_reach(graph(), active_ids)
 
       # Revisao 1, Fase 2: the sufficiency reading. Pressure is optional -
       # an inactive pressure scenario is just an all-zero press vector,
@@ -286,10 +300,23 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
       p_D <- build_press_vector(graph(), pressure_active_ids, pressure_strengths / 100)
       c_value <- input$effect_horizon
 
-      suff_df <- sufficiency(graph(), p_D, press, c = c_value)
-      suff_reach_over_c <- sufficiency_reach_over_c(graph(), p_D, press)
+      # Segunda rodada da Revisao 1: withProgress em torno do calculo -
+      # build_confidence_matrix() sozinho roda 300 simulacoes POR resposta
+      # existente na rede (nao so as ativas), perceptivel numa rede maior;
+      # sem isso o clique em "Apply scenario" nao dava nenhum feedback
+      # visual ate a tela inteira atualizar de uma vez, parecendo travado.
+      withProgress(message = "Computing scenario results", value = 0, {
+        incProgress(0.1, detail = "Reach")
+        reach <- response_reach(graph(), active_ids)
 
-      suff_confidence_matrix <- build_confidence_matrix(graph(), p_D, rn, c = c_value)
+        incProgress(0.2, detail = "Sufficiency")
+        suff_df <- sufficiency(graph(), p_D, press, c = c_value)
+        suff_reach_over_c <- sufficiency_reach_over_c(graph(), p_D, press)
+
+        incProgress(0.3, detail = "Confidence (resampling edge weights)")
+        suff_confidence_matrix <- build_confidence_matrix(graph(), p_D, rn, c = c_value)
+        incProgress(0.4, detail = "Done")
+      })
 
       current_scenario(list(
         name = input$scenario_name,
@@ -392,7 +419,6 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
       req(current_scenario())
 
       tagList(
-        tags$hr(),
         checkboxInput(ns("show_temporal"), "Show temporal simulation across discrete time windows (optional)", value = FALSE),
         conditionalPanel(
           condition = sprintf("input['%s']", ns("show_temporal")),
@@ -427,10 +453,18 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
           sliderInput(ns("storyboard_label_cex"), "Label size", min = 0.3, max = 1.5, value = 0.65, step = 0.05, width = "300px"),
           plotOutput(ns("temporal_storyboard"), height = "600px"),
           plot_download_row(ns, "temporal_storyboard")
-        ),
-        tags$hr(),
-        actionButton(ns("save_scenario"), "Save this scenario", icon = icon("save"), class = "btn-outline-primary")
+        )
       )
+    })
+
+    # Split out of temporal_and_save_section (second round of Revisao 1):
+    # "Save this scenario" isn't specific to the temporal disclosure, it
+    # saves whatever's in current_scenario() - now shown in the "Results"
+    # box instead of being buried inside the (collapsed-by-default)
+    # "Temporal simulation" box, so it stays easy to find.
+    output$save_scenario_section <- renderUI({
+      req(current_scenario())
+      actionButton(ns("save_scenario"), "Save this scenario", icon = icon("save"), class = "btn-outline-primary")
     })
 
     # =================================================

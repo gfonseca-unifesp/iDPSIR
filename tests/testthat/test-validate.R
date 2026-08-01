@@ -56,23 +56,39 @@ test_that("validate_dpsir_edge_logic allows a Response edge back to any earlier 
   expect_true(validate_dpsir_edge_logic(nodes, edges, schema))
 })
 
-test_that("normalize_dpsir_edges defaults threshold to NA and reference to '' when the columns are absent", {
+test_that("normalize_dpsir_edges defaults reference to '' when the column is absent", {
   edges <- data.frame(from = "A", to = "B", weight = 1, confidence = 0.5, stringsAsFactors = FALSE)
   normalized <- normalize_dpsir_edges(edges)
 
-  expect_true(is.na(normalized$threshold))
   expect_identical(normalized$reference, "")
 })
 
-test_that("normalize_dpsir_edges preserves threshold/reference values when present", {
+test_that("normalize_dpsir_edges preserves reference when present and drops a legacy threshold column", {
   edges <- data.frame(
     from = "A", to = "B", weight = 1, confidence = 0.5,
     threshold = 0.2, reference = "Some citation", stringsAsFactors = FALSE
   )
   normalized <- normalize_dpsir_edges(edges)
 
-  expect_equal(normalized$threshold, 0.2)
   expect_equal(normalized$reference, "Some citation")
+  expect_null(normalized$threshold)
+})
+
+test_that("normalize_dpsir_nodes defaults activation_threshold to NA when the column is absent", {
+  nodes <- data.frame(id = "S1", label = "S1", dpsir_category = "State", stringsAsFactors = FALSE)
+  normalized <- normalize_dpsir_nodes(nodes)
+
+  expect_true(is.na(normalized$activation_threshold))
+})
+
+test_that("normalize_dpsir_nodes preserves activation_threshold when present", {
+  nodes <- data.frame(
+    id = "S1", label = "S1", dpsir_category = "State",
+    activation_threshold = 0.15, stringsAsFactors = FALSE
+  )
+  normalized <- normalize_dpsir_nodes(nodes)
+
+  expect_equal(normalized$activation_threshold, 0.15)
 })
 
 test_that("normalize_dpsir_edges coerces weight/confidence to numeric and trims from/to", {
