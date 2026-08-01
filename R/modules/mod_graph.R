@@ -556,7 +556,17 @@ mod_graph_server <- function(id, schema, nodes, edges, graph, positions, set_pos
     })
 
     list(
-      graph_snapshots = reactive(graph_snapshots$list)
+      graph_snapshots = reactive(graph_snapshots$list),
+      # Exposed so other tabs (the Scenarios temporal storyboard) can draw
+      # the network the same way this tab currently does - same layout mode
+      # and spacing, so a node's position doesn't jump between tabs. Not
+      # `req()`-guarded: falls back to sensible defaults on the consuming
+      # side if this tab's inputs haven't rendered yet.
+      layout_settings = reactive(list(
+        layout_mode = input$layout_mode %||% "layered",
+        x_spacing = input$x_spacing %||% 200,
+        y_spacing = input$y_spacing %||% 80
+      ))
     )
   })
 }

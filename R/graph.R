@@ -189,6 +189,26 @@ apply_manual_positions <- function(layout, manual_positions) {
   layout
 }
 
+# Single source of truth for "what layout does this network actually use
+# right now" - computed layout plus manually-dragged positions, skipped in
+# circular mode (see apply_manual_positions()'s own comment: a position
+# dragged in layered mode would otherwise strand that node off the ring).
+# build_network_visual()/build_community_visual() and mod_responses.R's
+# temporal storyboard all need this exact same logic; extracted here so a
+# future change to it can't update one caller and silently miss another.
+compute_effective_layout <- function(
+    nodes, schema, layout_mode = "layered", x_spacing = 200, y_spacing = 80,
+    manual_positions = NULL
+) {
+  layout <- compute_graph_layout(nodes, schema, layout_mode = layout_mode, x_spacing = x_spacing, y_spacing = y_spacing)
+
+  if (!identical(layout_mode, "circular")) {
+    layout <- apply_manual_positions(layout, manual_positions)
+  }
+
+  layout
+}
+
 # =====================================================
 # TOOLTIPS
 # =====================================================
@@ -392,7 +412,6 @@ build_network_visual <- function(
   # dragged positions override either on a per-node basis)
   # ===================================================
 
-  layout <- compute_graph_layout(nodes, schema, layout_mode = layout_mode, x_spacing = x_spacing, y_spacing = y_spacing)
   # Manual drag positions only apply in layered mode - circular mode is a
   # precise ring, and re-applying a position dragged while in layered mode
   # would pull that one node off the ring, leaving it stranded outside the
@@ -400,10 +419,9 @@ build_network_visual <- function(
   # switching to circular after dragging a node in layered view left that
   # node behind at its old layered coordinates). The position itself is not
   # lost - it stays in the savepoint/manual_positions and re-applies the next
-  # time layout_mode is "layered".
-  if (!identical(layout_mode, "circular")) {
-    layout <- apply_manual_positions(layout, manual_positions)
-  }
+  # time layout_mode is "layered". See compute_effective_layout()'s own
+  # comment - this exact logic is shared with the temporal storyboard.
+  layout <- compute_effective_layout(nodes, schema, layout_mode = layout_mode, x_spacing = x_spacing, y_spacing = y_spacing, manual_positions = manual_positions)
   nodes <- merge(nodes, layout, by = "id", sort = FALSE)
 
   # Circular mode is a precise ring - physics would only distort it, so
@@ -596,13 +614,10 @@ build_community_visual <- function(
   nodes$color <- unname(community_colors[nodes$group])
   nodes$shape <- "dot"
 
-  layout <- compute_graph_layout(nodes, schema, layout_mode = layout_mode, x_spacing = x_spacing, y_spacing = y_spacing)
-  # See build_network_visual() for why manual positions are skipped in
-  # circular mode (a position dragged in layered mode would otherwise strand
-  # that node off the ring).
-  if (!identical(layout_mode, "circular")) {
-    layout <- apply_manual_positions(layout, manual_positions)
-  }
+  # See compute_effective_layout()/build_network_visual() for why manual
+  # positions are skipped in circular mode (a position dragged in layered
+  # mode would otherwise strand that node off the ring).
+  layout <- compute_effective_layout(nodes, schema, layout_mode = layout_mode, x_spacing = x_spacing, y_spacing = y_spacing, manual_positions = manual_positions)
   nodes <- merge(nodes, layout, by = "id", sort = FALSE)
 
   # See build_network_visual() for why physics (not fixed.x/fixed.y) is what

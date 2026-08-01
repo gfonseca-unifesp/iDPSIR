@@ -57,17 +57,65 @@ draw_sensitivity_plot <- function(sensitivity, top_n = 10) {
 # A narrow extra column renders the same red/blue scale as a color bar
 # (fast-follow requested after the storyboard shipped: the mapping was only
 # explained in the help text above the plot, not on the figure itself).
-draw_temporal_storyboard <- function(g, layout_df, hist_matrix, label_cex = 0.65) {
+draw_temporal_storyboard <- function(
+    g, layout_df, hist_matrix, label_cex = 0.65,
+    windows_shown = NULL, panels_per_row = NULL, show_labels = TRUE,
+    node_size_scale = 1, category_filter = NULL, highlight_top_n = 0
+) {
+  # Category filter: keep every node in `category_filter`, plus anything
+  # with a direct edge INTO one of those nodes (its immediate causes) - a
+  # plain category subset would otherwise show e.g. an Impact with no
+  # trace of what's driving it. Applied as an induced subgraph, so the
+  # kept nodes' own edges to each other are preserved and everything else
+  # (layout lookup, hist_matrix columns) just narrows to the same id set.
+  if (!is.null(category_filter) && length(category_filter) > 0 &&
+        !setequal(category_filter, unique(igraph::V(g)$dpsir_category))) {
+    keep_direct <- igraph::V(g)$name[igraph::V(g)$dpsir_category %in% category_filter]
+    keep_upstream <- if (length(keep_direct) > 0) {
+      # igraph::ego() returns a list of igraph.vs; unlist()-ing it collapses
+      # to a plain integer vector of vertex INDICES with vertex NAMES as the
+      # names() attribute, not the other way around - matching by value
+      # (as if it held names) silently matched nothing, confirmed live
+      # (a first version of this filter rendered every Impact with no
+      # upstream node at all, every time). names(), not the unlisted values.
+      unique(names(unlist(igraph::ego(g, order = 1, nodes = keep_direct, mode = "in"))))
+    } else {
+      character()
+    }
+    keep_ids <- unique(c(keep_direct, keep_upstream))
+    if (length(keep_ids) > 0) {
+      g <- igraph::induced_subgraph(g, keep_ids)
+      hist_matrix <- hist_matrix[, colnames(hist_matrix) %in% keep_ids, drop = FALSE]
+    }
+  }
+
   idx <- match(igraph::V(g)$name, layout_df$id)
   layout_matrix <- as.matrix(layout_df[idx, c("x", "y")])
 
-  n_panels <- nrow(hist_matrix)
-  ncol_grid <- ceiling(sqrt(n_panels))
+  all_panels <- seq_len(nrow(hist_matrix)) - 1L # 0-indexed window numbers
+  panels <- if (is.null(windows_shown)) all_panels else intersect(windows_shown, all_panels)
+  if (length(panels) == 0) panels <- all_panels
+  n_panels <- length(panels)
+
+  ncol_grid <- if (is.null(panels_per_row) || panels_per_row < 1) {
+    ceiling(sqrt(n_panels))
+  } else {
+    min(panels_per_row, n_panels)
+  }
   nrow_grid <- ceiling(n_panels / ncol_grid)
 
+  # Color/size scale is always computed from the FULL simulation, not just
+  # the panels currently shown - a subset of windows should still read on
+  # the same scale as the rest, otherwise "window 10" would look
+  # differently intense depending on whether window 3 was also on screen.
   max_abs <- max(abs(hist_matrix), na.rm = TRUE)
   if (!is.finite(max_abs) || max_abs == 0) max_abs <- 1
 
+  # layout() cell values are just "which sequential plot() call goes here",
+  # 1..n_panels in the order the for-loop below draws them (row-major) -
+  # NOT the underlying window numbers, which may be non-contiguous once
+  # `windows_shown` picks a subset. 0 = empty cell, one dedicated column
+  # for the color-scale legend.
   n_cells <- nrow_grid * ncol_grid
   panel_ids <- c(seq_len(n_panels), rep(0L, n_cells - n_panels))
   grid_mat <- matrix(panel_ids, nrow = nrow_grid, ncol = ncol_grid, byrow = TRUE)
@@ -79,9 +127,19 @@ draw_temporal_storyboard <- function(g, layout_df, hist_matrix, label_cex = 0.65
   graphics::layout(grid_mat, widths = c(rep(1, ncol_grid), 0.35))
 
   node_order <- match(igraph::V(g)$name, colnames(hist_matrix))
-  labels <- igraph::V(g)$label
+  labels <- if (isTRUE(show_labels)) igraph::V(g)$label else NA
 
-  for (t in seq_len(n_panels) - 1) {
+  highlight_ids <- character()
+  if (isTRUE(highlight_top_n > 0)) {
+    shown_rows <- panels + 1L
+    node_range <- apply(hist_matrix[shown_rows, , drop = FALSE], 2, function(col) diff(range(col, na.rm = TRUE)))
+    highlight_ids <- names(sort(node_range, decreasing = TRUE))[seq_len(min(highlight_top_n, length(node_range)))]
+  }
+  frame_color <- ifelse(igraph::V(g)$name %in% highlight_ids, "black", "grey50")
+  frame_width <- ifelse(igraph::V(g)$name %in% highlight_ids, 3, 1)
+  label_font <- ifelse(igraph::V(g)$name %in% highlight_ids, 2, 1)
+
+  for (t in panels) {
     x <- hist_matrix[t + 1, node_order]
     intensity <- pmin(abs(x) / max_abs, 1)
     node_color <- ifelse(
@@ -89,7 +147,7 @@ draw_temporal_storyboard <- function(g, layout_df, hist_matrix, label_cex = 0.65
       grDevices::rgb(1, 1 - intensity, 1 - intensity),
       grDevices::rgb(1 - intensity, 1 - intensity, 1)
     )
-    node_size <- 10 + 15 * intensity
+    node_size <- (10 + 15 * intensity) * node_size_scale
 
     igraph::plot.igraph(
       g,
@@ -103,8 +161,11 @@ draw_temporal_storyboard <- function(g, layout_df, hist_matrix, label_cex = 0.65
       vertex.shape = "circle",
       vertex.color = node_color,
       vertex.size = node_size,
+      vertex.frame.color = frame_color,
+      vertex.frame.width = frame_width,
       vertex.label = labels,
       vertex.label.cex = label_cex,
+      vertex.label.font = label_font,
       vertex.label.color = "black",
       vertex.label.dist = 1.3,
       edge.arrow.size = 0.3,

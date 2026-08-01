@@ -3331,6 +3331,193 @@ importa normalmente com os 5 avisos esperados, um por coluna opcional
 ausente. Sem erro no console do servidor em nenhum dos três casos. Suíte
 completa e checagem de sintaxe seguem limpas.
 
+**Avaliação de viabilidade: storyboard compartilhar estilo com a aba
+Graph** (item 2 do mesmo documento externo, decisão registrada **antes**
+de implementar, como pedido). Investigado o código real dos dois
+renderizadores antes de decidir:
+
+- **Posições/layout**: viabilidade alta, sem gambiarra. `compute_graph_layout()`/
+  `apply_manual_positions()` (`R/graph.R`) já são funções R puras,
+  independentes de `visNetwork` — `draw_temporal_storyboard()`
+  (`R/scenario_plots.R`) já as consome via um `layout_df` passado de
+  fora. O que falta não é capacidade, é **fiação**: `mod_responses.R`'s
+  `temporal_layout()` chama `compute_graph_layout(nodes(), schema())`
+  sem passar `layout_mode`/`x_spacing`/`y_spacing`/posições arrastadas —
+  sempre o layout em camadas "de fábrica", ignorando tanto o modo
+  circular quanto qualquer nó fixado pelo usuário na aba Graph. E
+  `mod_graph_server()` hoje só devolve `graph_snapshots` no `list()` de
+  retorno — layout/spacing/posições nunca saem do módulo. Correção:
+  expor esses inputs no retorno de `mod_graph_server()`, encaminhar por
+  `mod_wizard.R` até `mod_responses_server()` (que ganha um parâmetro
+  novo), sem tocar em `R/graph.R`/`R/scenario_plots.R`.
+- **Paleta de cor**: **decisão deliberada de NÃO igualar** — a
+  storyboard colore por *valor do fator na janela* (escala divergente
+  vermelho/azul), não por categoria DPSIR; é o próprio ponto da
+  storyboard (mostrar o que mudou ao longo do tempo). Forçar a paleta de
+  categoria por cima disso apagaria a única informação nova que a
+  storyboard adiciona sobre o grafo estático. A leitura de "mesma
+  aparência" do documento externo é satisfeita pela posição/layout
+  ficarem idênticos — o que muda (cor) é precisamente o que deveria
+  mudar.
+- **Formas por categoria**: viável, mas não essencial. `igraph::plot.igraph()`
+  já é forçado pra `vertex.shape="circle"` em todo nó (achado real da
+  Fase 6: os nomes de forma do schema — square/triangle/dot/diamond/star,
+  vocabulário do vis.js — não são formas válidas do pacote `igraph`,
+  "Bad vertex shape(s)" testado ao vivo). Registrar formas customizadas
+  via `igraph::add_shape()` resolveria, mas é escopo novo não pedido
+  explicitamente pelo "pronto quando" do documento (que fala de
+  layout/posições/paleta/legenda, não formas) — fica registrado como
+  possível fast-follow, não implementado agora.
+- **Legenda**: também deliberadamente diferente — a legenda da aba Graph
+  é categoria→cor (`build_dpsir_legend()`); a "legenda" da storyboard já
+  é uma barra de gradiente vermelho/branco/azul (`draw_storyboard_color_scale()`,
+  Fase 6) — o equivalente correto pra uma escala de *valor contínuo*, não
+  uma lista de categorias. As duas já cumprem o mesmo papel (explicar a
+  cor) do jeito certo pro que cada uma mostra.
+- **Alternativa avaliada e descartada**: gerar a storyboard via N widgets
+  `visNetwork` (um por janela) com layout fixo, em vez de `igraph::plot.igraph()`
+  estático. Descartado por três motivos concretos, não hipotéticos: (1)
+  N motores de física/DOM vivos simultâneos (a rede de Gnanapragasam já
+  usa 15 janelas) é pesado no cliente, contra um único `renderPlot()`
+  hoje; (2) exportar um widget JS pra PNG/SVG exige recriar o pipeline
+  de captura já documentado como frágil pro grafo principal (`html2canvas`,
+  redimensionar temporariamente, esconder controles de navegação,
+  recortar espaço morto — toda a saga em "Qualidade das figuras do
+  relatório" na Fase 5), contra `render_plot_png()`/`render_plot_svg()`
+  já prontos e simples pro caminho base-R atual; (3) nenhum ganho real —
+  o único gap identificado (posições) já tem solução completa dentro do
+  próprio `igraph::plot.igraph()`, sem precisar trocar de motor de
+  desenho.
+
+**Decisão**: manter `igraph::plot.igraph()` (base R, sem pacote novo),
+corrigir só a fiação de layout/posições/spacing entre `mod_graph.R` e
+`mod_responses.R`. Implementado junto com os controles do item 1 do
+documento (ver próxima entrada).
+
+**Storyboard: controles novos + alinhamento de layout com a aba Graph**
+(item 1 do documento externo, implementado junto com a decisão da entrada
+acima). `R/graph.R` ganha `compute_effective_layout()` — extrai a lógica
+já duplicada em `build_network_visual()`/`build_community_visual()`
+(computa layout + aplica posições manuais, pulando isso em modo circular)
+pra uma função só, reaproveitada agora também por `mod_responses.R`. Os
+dois call sites antigos foram atualizados pra chamá-la em vez de repetir
+a lógica inline — reffactor puro, sem mudança de comportamento (mesmos
+dois `if`s de sempre, só num lugar).
+
+**Fiação posições/layout**: `mod_graph_server()` (`R/modules/mod_graph.R`)
+passa a devolver `layout_settings` (reactive com `layout_mode`/
+`x_spacing`/`y_spacing`) no `list()` de retorno, ao lado do
+`graph_snapshots` que já existia. `mod_wizard.R` encaminha isso mais
+`data$positions` pra `mod_responses_server()`, que ganha dois parâmetros
+novos (`layout_settings = NULL`, `positions = NULL` — opcionais, caem pro
+default do próprio `compute_effective_layout()` se o módulo for usado
+sozinho/testado). `temporal_layout()` deixou de chamar
+`compute_graph_layout(nodes(), schema())` (sempre em camadas, sempre
+ignorando posições arrastadas) e passa a chamar
+`compute_effective_layout()` com o modo/espaçamento/posições atuais da
+aba Graph — verificado ao vivo arrastando D1 pra `(500,-300)` na aba
+Graph, aplicando um cenário na aba Scenarios, e conferindo que o
+savepoint baixado (`positions: [{id:"D1",x:500,y:-300}]`) é exatamente o
+que `compute_effective_layout()` usa pra desenhar a storyboard — mesma
+função, mesmo dado, sem caminho pra divergir.
+
+**Controles novos na storyboard** (`R/scenario_plots.R`'s
+`draw_temporal_storyboard()` ganha 6 parâmetros novos, todos opcionais
+com default = comportamento de antes; `mod_responses.R` expõe um controle
+de UI por parâmetro):
+- `windows_shown` — slider de faixa "Windows to show" (min/max = 0 e o
+  teto de `temporal_windows`); um subconjunto não recalcula a escala de
+  cor (continua usando a simulação inteira, não só o que está visível —
+  senão a janela 10 pareceria mais/menos intensa dependendo de quais
+  outras janelas estão na tela junto).
+- `panels_per_row` — slider "Panels per row (0 = auto)"; 0 mantém o
+  `ceiling(sqrt(n))` de sempre.
+- `show_labels` — checkbox; `FALSE` vira `vertex.label = NA` (vocabulário
+  que o `igraph::plot.igraph()` já entende como "sem rótulo").
+- `node_size_scale` — slider multiplicador sobre a fórmula de tamanho já
+  existente (`(10 + 15*intensity) * node_size_scale`).
+- `category_filter` — multi-select "Show only these categories",
+  populado a partir do schema (`observeEvent(schema())`, todas
+  selecionadas por padrão = sem filtro, mesma checagem
+  `setequal(category_filter, todas as categorias)` já usada). Mantém não
+  só os nós da(s) categoria(s) escolhida(s) mas também qualquer nó com
+  aresta direta ENTRANDO neles (`igraph::ego(mode="in", order=1)`) — um
+  Impacto sozinho sem nenhum traço do que o causa não seria útil.
+  Implementado como `igraph::induced_subgraph()` sobre o grafo antes de
+  desenhar, reaproveitando o mesmo `layout_df`/`hist_matrix` só filtrados
+  pro subconjunto de ids.
+- `highlight_top_n` — slider "Highlight top N most-changed"; calcula
+  `diff(range(...))` por nó sobre as janelas exibidas, dá aos top-N
+  `vertex.frame.color="black"`/`vertex.frame.width=3`/`vertex.label.font=2`
+  (negrito) contra `grey50`/`1`/`1` pros demais — testado que
+  `vertex.frame.width` por vértice é de fato respeitado por
+  `igraph::plot.igraph()` nesta versão (não documentado explicitamente,
+  confirmado só renderizando).
+
+**Exportação por janela única** — dois `downloadHandler`s novos
+(`download_temporal_storyboard_window_png/svg`), reaproveitando a mesma
+`draw_temporal_storyboard()` com `windows_shown` fixado num único valor
+(grade 1x1 automática, sem código de layout separado). Um
+`numericInput` "Export a single window" alimenta um valor **clampado**
+(`single_export_window()`, não o valor cru do input) entre 0 e o último
+índice de janela realmente simulado — decisão deliberada: sem o clamp,
+um número fora do intervalo cairia no fallback de
+`draw_temporal_storyboard()` de "nada bateu, mostra tudo" (correto pro
+gráfico principal, onde é melhor mostrar algo do que nada — errado aqui,
+onde silenciosamente espremeria a storyboard inteira dentro do tamanho
+de imagem de um painel só). Verificado ao vivo: pedir a janela 25 numa
+simulação de 5 janelas baixa `temporal_storyboard_window_5_...png`, não
+trava nem gera uma imagem deformada.
+
+**Dois bugs reais, achados só testando de verdade** (nenhum na checagem
+de sintaxe nem no primeiro rascunho lido de olho):
+1. Uma primeira versão do grid de painéis (`graphics::layout()`)
+   carregava a numeração de JANELA (que pode ser não-contígua com
+   `windows_shown`, ex. `{5,6,7,8}` de uma faixa 2-8) direto nas células
+   da matriz de layout, com um remapeamento extra pra tentar compensar —
+   complexidade desnecessária: `layout()` só precisa da ORDEM sequencial
+   de desenho (1, 2, 3...), não dos números de janela reais, que só
+   importam dentro do loop de `plot.igraph()` (`main = paste("Window",
+   t)`). Simplificado de volta pro padrão original (`seq_len(n_panels)`),
+   só generalizado pra `n_panels` poder ser um subconjunto agora.
+2. **O real, mais sério**: `category_filter` inicialmente não incluía
+   NENHUM nó a montante — testado renderizando de verdade (script
+   standalone, não assumido), filtrar por "Impact" mostrava só os 5
+   Impactos soltos, sem nenhuma aresta, quando deveria incluir Fleet
+   motorization/Fish stock/as duas respostas que alimentam eles direto.
+   Causa: `unlist(igraph::ego(g, order=1, nodes=keep_direct, mode="in"))`
+   devolve um vetor INTEIRO nomeado — os VALORES são índices de vértice,
+   os NOMES são os ids reais — e o código comparava
+   `V(g)$name %in% unique(unlist(...))` (comparando strings contra
+   números, nunca bate). Corrigido pra `names(unlist(...))` em vez dos
+   valores — confirmado com a mesma imagem de teste antes/depois do fix
+   (antes: 5 círculos soltos sem aresta nenhuma; depois: os 5 Impactos
+   mais Fleet motorization/Fish stock/Post-tsunami aid/Post-war aid,
+   com as arestas entre eles desenhadas).
+
+Testado ponta a ponta rodando o app de verdade (savepoint de
+Gnanapragasam): os 10 controles novos existem e respondem sem erro no
+console do servidor (label size, show labels, node size, highlight N,
+window range, panels per row, category filter, export window + 2
+botões de download); arrastar D1 na aba Graph e depois abrir a
+simulação temporal na aba Scenarios usa a posição arrastada (confirmado
+via savepoint, não só visualmente); os 4 downloads (board PNG/SVG,
+janela única PNG/SVG) respondem 200 com tamanho não-trivial; relatório
+gerado com a seção temporal continua funcionando sem regressão (mesmo
+`R/report.R`, que **deliberadamente não** foi migrado pra
+`compute_effective_layout()`/posições manuais — o relatório descreve um
+cenário salvo, possivelmente de um estado de rede anterior ao arrasto
+mais recente, então usar a posição *atual* ali seria uma inconsistência
+nova, não uma correção). 8 cenários testados via script standalone antes
+do teste no navegador (grid automático, subconjunto de janelas +
+panels_per_row, sem rótulos + tamanho maior, filtro de categoria, destaque,
+janela única, modo circular, posição manual) — todos renderizando sem
+erro. Suíte `testthat` completa e checagem de sintaxe seguem limpas
+(nenhum teste novo em `R/graph.R`/`R/scenario_plots.R` — mesmo padrão já
+estabelecido no projeto de tratar código de layout/desenho como
+verificado ao vivo, não por unit test, reservando `testthat` pro núcleo
+numérico).
+
 Trilha operacional separada (independente, registrada no plano, encaixa
 quando quiser): layout circular não parece um círculo (suspeita de
 container retangular esticando a proporção, não confirmada ao vivo ainda —
