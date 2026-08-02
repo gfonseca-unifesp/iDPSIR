@@ -222,7 +222,7 @@ mod_report_ui <- function(id) {
   )
 }
 
-mod_report_server <- function(id, schema, nodes, edges, graph, saved_scenarios, graph_snapshots, centrality_params) {
+mod_report_server <- function(id, schema, nodes, edges, graph, saved_scenarios, graph_snapshots, centrality_params, layout_settings = NULL, positions = NULL) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
@@ -290,7 +290,9 @@ mod_report_server <- function(id, schema, nodes, edges, graph, saved_scenarios, 
           saved_scenarios = saved,
           selected_scenario_names = selected_scenario_names,
           include_reproducibility = isTRUE(input$include_reproducibility),
-          include_temporal_section = isTRUE(input$include_temporal_section)
+          include_temporal_section = isTRUE(input$include_temporal_section),
+          layout_settings = layout_settings,
+          positions = positions
         )
 
         htmltools::save_html(page, file)

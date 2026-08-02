@@ -55,7 +55,9 @@ build_full_report_html <- function(
     saved_scenarios = list(),
     selected_scenario_names = character(),
     include_reproducibility = FALSE,
-    include_temporal_section = FALSE
+    include_temporal_section = FALSE,
+    layout_settings = NULL,
+    positions = NULL
 ) {
   # Sequential "Figure N"/"Table N" numbering across the whole report, plus
   # a caption paragraph under each - both requested so the report reads like
@@ -298,7 +300,22 @@ build_full_report_html <- function(
     # layout is computed once (not per scenario) - every panel of every
     # scenario's storyboard shares the same node positions as the Graph tab.
     if (isTRUE(include_temporal_section)) {
-      temporal_layout <- compute_graph_layout(graph_to_nodes(graph), schema)
+      # Same layout the Graph tab is currently showing (layout mode,
+      # spacing, and any manually-dragged positions) - see
+      # compute_effective_layout() in R/graph.R and mod_responses.R's
+      # temporal_layout for the same pattern already used on-screen.
+      # `layout_settings`/`positions` are optional (NULL when this is
+      # called outside the wizard, e.g. from a script) - falls back to
+      # the same defaults compute_effective_layout() itself uses.
+      ls <- if (is.null(layout_settings)) NULL else layout_settings()
+      manual_positions <- if (is.null(positions)) NULL else positions()
+      temporal_layout <- compute_effective_layout(
+        graph_to_nodes(graph), schema,
+        layout_mode = ls$layout_mode %||% "layered",
+        x_spacing = ls$x_spacing %||% 200,
+        y_spacing = ls$y_spacing %||% 80,
+        manual_positions = manual_positions
+      )
 
       temporal_sections <- lapply(selected_scenario_names, function(scenario_name) {
         sc <- saved_scenarios[[scenario_name]]

@@ -2174,6 +2174,42 @@ apagado da árvore de trabalho (mas ainda commitado, sem perda de dado)
 foram encontrados — os junks removidos, o savepoint restaurado via
 `git checkout` a partir do commit `c5b21a7`.
 
+**Bug real corrigido: a prancha temporal do relatório não usava o layout/
+posições da aba Graph, só a prancha em tela usava** (segundo bug reportado
+pelo usuário junto com o de divergência acima). Causa: `R/report.R`'s
+seção temporal chamava `compute_graph_layout(graph_to_nodes(graph),
+schema)` direto — sempre o layout em camadas "de fábrica", ignorando
+tanto o modo circular quanto qualquer nó arrastado manualmente — em vez
+de `compute_effective_layout()` (`R/graph.R`), a mesma função que
+`mod_responses.R`'s prancha em tela já usa desde a rodada anterior
+("Storyboard: controles novos + alinhamento de layout com a aba Graph").
+Não era falta de capacidade da função, era falta de **fiação**:
+`mod_report_server()` nunca recebia `layout_settings`/`positions` no
+`mod_wizard.R` (só `graph_snapshots` chegava até o relatório). Corrigido
+encadeando os dois parâmetros — `mod_wizard.R` → `mod_report_server()`
+(`R/modules/mod_report.R`, dois parâmetros novos, default `NULL`) →
+`build_full_report_html()` (`R/report.R`, mesmos dois parâmetros novos) —
+mesmo padrão já usado por `mod_responses_server()`: `ls <-
+layout_settings()`/`manual_positions <- positions()` lidos só dentro do
+bloco `include_temporal_section`, com fallback pros defaults de
+`compute_effective_layout()` quando `NULL` (chamado fora do wizard, ex.
+um script).
+
+Testado ponta a ponta rodando o app de verdade contra
+`docs/example_gnanapragasam.idpsir.json`: cenário pré-configurado
+aplicado e salvo, relatório baixado com a seção temporal ligada (imagem
+capturada como baseline, ~61.5KB de base64); voltando pra aba Graph e
+arrastando D1 pra `(900,-900)` (confirmado no savepoint baixado logo em
+seguida: `positions: [{id:"D1",x:900,y:-900}]`, mesmo padrão de
+verificação já usado antes nesta sessão); relatório baixado de novo com o
+mesmo cenário selecionado — a imagem da prancha temporal mudou
+(`~56.3KB`, diferente byte a byte da anterior), confirmando que a posição
+arrastada chegou até a imagem do relatório. Sem erro no console do
+servidor em nenhum passo. Suíte `testthat` completa segue limpa
+(`R/report.R`/`mod_report.R` não têm suíte dedicada — verificado só via
+app real, mesmo padrão já usado pras demais seções do relatório);
+checagem de sintaxe limpa.
+
 ## Próximo
 
 Fase 5 está completa (Marcos A-D). Todos os 4 itens da lista pós-Fase 5 (1:
@@ -3657,18 +3693,17 @@ só duram a sessão) se isso vier a ser pedido. Relatório: adicionar seção de
 Comunidades (imagem + tabela) como fast-follow, reaproveitando a mecânica de
 captura já existente.
 
-**Pendências reportadas pelo usuário junto com o bug de divergência temporal
-acima, ainda não endereçadas (trabalhando uma de cada vez, com check-in):**
-- O storyboard já compartilha layout/posições com a aba Graph (ver "Storyboard:
-  controles novos + alinhamento de layout com a aba Graph" acima); a seção
-  temporal do **relatório** (`R/report.R`) ainda chama
-  `compute_graph_layout(graph_to_nodes(graph), schema)` direto em vez de
-  `compute_effective_layout()` — a prancha do relatório não reflete o layout/
-  posições arrastadas configuradas na aba Graph, só a tela reflete.
+**Pendência reportada pelo usuário junto com o bug de divergência temporal
+acima, ainda não endereçada (trabalhando uma de cada vez, com check-in):**
 - `uncertainty`/`controllability` (nós) continuam categóricos
   (`low`/`medium`/`high`) — o usuário indicou preferência por trocar pra escala
   numérica 0-1 (mesmo padrão já usado por `self_regulation`), discussão prévia
   não registrada em detalhe neste arquivo ainda.
+
+(A pendência do storyboard do relatório não usar o layout/posições da aba
+Graph foi corrigida — ver "Bug real corrigido: a prancha temporal do
+relatório não usava o layout/posições da aba Graph" na seção Estado atual
+acima.)
 
 ## Princípios
 
