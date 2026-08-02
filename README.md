@@ -110,8 +110,11 @@ iDPSIR/
 ## Data format
 
 **Nodes** (`data/sample_nodes.csv`): `id`, `label`, `dpsir_category` (Driver, Pressure,
-State, Impact, Response), `subsystem`, `uncertainty` (low/medium/high),
-`controllability` (low/medium/high), `self_regulation` (optional, a number in [0, 1),
+State, Impact, Response), `subsystem`, `uncertainty` (optional, a number in [0, 1],
+default 0.5 — how confident you are this node is described correctly; thickens the
+node's border on the graph, not read by any calculation), `controllability` (optional,
+a number in [0, 1], default 0.5 — how much a manager can influence this factor
+directly, not read by any calculation), `self_regulation` (optional, a number in [0, 1),
 default 0 — the fraction of a factor's simulated deviation that reverts each time
 window, e.g. a fish stock that partially replenishes; only used by the optional
 temporal simulation, see Scenarios below), `growth_rate` (optional, default 0 — a

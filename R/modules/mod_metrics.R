@@ -35,7 +35,7 @@ mod_metrics_ui <- function(id) {
         h4("Category x category matrix"),
         DTOutput(ns("matrix_table")),
         uiOutput(ns("gaps_summary")),
-        h4("Average uncertainty/controllability by category (1=low, 2=medium, 3=high)"),
+        h4("Average uncertainty/controllability by category (0 = low, 1 = high)"),
         DTOutput(ns("averages_table")),
         h4("All Driver-to-Impact pathways"),
         p(

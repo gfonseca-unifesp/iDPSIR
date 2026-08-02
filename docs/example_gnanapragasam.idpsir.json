@@ -50,156 +50,169 @@
       "label": "Coastal population growth",
       "dpsir_category": "Driver",
       "subsystem": "Northern Sri Lanka fisheries",
-      "uncertainty": "medium",
-      "controllability": "low",
+      "uncertainty": 0.5,
+      "controllability": 0.2,
       "self_regulation": 0,
       "growth_rate": 0.02,
       "reference_value": 1,
-      "activation_threshold": null
+      "activation_threshold": null,
+      "descriptor": ""
     },
     {
       "id": "D2",
       "label": "Fish demand and consumption growth",
       "dpsir_category": "Driver",
       "subsystem": "Northern Sri Lanka fisheries",
-      "uncertainty": "medium",
-      "controllability": "low",
+      "uncertainty": 0.5,
+      "controllability": 0.2,
       "self_regulation": 0,
       "growth_rate": 0.015,
       "reference_value": 1,
-      "activation_threshold": null
+      "activation_threshold": null,
+      "descriptor": ""
     },
     {
       "id": "D3",
       "label": "Number of fishers and boats",
       "dpsir_category": "Driver",
       "subsystem": "Northern Sri Lanka fisheries",
-      "uncertainty": "medium",
-      "controllability": "medium",
+      "uncertainty": 0.5,
+      "controllability": 0.5,
       "self_regulation": 0.1,
       "growth_rate": 0.03,
       "reference_value": 1,
-      "activation_threshold": null
+      "activation_threshold": null,
+      "descriptor": ""
     },
     {
       "id": "P1",
       "label": "Fishing effort",
       "dpsir_category": "Pressure",
       "subsystem": "Northern Sri Lanka fisheries",
-      "uncertainty": "medium",
-      "controllability": "medium",
+      "uncertainty": 0.5,
+      "controllability": 0.5,
       "self_regulation": 0,
       "growth_rate": 0,
       "reference_value": 1,
-      "activation_threshold": null
+      "activation_threshold": null,
+      "descriptor": ""
     },
     {
       "id": "S1",
       "label": "Fish stock (CPUE)",
       "dpsir_category": "State",
       "subsystem": "Northern Sri Lanka fisheries",
-      "uncertainty": "high",
-      "controllability": "low",
+      "uncertainty": 0.8,
+      "controllability": 0.2,
       "self_regulation": 0.35,
       "growth_rate": 0,
       "reference_value": 100,
-      "activation_threshold": 0.15
+      "activation_threshold": 0.15,
+      "descriptor": ""
     },
     {
       "id": "S2",
       "label": "Fleet motorization (% motorized)",
       "dpsir_category": "State",
       "subsystem": "Northern Sri Lanka fisheries",
-      "uncertainty": "medium",
-      "controllability": "low",
+      "uncertainty": 0.5,
+      "controllability": 0.2,
       "self_regulation": 0.02,
       "growth_rate": 0,
       "reference_value": 1,
-      "activation_threshold": null
+      "activation_threshold": null,
+      "descriptor": ""
     },
     {
       "id": "I1",
       "label": "Catch decline",
       "dpsir_category": "Impact",
       "subsystem": "Northern Sri Lanka fisheries",
-      "uncertainty": "medium",
-      "controllability": "medium",
+      "uncertainty": 0.5,
+      "controllability": 0.5,
       "self_regulation": 0,
       "growth_rate": 0,
       "reference_value": 1,
-      "activation_threshold": null
+      "activation_threshold": null,
+      "descriptor": ""
     },
     {
       "id": "I2",
       "label": "Fisher income loss",
       "dpsir_category": "Impact",
       "subsystem": "Northern Sri Lanka fisheries",
-      "uncertainty": "medium",
-      "controllability": "medium",
+      "uncertainty": 0.5,
+      "controllability": 0.5,
       "self_regulation": 0,
       "growth_rate": 0,
       "reference_value": 1,
-      "activation_threshold": null
+      "activation_threshold": null,
+      "descriptor": ""
     },
     {
       "id": "I3",
       "label": "Conflict with Indian fishermen",
       "dpsir_category": "Impact",
       "subsystem": "Northern Sri Lanka fisheries",
-      "uncertainty": "high",
-      "controllability": "low",
+      "uncertainty": 0.8,
+      "controllability": 0.2,
       "self_regulation": 0,
       "growth_rate": 0,
       "reference_value": 1,
-      "activation_threshold": null
+      "activation_threshold": null,
+      "descriptor": ""
     },
     {
       "id": "I4",
       "label": "Traditional fishing decline",
       "dpsir_category": "Impact",
       "subsystem": "Northern Sri Lanka fisheries",
-      "uncertainty": "medium",
-      "controllability": "medium",
+      "uncertainty": 0.5,
+      "controllability": 0.5,
       "self_regulation": 0,
       "growth_rate": 0,
       "reference_value": 1,
-      "activation_threshold": null
+      "activation_threshold": null,
+      "descriptor": ""
     },
     {
       "id": "I5",
       "label": "Loss of traditional fishing culture",
       "dpsir_category": "Impact",
       "subsystem": "Northern Sri Lanka fisheries",
-      "uncertainty": "high",
-      "controllability": "low",
+      "uncertainty": 0.8,
+      "controllability": 0.2,
       "self_regulation": 0,
       "growth_rate": 0,
       "reference_value": 1,
-      "activation_threshold": null
+      "activation_threshold": null,
+      "descriptor": ""
     },
     {
       "id": "R1",
       "label": "Post-tsunami aid",
       "dpsir_category": "Response",
       "subsystem": "Northern Sri Lanka fisheries",
-      "uncertainty": "medium",
-      "controllability": "high",
+      "uncertainty": 0.5,
+      "controllability": 0.8,
       "self_regulation": 0,
       "growth_rate": 0,
       "reference_value": 1,
-      "activation_threshold": null
+      "activation_threshold": null,
+      "descriptor": ""
     },
     {
       "id": "R2",
       "label": "Post-war aid",
       "dpsir_category": "Response",
       "subsystem": "Northern Sri Lanka fisheries",
-      "uncertainty": "medium",
-      "controllability": "high",
+      "uncertainty": 0.5,
+      "controllability": 0.8,
       "self_regulation": 0,
       "growth_rate": 0,
       "reference_value": 1,
-      "activation_threshold": null
+      "activation_threshold": null,
+      "descriptor": ""
     }
   ],
   "edges": [

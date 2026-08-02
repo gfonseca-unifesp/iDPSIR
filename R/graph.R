@@ -225,8 +225,8 @@ build_node_tooltip <- function(nodes) {
     "{descriptor_line}",
     "Category: {nodes$dpsir_category}<br>",
     "Subsystem: {ifelse(is.na(nodes$subsystem) | nodes$subsystem == '', '-', nodes$subsystem)}<br>",
-    "Uncertainty: {ifelse(is.na(nodes$uncertainty) | nodes$uncertainty == '', '-', nodes$uncertainty)}<br>",
-    "Controllability: {ifelse(is.na(nodes$controllability) | nodes$controllability == '', '-', nodes$controllability)}<br>",
+    "Uncertainty: {ifelse(is.na(nodes$uncertainty), '-', round(nodes$uncertainty, 2))}<br>",
+    "Controllability: {ifelse(is.na(nodes$controllability), '-', round(nodes$controllability, 2))}<br>",
     "Activation threshold: {ifelse(is.na(nodes$activation_threshold), '-', nodes$activation_threshold)}"
   )
 }
@@ -310,9 +310,12 @@ size_nodes_by_degree <- function(nodes, graph, node_size_mode = "all", node_size
 }
 
 border_by_uncertainty <- function(nodes) {
-  uncertainty_border <- c(low = 1, medium = 2.5, high = 4)
-  nodes$borderWidth <- unname(uncertainty_border[nodes$uncertainty])
-  nodes$borderWidth[is.na(nodes$borderWidth)] <- 2
+  # Linear interpolation between the old categorical vocabulary's three
+  # discrete widths (low=1, medium=2.5, high=4) - uncertainty=0.5 (the
+  # "medium"-equivalent default) lands on exactly 2.5, so a network never
+  # edited since the low/medium/high days looks visually identical.
+  nodes$borderWidth <- 1 + 3 * as.numeric(nodes$uncertainty)
+  nodes$borderWidth[is.na(nodes$borderWidth)] <- 2.5
   nodes
 }
 

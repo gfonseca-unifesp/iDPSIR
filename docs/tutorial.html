@@ -654,8 +654,8 @@ cd iDPSIR</pre>
                     <tr><td class="key">label</td><td>Human-readable name</td></tr>
                     <tr><td class="key">dpsir_category</td><td>Driver / Pressure / State / Impact / Response</td></tr>
                     <tr><td class="key">subsystem</td><td>Optional grouping</td></tr>
-                    <tr><td class="key">uncertainty</td><td>low / medium / high</td></tr>
-                    <tr><td class="key">controllability</td><td>low / medium / high</td></tr>
+                    <tr><td class="key">uncertainty</td><td>Optional number in [0, 1], default 0.5</td></tr>
+                    <tr><td class="key">controllability</td><td>Optional number in [0, 1], default 0.5</td></tr>
                     <tr><td class="key">descriptor</td><td>Optional free-text description of what this factor represents</td></tr>
                     <tr><td class="key">self_regulation</td><td>Optional number in [0, 1), default 0 — only used by the optional temporal simulation (see Scenarios below)</td></tr>
                     <tr><td class="key">growth_rate</td><td>Optional number, default 0 — a factor's own exogenous trend per time window, independent of any edge</td></tr>
@@ -664,9 +664,9 @@ cd iDPSIR</pre>
                   </table>
                 </div>
                 <pre>id,label,dpsir_category,subsystem,uncertainty,controllability
-D1,Urban growth,Driver,Water,medium,low
-P1,Wastewater discharge,Pressure,Water,medium,low
-S1,Water quality decline,State,Water,medium,low</pre>
+D1,Urban growth,Driver,Water,0.5,0.2
+P1,Wastewater discharge,Pressure,Water,0.5,0.2
+S1,Water quality decline,State,Water,0.5,0.2</pre>
               </div>
               <div class="code-card">
                 <h4>Edges CSV (optional)</h4>
@@ -733,8 +733,8 @@ P1,S1,3,0.85,negative,monitoring</pre>
                 <tr><td class="key">label</td><td>The human-readable name shown on the graph and in tables.</td></tr>
                 <tr><td class="key">dpsir_category</td><td>Driver, Pressure, State, Impact or Response — sets the shape, color and position on the graph.</td></tr>
                 <tr><td class="key">subsystem</td><td>Optional grouping (e.g. "Fisheries", "Water") — lets you filter the Graph tab down to one part of the network.</td></tr>
-                <tr><td class="key">uncertainty</td><td>low / medium / high — how confident you are this node is described correctly. Thickens the node's border on the graph.</td></tr>
-                <tr><td class="key">controllability</td><td>low / medium / high — how much a manager can influence this factor directly.</td></tr>
+                <tr><td class="key">uncertainty</td><td>Optional number in [0, 1], default 0.5 — how confident you are this node is described correctly (0 = very confident, 1 = very uncertain). Thickens the node's border on the graph. Not read by any calculation, purely a visual/documentation aid.</td></tr>
+                <tr><td class="key">controllability</td><td>Optional number in [0, 1], default 0.5 — how much a manager can influence this factor directly (0 = not at all, 1 = fully). Not read by any calculation.</td></tr>
                 <tr><td class="key">descriptor</td><td>Optional — a short, plain-language description of what this factor represents. Purely documentation: not read by any calculation, just there so someone reading the network later (including a future you) doesn't have to guess what a node means.</td></tr>
                 <tr><td class="key">self_regulation</td><td>Optional number in [0, 1), default 0. The fraction of this factor's simulated deviation that reverts each time window (e.g. a recovering habitat) — only used by the Scenarios tab's optional temporal simulation, see the worked example.</td></tr>
                 <tr><td class="key">growth_rate</td><td>Optional number, default 0. This factor's own exogenous trend per time window (e.g. population growth), independent of any edge — also only used by the temporal simulation.</td></tr>

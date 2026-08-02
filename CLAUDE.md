@@ -2210,6 +2210,76 @@ servidor em nenhum passo. Suíte `testthat` completa segue limpa
 app real, mesmo padrão já usado pras demais seções do relatório);
 checagem de sintaxe limpa.
 
+**`uncertainty`/`controllability` (nós) migrados de vocabulário categórico
+(low/medium/high) pra fração contínua em [0,1]** — terceiro bug/pedido
+reportado pelo usuário junto com os dois acima, mesmo padrão já
+estabelecido por `self_regulation` na Fase 5 (embora estes dois nunca
+tenham entrado em nenhum cálculo — só leitura: borda do nó no grafo,
+tooltip, média por categoria em Descriptors/relatório). Superfície
+completa migrada: `R/schema.R` (`get_uncertainty_levels()`/
+`get_controllability_levels()` removidas), `R/validate.R`'s
+`normalize_dpsir_nodes()` (default 0.5 — "moderado/não informado", o
+mesmo papel que "medium" tinha, sem favorecer alta nem baixa incerteza
+por omissão — mais o mapeamento de legado low=0.2/medium=0.5/high=0.8
+pra um savepoint/CSV antigo continuar carregando sem quebrar, mesmo
+padrão já usado por `self_regulation`) e `preflight_import_nodes()`
+(bloqueio trocado de "não está no vocabulário" pra "não é número"/"fora
+de [0,1]", aceitando as strings antigas sem bloquear, mesmo padrão de
+`self_regulation`'s `is_legacy`). `R/modules/mod_data.R` (`selectInput`→
+`numericInput(0-1, step 0.1)` no formulário de nó, default 0.5).
+`R/graph.R`'s `build_node_tooltip()` (mostra o número arredondado) e
+`border_by_uncertainty()` (interpolação linear `1 + 3*uncertainty` em vez
+de lookup discreto — escolhida porque bate exatamente nos três pontos do
+vocabulário antigo: 0→1, 0.5→2.5, 1→4, então uma rede nunca editada desde
+antes desta mudança fica visualmente idêntica). `R/metrics.R`'s
+`compute_dpsir_descriptors()` (removida `ordinal_score()`, a média agora
+é direta sobre o número, sem mapear vocabulário pra escore) — cabeçalho
+"(1=low, 2=medium, 3=high)" trocado por "(0 = low, 1 = high)" em
+`R/modules/mod_metrics.R` e `R/report.R`.
+
+`data/sample_nodes.csv`, `data/mangi2007_nodes.csv` e
+`data/gnanapragasam2026_nodes.csv` (os três CSVs de nó com essas colunas)
+migrados pro mesmo mapeamento low=0.2/medium=0.5/high=0.8 usado na
+compatibilidade retroativa — não editados à mão, valor por valor
+conferido contra o CSV original antes de escrever. `docs/example_mangi
+.idpsir.json`/`docs/example_gnanapragasam.idpsir.json` regenerados a
+partir desses CSVs (mesmo script padrão, `build_savepoint()`/
+`write_savepoint()` de verdade, com o mesmo `scenario_state`
+pré-configurado de antes) — `updated_at` corrigido de volta pra bater com
+`created_at` depois, pra o diff do savepoint mostrar só a mudança real
+(uncertainty/controllability), não um timestamp incidental da
+regeneração. `docs/example_fisheries.idpsir.json` **não foi tocado** —
+continua no formato antigo de propósito, é a fixture que prova
+retrocompatibilidade nos testes (`test-loop_analysis.R`/`test-reach.R`/
+`test-metrics.R`).
+
+`docs/tutorial.html` (tabela de campos CSV de Nós, tabela de campos do
+formulário, exemplo de CSV inline) e `README.md` (seção Data format)
+atualizados pra descrever a escala numérica em vez do vocabulário antigo.
+
+Testado ponta a ponta rodando o app de verdade contra
+`docs/example_mangi.idpsir.json`: tabela de Nós mostrando os valores
+numéricos corretos (D1 `uncertainty=0.5`/`controllability=0.2`, etc.);
+editando D1 pelo formulário (`numericInput`, confirmado `type="number"`)
+pra `uncertainty=0.9` — gravado corretamente na coluna certa, as demais
+colunas (incluindo `self_regulation`/`growth_rate`/`reference_value`,
+onde um bug real de corrupção posicional já foi encontrado antes nesta
+revisão) inalteradas; "Everything is valid"/"Graph built successfully"
+nos 18 nós/31 arestas; tooltip do nó D1 mostrando "Uncertainty: 0.9"
+(arredondado, confirmado lendo `network.body.data.nodes.get('D1').title`
+via JS) e `borderWidth: 3.7` (bate exatamente com `1 + 3*0.9`); aba
+Metrics → DPSIR descriptors mostrando "Average uncertainty/controllability
+by category (0 = low, 1 = high)" com `Driver: avg_uncertainty=0.60`
+(média real de 0.9/0.5/0.5/0.5, confirmando que a média numérica direta
+substituiu corretamente `ordinal_score()`); relatório gerado com
+"Descriptors" ligado contendo a mesma tabela com os mesmos números e o
+mesmo cabeçalho. Sem erro no console do servidor em nenhum passo. Suíte
+`testthat` ganhou 5 testes novos em `test-validate.R` (default quando a
+coluna está ausente, passagem numérica direta, mapeamento de legado
+categórico→numérico, bloqueio de preflight fora de [0,1]/não-numérico
+com aceitação do vocabulário antigo) — suíte de `validate` foi de 49 pra
+59 assertivas, suíte completa e checagem de sintaxe seguem limpas.
+
 ## Próximo
 
 Fase 5 está completa (Marcos A-D). Todos os 4 itens da lista pós-Fase 5 (1:
@@ -3693,17 +3763,13 @@ só duram a sessão) se isso vier a ser pedido. Relatório: adicionar seção de
 Comunidades (imagem + tabela) como fast-follow, reaproveitando a mecânica de
 captura já existente.
 
-**Pendência reportada pelo usuário junto com o bug de divergência temporal
-acima, ainda não endereçada (trabalhando uma de cada vez, com check-in):**
-- `uncertainty`/`controllability` (nós) continuam categóricos
-  (`low`/`medium`/`high`) — o usuário indicou preferência por trocar pra escala
-  numérica 0-1 (mesmo padrão já usado por `self_regulation`), discussão prévia
-  não registrada em detalhe neste arquivo ainda.
-
-(A pendência do storyboard do relatório não usar o layout/posições da aba
-Graph foi corrigida — ver "Bug real corrigido: a prancha temporal do
-relatório não usava o layout/posições da aba Graph" na seção Estado atual
-acima.)
+As três pendências reportadas pelo usuário junto com o bug de divergência
+temporal (motor temporal divergindo, storyboard do relatório sem o
+layout/posições da aba Graph, `uncertainty`/`controllability` categóricos)
+foram todas corrigidas — ver a seção Estado atual acima ("Bug real
+corrigido: a prancha temporal do relatório..." e
+"`uncertainty`/`controllability` (nós) migrados de vocabulário
+categórico...").
 
 ## Princípios
 

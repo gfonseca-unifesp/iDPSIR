@@ -68,6 +68,7 @@ preflight_import_nodes <- function(nodes_raw, schema = get_default_dpsir_schema(
   }
 
   optional_defaults <- c(
+    uncertainty = "0.5", controllability = "0.5",
     self_regulation = "0", growth_rate = "0", reference_value = "1",
     activation_threshold = "blank (no threshold)", descriptor = "blank"
   )
@@ -95,12 +96,23 @@ preflight_import_nodes <- function(nodes_raw, schema = get_default_dpsir_schema(
     for (field in c("uncertainty", "controllability")) {
       if (field %in% present) {
         raw <- nodes_raw[[field]]
-        vals <- trimws(as.character(raw))
-        bad <- which(!.pf_is_blank(raw) & !vals %in% c("low", "medium", "high"))
-        if (length(bad) > 0) {
+        legacy_levels <- c("low", "medium", "high") # pre-Revisao-1 vocabulary, still accepted
+        raw_chr <- trimws(as.character(raw))
+        blank <- .pf_is_blank(raw)
+        is_legacy <- raw_chr %in% legacy_levels
+        numeric_vals <- suppressWarnings(as.numeric(raw))
+        bad_type <- which(!blank & !is_legacy & is.na(numeric_vals))
+        if (length(bad_type) > 0) {
           blocking <- c(blocking, sprintf(
-            "Nodes file, row %d: %s '%s' must be low, medium or high.",
-            bad + 1, field, vals[bad]
+            "Nodes file, row %d: %s '%s' is not a number.",
+            bad_type + 1, field, raw_chr[bad_type]
+          ))
+        }
+        bad_range <- which(!blank & !is_legacy & !is.na(numeric_vals) & (numeric_vals < 0 | numeric_vals > 1))
+        if (length(bad_range) > 0) {
+          blocking <- c(blocking, sprintf(
+            "Nodes file, row %d: %s %s is outside the valid range [0, 1].",
+            bad_range + 1, field, numeric_vals[bad_range]
           ))
         }
       }
@@ -277,6 +289,32 @@ normalize_dpsir_nodes <- function(nodes) {
   nodes$id <- trimws(as.character(nodes$id))
   nodes$label <- as.character(nodes$label)
   nodes$dpsir_category <- trimws(as.character(nodes$dpsir_category))
+
+  # uncertainty/controllability deixaram de ser um vocabulario categorico
+  # (low/medium/high) e viraram uma fracao continua em [0,1] - nunca
+  # entraram em nenhum calculo (so leitura: borda do no, tooltip, media
+  # por categoria), entao a mudanca e so de representacao, sem nenhuma
+  # equacao pra reavaliar (diferente de self_regulation, ver abaixo, que
+  # precisou virar numerico especificamente pra ser usado no motor
+  # temporal). 0.5 e o default tanto pra coluna ausente quanto pra valor
+  # em branco - "moderado/nao informado", o mesmo papel que "medium" jogava
+  # no vocabulario antigo, sem favorecer nem alta nem baixa incerteza por
+  # omissao. Um savepoint/CSV de antes desta mudanca ainda pode trazer as
+  # strings antigas - mapeadas aqui pra nao quebrar ao carregar, mesmo
+  # padrao de legado ja usado por self_regulation logo abaixo.
+  for (field in c("uncertainty", "controllability")) {
+    if (!field %in% names(nodes)) {
+      nodes[[field]] <- 0.5
+    } else {
+      raw <- nodes[[field]]
+      legacy_levels <- c(low = 0.2, medium = 0.5, high = 0.8)
+      is_legacy_string <- as.character(raw) %in% names(legacy_levels)
+      numeric_values <- suppressWarnings(as.numeric(raw))
+      numeric_values[is_legacy_string] <- legacy_levels[as.character(raw)[is_legacy_string]]
+      numeric_values[is.na(numeric_values)] <- 0.5
+      nodes[[field]] <- numeric_values
+    }
+  }
 
   # Revisao 1, Fase 5: self_regulation deixou de ser um vocabulario
   # categorico (none/low/medium/high) e virou uma fracao continua em

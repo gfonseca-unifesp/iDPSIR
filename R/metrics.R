@@ -169,10 +169,6 @@ compute_all_metrics <- function(g, directed = TRUE, normalized = TRUE, weighted 
 # DESCRITORES DPSIR
 # =====================================================
 
-ordinal_score <- function(x, levels = c("low", "medium", "high")) {
-  match(x, levels)
-}
-
 compute_dpsir_descriptors <- function(g, schema) {
   categories <- schema_categories(schema)
 
@@ -242,15 +238,14 @@ compute_dpsir_descriptors <- function(g, schema) {
   }
 
   # ---- medias de incerteza/controlabilidade por categoria ----
-  nodes$.uncertainty_score <- ordinal_score(nodes$uncertainty)
-  nodes$.controllability_score <- ordinal_score(nodes$controllability)
-
+  # uncertainty/controllability sao numericos em [0,1] desde a Revisao 1 -
+  # media direta, sem precisar mapear vocabulario categorico pra escore.
   averages_by_category <- do.call(rbind, lapply(categories, function(cat) {
     subset_nodes <- nodes[nodes$dpsir_category == cat, ]
     data.frame(
       dpsir_category = cat,
-      avg_uncertainty = mean(subset_nodes$.uncertainty_score, na.rm = TRUE),
-      avg_controllability = mean(subset_nodes$.controllability_score, na.rm = TRUE),
+      avg_uncertainty = mean(as.numeric(subset_nodes$uncertainty), na.rm = TRUE),
+      avg_controllability = mean(as.numeric(subset_nodes$controllability), na.rm = TRUE),
       stringsAsFactors = FALSE
     )
   }))

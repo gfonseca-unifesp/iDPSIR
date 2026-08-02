@@ -193,9 +193,13 @@ schema_shapes <- function(schema) {
 # VOCABULARIOS CONTROLADOS (NOS E ARESTAS)
 # =====================================================
 
-get_uncertainty_levels <- function() c("low", "medium", "high")
-
-get_controllability_levels <- function() c("low", "medium", "high")
+# `uncertainty`/`controllability` (nos) deixaram de ser um vocabulario
+# categorico (low/medium/high) e viraram uma fracao continua em [0,1] -
+# mesmo padrao ja adotado por `self_regulation` na Fase 5, embora estes
+# dois nunca tenham entrado em nenhum calculo (so leitura/exibicao: borda
+# do no no grafo, tooltip, media por categoria em Descriptors/relatorio) -
+# get_uncertainty_levels()/get_controllability_levels() removidas, o
+# formulario (mod_data.R) usa numericInput(0-1) no lugar do selectInput.
 
 # `temporal_scale` (short/medium/long) foi aposentado na Revisao 1: nunca
 # entrava em nenhum calculo (so decorativo desde a Fase 1) e ficou

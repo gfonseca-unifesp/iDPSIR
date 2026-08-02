@@ -16,8 +16,8 @@ create_empty_nodes_table <- function() {
     label = character(),
     dpsir_category = character(),
     subsystem = character(),
-    uncertainty = character(),
-    controllability = character(),
+    uncertainty = numeric(),
+    controllability = numeric(),
     self_regulation = numeric(),
     growth_rate = numeric(),
     reference_value = numeric(),
@@ -432,8 +432,7 @@ mod_data_server <- function(id, seed = NULL) {
     node_modal <- function(defaults = NULL) {
       d <- defaults %||% list(
         id = "", label = "", dpsir_category = schema_categories(rv$schema)[1],
-        subsystem = "", uncertainty = get_uncertainty_levels()[1],
-        controllability = get_controllability_levels()[1],
+        subsystem = "", uncertainty = 0.5, controllability = 0.5,
         self_regulation = 0, growth_rate = 0, reference_value = 1,
         activation_threshold = NA_real_, descriptor = ""
       )
@@ -444,8 +443,14 @@ mod_data_server <- function(id, seed = NULL) {
         textInput(ns("nm_label"), "Label", value = d$label),
         selectInput(ns("nm_category"), "DPSIR category", choices = schema_categories(rv$schema), selected = d$dpsir_category),
         textInput(ns("nm_subsystem"), "Subsystem", value = d$subsystem),
-        selectInput(ns("nm_uncertainty"), "Uncertainty", choices = get_uncertainty_levels(), selected = d$uncertainty),
-        selectInput(ns("nm_controllability"), "Controllability", choices = get_controllability_levels(), selected = d$controllability),
+        numericInput(
+          ns("nm_uncertainty"), "Uncertainty (0-1)",
+          value = d$uncertainty %||% 0.5, min = 0, max = 1, step = 0.1
+        ),
+        numericInput(
+          ns("nm_controllability"), "Controllability (0-1)",
+          value = d$controllability %||% 0.5, min = 0, max = 1, step = 0.1
+        ),
         numericInput(
           ns("nm_self_regulation"), "Self-regulation (0-1)",
           value = d$self_regulation %||% 0, min = 0, max = 0.99, step = 0.05

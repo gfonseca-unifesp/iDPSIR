@@ -145,9 +145,9 @@ build_full_report_html <- function(
         tags$strong("Pressures not covered by Response: "),
         if (length(d$pressures_without_response) == 0) "none" else paste(d$pressures_without_response, collapse = ", ")
       ),
-      tags$h3("Average uncertainty/controllability by category (1=low, 2=medium, 3=high)"),
+      tags$h3("Average uncertainty/controllability by category (0 = low, 1 = high)"),
       report_html_table(d$averages_by_category),
-      caption_tag("Table", next_table_n(), "Mean uncertainty and controllability score per DPSIR category, coded as 1 (low), 2 (medium), 3 (high).")
+      caption_tag("Table", next_table_n(), "Mean uncertainty and controllability score per DPSIR category, on a 0 (low) to 1 (high) scale.")
     ))
 
     dp <- compute_all_driver_impact_pathways(graph, schema)
