@@ -21,7 +21,15 @@
 #
 # Equacao de atualizacao por no i, por janela discreta t:
 #
-#   x_i(t+1) = x_i(t) + growth_rate_i * x_i(t) + sum_j gate_ji(t) * W[i,j] * x_j(t) + p_i(t)
+#   x_i(t+1) = x_i(t) + growth_rate_i * x_i(t) + sum_j gate_ji(t) * (lambda*W)[i,j] * x_j(t) + p_i(t)
+#
+# `lambda*W` (nao o W bruto de build_interaction_matrix()) - ver o
+# comentario dentro de simulate_temporal_pair() pra por que: sem esse
+# fator de contracao, uma rede cujo raio espectral de W passe de 1
+# (comum com poucos ciclos de feedback e pesos moderados - confirmado
+# ~4 na rede do Mangi) faz esta recursao explicita divergir
+# geometricamente a cada janela, um artefato numerico da discretizacao,
+# nao um dinamismo real da rede.
 #
 # W = build_interaction_matrix(g) (R/loop_analysis.R) - ja inclui a
 # auto-regulacao na diagonal (Fase 9), entao NAO ha um termo separado de
@@ -125,7 +133,9 @@ apply_threshold_gate <- function(W, x, threshold_matrix, reference_values) {
   W_eff
 }
 
-# Um passo discreto da equacao no topo do arquivo.
+# Um passo discreto da equacao no topo do arquivo. `W` aqui e o interaction
+# matrix JA CONTRAIDO (ver `contraction_c` em simulate_temporal_pair() logo
+# abaixo) - nao o W bruto de build_interaction_matrix().
 temporal_step <- function(x, W, growth_rate, threshold_matrix, reference_values, p) {
   gated_W <- apply_threshold_gate(W, x, threshold_matrix, reference_values)
   x + growth_rate * x + as.numeric(gated_W %*% x) + p
@@ -150,15 +160,92 @@ simulate_temporal_pair <- function(g, p_D, p_R, windows = 5,
                                     growth_rate = NULL,
                                     threshold_matrix = NULL,
                                     reference_values = NULL,
+                                    stability_cap = 0.9,
                                     on_step = NULL) {
   stopifnot(inherits(g, "igraph"))
   stopifnot(windows >= 1)
+  stopifnot(stability_cap > 0, stability_cap < 1)
   mode_D <- match.arg(mode_D)
   mode_R <- match.arg(mode_R)
 
   W <- build_interaction_matrix(g)
   node_names <- rownames(W)
   n <- nrow(W)
+
+  # Real bug, confirmed against a generated report (rede do Mangi): the raw
+  # interaction matrix's spectral radius can be well above 1 (rho(W)~4 for
+  # Mangi's own network) - since each window's update is x + growth*x +
+  # W%*%x + p, an UNSCALED W with rho(W)>1 makes the propagated term
+  # amplify every single window (roughly rho(W)-fold), independent of
+  # growth_rate or self_regulation, which is baked into W's diagonal and
+  # gets swamped by the same unscaled off-diagonal terms it's supposed to
+  # counteract. That's not a modeled dynamic, it's the discrete recursion
+  # blowing up numerically - confirmed by hand: Mangi's Impacts grew ~5x
+  # per window, matching rho(W)~4 almost exactly.
+  #
+  # Deliberately NOT the static reading's "always normalize to a fixed c"
+  # (R/sufficiency.R's propagate()) - that would rescale even networks that
+  # are already perfectly well-behaved (Gnanapragasam's own W has
+  # rho(W)=0.35, comfortably < 1, confirmed by hand before choosing this
+  # design), which would have meant re-deriving every already-verified
+  # number in the tutorial's worked example for no reason other than
+  # matching the static engine's habit. Instead this ONLY intervenes when
+  # the network would actually diverge: `lambda = min(1, stability_cap /
+  # rho(W))` when rho(W) > 0, so a network with rho(W) <= stability_cap is
+  # left completely untouched (lambda=1, identical to before this fix),
+  # and only a genuinely unstable one gets scaled down - by just enough to
+  # cap the per-window gain at `stability_cap` (< 1, so it now decays
+  # instead of exploding), never further. `stability_cap` is a fixed
+  # numerical-safety margin, not a user-facing modeling choice like the
+  # static reading's "how far to trace the effect" (effect_horizon) -
+  # deliberately NOT reusing that slider here, since conflating "how far
+  # an effect should be trusted to propagate" (a modeling question) with
+  # "how much to dampen so the numbers don't blow up" (a stability
+  # question) would let a user's effect_horizon choice silently change
+  # whether their network diverges, which has nothing to do with what
+  # that slider is supposed to mean. A genuinely nilpotent W (rho(W)=0 -
+  # every network without a feedback cycle, e.g. a pure Driver-to-Impact
+  # chain) can't blow up exponentially through W alone regardless of
+  # scaling (its powers are exactly zero past a finite point, so
+  # (I+W)^t grows only polynomially in t, not geometrically) - left at
+  # lambda=1 too, nothing to fix there.
+  rho_W <- spectral_radius(W)
+  lambda <- if (rho_W > 0) min(1, stability_cap / rho_W) else 1
+
+  # Even after the cap above, a network can still be genuinely unbounded:
+  # for any eigenvalue mu of W with Re(mu) > 0 (a true reinforcing loop -
+  # confirmed present in the Mangi network, dominant eigenvalue
+  # 2.6+3.1i), no positive lambda can bring |1+lambda*mu| below 1 - that's
+  # not a step-size artifact, it's the network's own topology outrunning
+  # its configured self_regulation. rho(I + lambda*W) detects this
+  # directly (spectral_radius() already handles complex eigenvalues via
+  # Mod(), same as everywhere else in this app). Deliberately checks W's
+  # contribution ALONE, excluding growth_rate: growth_rate is an already-
+  # documented, intentional exogenous trend (population growth, etc.) that
+  # legitimately compounds on its own and would make this check fire for
+  # almost any network with growth_rate>0 - noise, not signal, since that
+  # growth isn't the "hidden feedback loop" this warning is meant to catch.
+  #
+  # Threshold is STRICTLY > 1 (with a small numeric tolerance), not >= 1 -
+  # a real distinction, not a rounding nicety. Any node without
+  # self_regulation (an Impact, most Drivers/Pressures) contributes an
+  # eigenvalue of exactly 0 to W, which lands M's eigenvalue at EXACTLY 1 -
+  # that's the already-documented, expected "ratchet, no natural recovery"
+  # behavior (see the self_regulation=0 test in test-temporal.R: an
+  # impulse just holds steady forever, it doesn't grow). >= 1 flagged that
+  # constantly (confirmed: it fired on the plain 5-node test fixture with
+  # NO feedback cycle at all, and even on the self_regulation=2 fixture,
+  # which decays on the node that has it and merely holds steady - never
+  # grows - on the rest) - noise on nearly every network, not signal.
+  # > 1 fires only when some mode of M genuinely amplifies each window,
+  # confirmed against Mangi (1.72, correctly flagged) and Gnanapragasam
+  # (exactly 1.00, correctly NOT flagged - its own growth is entirely
+  # growth_rate-driven and already explained in the tutorial, not a
+  # topology loop).
+  rho_topology <- spectral_radius(diag(n) + lambda * W)
+  stability <- list(rho_W = rho_W, lambda = lambda, unbounded = rho_topology > 1 + 1e-6)
+
+  W <- lambda * W
 
   if (is.null(growth_rate)) growth_rate <- build_growth_rate_vector(g)
   if (is.null(reference_values)) reference_values <- build_reference_values(g)
@@ -186,13 +273,45 @@ simulate_temporal_pair <- function(g, p_D, p_R, windows = 5,
     if (!is.null(on_step)) on_step(t, windows)
   }
 
-  list(baseline = hist_baseline, scenario = hist_scenario, windows = windows)
+  list(baseline = hist_baseline, scenario = hist_scenario, windows = windows, stability = stability)
 }
 
-# Uma linha por Impacto x janela: Impact_i(t) = max(0, x_i(t)) nas duas
-# rodadas, e o veredito dessa janela (total/parcial/falha) comparando as
-# duas - a generalizacao pra multiplas janelas do criterio de sucesso da
-# leitura estatica (neutralized = net <= threshold).
+# Plain-language note for temporal_result$stability - NULL when the network
+# is fine (nothing to say), a warning string when the topology's own
+# reinforcing loop outgrows what stability_cap/self_regulation can offset
+# (see the comment inside simulate_temporal_pair() above). Kept separate
+# from the table/storyboard renderers so both R/modules/mod_responses.R and
+# R/report.R show the exact same wording without duplicating it.
+temporal_stability_note <- function(stability) {
+  if (is.null(stability) || !isTRUE(stability$unbounded)) return(NULL)
+  paste(
+    "This network has a reinforcing feedback loop that its configured self-regulation doesn't fully offset -",
+    "factor values will keep growing window after window instead of settling down. Treat this simulation as a",
+    "directional signal (is the response still helping relative to no response, at each window?), not as a",
+    "forecast that converges to a final number."
+  )
+}
+
+# Uma linha por Impacto x janela: Impact_i(t) = x_i(t) (valor bruto, com
+# sinal) nas duas rodadas, e o veredito dessa janela (total/parcial/falha)
+# comparando as duas - a generalizacao pra multiplas janelas do criterio
+# de sucesso da leitura estatica (neutralized = net <= threshold).
+#
+# Bug real corrigido, confirmado contra um relatorio gerado de verdade
+# (rede do Mangi): uma versao anterior mostrava `max(0, x_i(t))` em vez do
+# valor bruto, e classificava "Neutralized" sempre que esse valor
+# flor-a-zero desse zero. Numa rede que estava DIVERGINDO (ver o fix de
+# `contraction_c` em simulate_temporal_pair() acima), x oscila de sinal a
+# cada poucas janelas sem nunca de fato se aproximar de zero em modulo -
+# flor-a-zero escondia essa oscilacao toda vez que x calhava de estar
+# negativo naquela janela especifica, entao a tabela mostrava "Scenario:
+# 0.000, Neutralized" em toda janela, uma ilusao de sucesso permanente
+# construida em cima do mesmo artefato numerico. Mostrando o valor bruto
+# (que pode ser negativo - significa que o cenario moveu esse fator pra
+# ALEM do zero da linha de base, uma leitura em si valida) e julgando o
+# veredito pelo MODULO do valor bruto (nao por "e <= 0"), um valor apenas
+# negativo mas ainda grande em modulo nao e mais confundido com
+# neutralizado.
 format_temporal_table <- function(g, temporal_result, threshold = 1e-9) {
   categories <- V(g)$dpsir_category
   is_impact <- !is.null(categories) & categories == "Impact"
@@ -210,19 +329,16 @@ format_temporal_table <- function(g, temporal_result, threshold = 1e-9) {
   impact_labels <- if (!is.null(V(g)$label)) V(g)$label[is_impact] else impact_ids
   windows <- temporal_result$windows
 
-  # pmax() takes dim/attributes from its FIRST argument (documented R
-  # behavior) - the matrix must come first, or a single-Impact-node network
-  # silently degrades from a matrix to a plain vector here.
-  baseline_impact <- pmax(temporal_result$baseline[, impact_ids, drop = FALSE], 0)
-  scenario_impact <- pmax(temporal_result$scenario[, impact_ids, drop = FALSE], 0)
+  baseline_impact <- temporal_result$baseline[, impact_ids, drop = FALSE]
+  scenario_impact <- temporal_result$scenario[, impact_ids, drop = FALSE]
 
   rows <- lapply(seq_len(windows + 1) - 1, function(t) {
     b <- baseline_impact[t + 1, ]
     s <- scenario_impact[t + 1, ]
 
     verdict <- ifelse(
-      s <= threshold, "Neutralized",
-      ifelse(s < b - threshold, "Partial", "Failure/worsened")
+      abs(s) <= threshold, "Neutralized",
+      ifelse(abs(s) < abs(b) - threshold, "Partial", "Failure/worsened")
     )
 
     data.frame(

@@ -441,6 +441,7 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
               selected = "impulse"
             ))
           ),
+          uiOutput(ns("temporal_stability_note")),
           h5("How each Impact changes, window by window"),
           DTOutput(ns("temporal_table")),
           h5("Network storyboard"),
@@ -517,6 +518,14 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
           }
         )
       })
+    })
+
+    output$temporal_stability_note <- renderUI({
+      tr <- temporal_result()
+      req(tr)
+      note <- temporal_stability_note(tr$stability)
+      req(note)
+      div(class = "alert alert-warning", role = "alert", note)
     })
 
     output$temporal_table <- renderDT({

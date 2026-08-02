@@ -115,25 +115,32 @@ test_that("impulse mode only pushes on window 1; permanent mode keeps pushing ev
   expect_equal(unname(permanent$scenario[, "R1"]), 0:5)
 })
 
-test_that("real finding: a self_regulation magnitude of 2 (outside the intended [0,1) range) oscillates in this discrete difference equation instead of decaying", {
+test_that("a self_regulation magnitude of 2 (outside the intended [0,1) range) no longer oscillates forever, now that stability_cap damps it automatically", {
   # self_regulation is numeric directly since Fase 5 - a raw value of 2
   # reproduces the exact magnitude the OLD categorical "high" used to map
   # to (self_regulation_magnitudes()["high"] = -2, before that function was
   # removed), reachable today only by bypassing the form's 0-1 validation
   # (e.g. a hand-edited CSV) - still worth guaranteeing the engine doesn't
   # silently misbehave if that happens.
+  #
+  # Historical note: before the stability_cap fix (confirmed against a real
+  # generated report, rede do Mangi - see the comment inside
+  # simulate_temporal_pair()), this exact fixture demonstrated the RAW,
+  # unscaled equation oscillating forever: self_regulation=2 -> diagonal=-2
+  # -> (1 + (-2)) = -1, so the state flipped sign every window at the SAME
+  # magnitude, never decaying. That was the original motivation for Fase 5
+  # constraining self_regulation to [0,1) in the form (mod_data.R). Now
+  # that stability_cap always caps rho(W) at 0.9 by default, this
+  # out-of-range value gets damped automatically too (rho(W)=2 here ->
+  # lambda=0.45 -> effective diagonal (1 + 0.45*(-2)) = 0.1, decaying
+  # geometrically) - confirmed against scratchpad, not assumed.
   g <- build_test_network(self_regulation = c(D1 = 0, P1 = 0, S1 = 2, I1 = 0, R1 = 0))
   p_test <- build_press_vector(g, active_ids = "S1", strengths = c(S1 = -1))
   zero_p <- zero_press(g)
 
   result <- simulate_temporal_pair(g, p_test, zero_p, windows = 6, mode_D = "impulse", mode_R = "impulse")
 
-  # self_regulation = 2 -> diagonal = -2 (negated) -> (1 + (-2)) = -1: the
-  # state flips sign every window at the SAME magnitude forever, never
-  # actually decaying toward 0. This is the real, tested motivation for
-  # Fase 5 constraining self_regulation to [0,1) in the form (mod_data.R)
-  # instead of allowing magnitudes this large.
-  expect_equal(unname(result$baseline[, "S1"]), c(0, -1, 1, -1, 1, -1, 1))
+  expect_equal(unname(result$baseline[, "S1"]), c(0, -1, -0.1, -0.01, -0.001, -0.0001, -0.00001))
 })
 
 test_that("self_regulation = 0 leaves an impulse permanently unchanged (ratchet, no natural recovery)", {
@@ -144,6 +151,73 @@ test_that("self_regulation = 0 leaves an impulse permanently unchanged (ratchet,
   result <- simulate_temporal_pair(g, p_test, zero_p, windows = 5, mode_D = "impulse", mode_R = "impulse")
 
   expect_equal(unname(result$baseline[, "S1"]), c(0, rep(-1, 5)))
+})
+
+test_that("stability_cap leaves an already well-behaved network's lambda untouched (rho(W)=0 for this fixture - no feedback cycle reaches R1)", {
+  g <- build_test_network()
+  p_D <- build_press_vector(g, active_ids = "D1", strengths = c(D1 = 1))
+  zero_p <- zero_press(g)
+
+  result <- simulate_temporal_pair(g, p_D, zero_p, windows = 3, mode_D = "impulse", mode_R = "impulse")
+
+  expect_equal(result$stability$rho_W, 0)
+  expect_equal(result$stability$lambda, 1)
+  expect_false(result$stability$unbounded)
+  expect_null(temporal_stability_note(result$stability))
+})
+
+test_that("stability_cap scales down a network whose rho(W) exceeds it, but self_regulation alone (no genuine cycle) still counts as 'unbounded=FALSE' - it decays/holds, never grows", {
+  # This fixture (self_regulation=2 on S1, a DAG otherwise - R1 is a pure
+  # source, no cycle reaches it) has W-eigenvalues {0,0,0,-2,0}: the
+  # capped diagonal entry on S1 decays (confirmed by the baseline sequence
+  # test above), and the other 4 nodes merely hold steady (eigenvalue
+  # exactly 0, same "ratchet" as the plain fixture below) - none of them
+  # amplify, so this is correctly NOT flagged as a reinforcing loop.
+  g <- build_test_network(self_regulation = c(D1 = 0, P1 = 0, S1 = 2, I1 = 0, R1 = 0))
+  p_test <- build_press_vector(g, active_ids = "S1", strengths = c(S1 = -1))
+  zero_p <- zero_press(g)
+
+  result <- simulate_temporal_pair(g, p_test, zero_p, windows = 2, mode_D = "impulse", mode_R = "impulse")
+
+  expect_equal(result$stability$rho_W, 2)
+  expect_equal(result$stability$lambda, 0.45)
+  expect_false(result$stability$unbounded)
+  expect_null(temporal_stability_note(result$stability))
+})
+
+test_that("a genuine two-node reinforcing loop (A->B positive, B->A positive) is flagged as unbounded even after stability_cap", {
+  # Real finding (confirmed against a generated report, rede do Mangi):
+  # scaling W by lambda=min(1, stability_cap/rho(W)) reduces the
+  # per-window gain but cannot fully eliminate it for a genuine reinforcing
+  # loop - here a minimal, hand-verifiable 2-node mutual-reinforcement
+  # network (the simplest case of the same structural problem Mangi has -
+  # a dominant eigenvalue with positive real part). W = [[0,1],[1,0]],
+  # eigenvalues = +1 and -1: no positive lambda can bring |1+lambda*1|
+  # below 1, so this network can never be fully stabilized by scaling
+  # alone, exactly the algebraic proof behind this whole fix.
+  # graph_from_data_frame() directly, not build_igraph() - A->B->A isn't a
+  # schema-valid connection pair (only Response is allowed to loop
+  # backward), same escape hatch already used by the "no Impact nodes"
+  # test below for a graph that only needs to exercise the math, not the
+  # DPSIR ordering.
+  nodes <- data.frame(id = c("A", "B"), label = c("A", "B"), dpsir_category = c("Driver", "Pressure"), stringsAsFactors = FALSE)
+  edges <- data.frame(
+    from = c("A", "B"), to = c("B", "A"), weight = c(1, 1),
+    interaction_type = c("positive", "positive"), stringsAsFactors = FALSE
+  )
+  g <- graph_from_data_frame(edges, vertices = nodes, directed = TRUE)
+  press <- setNames(c(1, 0), c("A", "B"))
+  zero_p <- setNames(c(0, 0), c("A", "B"))
+
+  result <- simulate_temporal_pair(g, press, zero_p, windows = 2, mode_D = "impulse", mode_R = "impulse")
+
+  expect_equal(result$stability$rho_W, 1)
+  expect_equal(result$stability$lambda, 0.9)
+  expect_true(result$stability$unbounded)
+
+  note <- temporal_stability_note(result$stability)
+  expect_true(is.character(note))
+  expect_true(grepl("reinforcing feedback loop", note, fixed = TRUE))
 })
 
 test_that("format_temporal_table reports the response's benefit shrinking over windows, on the 'response becomes new pressure' network", {
@@ -168,6 +242,37 @@ test_that("format_temporal_table reports the response's benefit shrinking over w
   ratio_w7 <- tbl$scenario_impact[tbl$window == 7] / tbl$baseline_impact[tbl$window == 7]
   ratio_w8 <- tbl$scenario_impact[tbl$window == 8] / tbl$baseline_impact[tbl$window == 8]
   expect_true(ratio_w8 > ratio_w7) # mitigation getting weaker window over window
+})
+
+test_that("format_temporal_table judges the raw signed value, not a floor-to-zero clamp (real bug, confirmed against a generated report)", {
+  # Real bug, confirmed against a generated report (rede do Mangi): an
+  # earlier version showed max(0, x) instead of the raw value and called
+  # anything that floored to zero "Neutralized" - a network that was
+  # diverging and flipping sign every few windows got mislabeled
+  # "Neutralized" every single window it happened to land negative,
+  # a permanent illusion of success built on the same numeric artifact.
+  # This test hand-crafts a temporal_result (bypassing the dynamics of
+  # simulate_temporal_pair entirely) to isolate format_temporal_table's
+  # display logic on its own.
+  nodes <- data.frame(id = "I1", label = "I1", dpsir_category = "Impact", stringsAsFactors = FALSE)
+  g <- graph_from_data_frame(data.frame(from = character(), to = character()), vertices = nodes, directed = TRUE)
+
+  temporal_result <- list(
+    windows = 2,
+    baseline = matrix(c(0, 10, 10), ncol = 1, dimnames = list(NULL, "I1")),
+    scenario = matrix(c(0, -50, 1e-12), ncol = 1, dimnames = list(NULL, "I1"))
+  )
+  tbl <- format_temporal_table(g, temporal_result)
+
+  # Window 1: scenario overshot to -50, LARGER in magnitude than the
+  # baseline's 10 - genuinely worse, not "neutralized" just because it's
+  # negative (the old floor-to-zero bug would have shown 0/"Neutralized").
+  expect_equal(tbl$scenario_impact[tbl$window == 1], -50)
+  expect_equal(tbl$verdict[tbl$window == 1], "Failure/worsened")
+
+  # Window 2: scenario is genuinely ~0 (not just negative) - correctly
+  # "Neutralized".
+  expect_equal(tbl$verdict[tbl$window == 2], "Neutralized")
 })
 
 test_that("format_temporal_table returns an empty data.frame, not an error, when the graph has no Impact nodes", {

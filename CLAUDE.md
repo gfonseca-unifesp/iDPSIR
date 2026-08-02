@@ -2054,6 +2054,126 @@ padrão do item 6.4), e caso de borda (grafo sem nó Impacto). Suíte completa
 `R/` limpa. App não testado no navegador nesta fase de propósito — nada
 mudou na UI ainda, é exatamente o que a Fase 1 promete.
 
+**Bug real de divergência numérica no motor temporal, reportado pelo
+usuário com um relatório gerado de verdade (`idpsir_report_2026-08-01`,
+rede do Mangi) — corrigido em `R/temporal.R`.** A atualização explícita
+`x(t+1) = x(t) + growth*x + W·x + p` (`R/temporal.R`) amplificava a cada
+janela por um fator próximo de `ρ(W)` (o raio espectral da matriz de
+interação) — confirmado ≈4 na rede do Mangi, batendo com o relato do
+usuário (~5×/janela na Tabela 12 do relatório). Um segundo problema,
+citado junto pelo usuário como agravante: a tabela de exibição aplicava
+`max(0, x)` antes de julgar o veredito, então uma rede que estava
+divergindo e trocando de sinal a cada poucas janelas aparecia como
+"Neutralized" toda vez que calhava de estar negativa — uma ilusão de
+sucesso permanente construída em cima do mesmo artefato numérico.
+
+Investigação (não assumida, cada passo verificado por script antes de
+decidir o próximo): `spectral_radius(W)` (já existe em `R/sufficiency.R`,
+usa `Mod(eigen(W)$values)` — reaproveitada, não duplicada) confirmou
+`ρ(W)≈4.05` no Mangi, `ρ(W)=0.35` no Gnanapragasam (bem comportada) e
+`ρ(W)≈4.16` no `data/sample_*.csv`. Prova algébrica feita antes de
+escrever qualquer código: pra um autovalor `μ` de `W` com parte real
+positiva, `|1+λμ|>1` pra **qualquer** `λ>0` — nenhuma escala positiva de
+`W` consegue estabilizar essa direção. A rede do Mangi tem justamente
+isso: autovalor dominante `2.61+3.09i` (parte real positiva), mais dois
+autovalores reais positivos (2.20, 1.54) — um loop de reforço genuíno na
+topologia, não um artefato de discretização.
+
+**Duas correções, mais uma terceira descoberta necessária ao testar
+contra os próprios critérios do usuário:**
+
+1. **Limitar o ganho por janela**: `simulate_temporal_pair()` ganhou
+   `stability_cap` (novo parâmetro, default 0.9, **não** reaproveitando
+   `effect_horizon` da leitura estática — decisão deliberada, ver
+   comentário em `R/temporal.R`: conflating "até onde confiar que um
+   efeito se propaga" [pergunta de modelagem] com "quanto amortecer pra
+   os números não explodirem" [pergunta de estabilidade numérica] deixaria
+   a escolha de `effect_horizon` do usuário mudar silenciosamente se a
+   rede diverge ou não, o que não tem nada a ver com o que aquele slider
+   deveria significar). `λ = min(1, stability_cap/ρ(W))` quando `ρ(W)>0`,
+   senão `λ=1` — **só intervém quando a rede realmente divergiria**: uma
+   rede já bem comportada (`ρ(W) ≤ stability_cap`) fica com `λ=1`,
+   idêntica a antes desta mudança (confirmado byte a byte: Gnanapragasam,
+   `ρ(W)=0.35`, produz histórico idêntico ao código antigo — `all.equal()`
+   `TRUE` nas duas rodadas, script `compare_old_new.R`, não seria
+   necessário reverificar nenhum número já publicado no tutorial). Uma
+   `W` genuinamente nilpotente (`ρ(W)=0` — qualquer rede sem ciclo de
+   feedback) também fica em `λ=1`: suas potências são exatamente zero
+   passado um ponto finito, então `(I+W)^t` cresce só polinomialmente em
+   `t`, nunca geometricamente — nada pra corrigir aí.
+2. **Display honesto**: `format_temporal_table()` parou de aplicar
+   `max(0, x)` antes de julgar — mostra o valor bruto (com sinal; um
+   valor negativo significa que o cenário moveu o fator pra **além** do
+   zero da linha de base, uma leitura em si válida) e julga o veredito
+   pelo **módulo** do valor bruto, não por "é ≤ 0" (`Neutralized` se
+   `|cenário| ≤ threshold`, `Partial` se `|cenário| < |baseline|`, senão
+   `Failure/worsened`) — um valor apenas negativo mas ainda grande em
+   módulo não é mais confundido com neutralizado.
+3. **Aviso explícito quando o cap não é suficiente** — descoberto
+   necessário só ao testar contra o critério literal do usuário ("que a
+   influência propagada por janela não amplifique"): mesmo com o cap,
+   `ρ(I+λW)` continuava ≥1 pro Mangi (1.72) e pro `sample_*.csv` (1.90) —
+   a prova algébrica acima confirmando na prática que nenhuma escala
+   elimina um loop de reforço genuíno. Apresentado ao usuário via
+   `AskUserQuestion` (três opções: cap+aviso explícito / trocar pra passo
+   implícito, que amorteceria artificialmente um crescimento que é
+   matematicamente real / só o cap sem aviso novo) — escolhida "cap +
+   aviso explícito". `temporal_stability_note()` (`R/temporal.R`) novo,
+   texto em linguagem simples ("este rede tem um loop de reforço que a
+   auto-regulação configurada não neutraliza totalmente... leia como
+   sinal direcional, não previsão que converge"), mostrado como
+   `alert-warning` acima da tabela temporal em `mod_responses.R` e como
+   parágrafo (`.report-warning`, nova classe CSS) por cenário na seção
+   temporal do relatório (`R/report.R`).
+
+   **Achado real, corrigido antes de expor ao usuário** (dois ciclos de
+   auto-verificação antes de aceitar o critério): a primeira versão
+   comparava `ρ(I+λW) >= 1` — mas qualquer nó **sem** auto-regulação
+   (a maioria dos Impactos, muitos Drivers/Pressures) contribui um
+   autovalor de exatamente 0 pra `W`, o que deixa `M` com um autovalor de
+   exatamente 1 — e isso é o comportamento já documentado e esperado de
+   "ratchet, sem recuperação natural" (`self_regulation=0` já tinha um
+   teste inteiro provando isso em `test-temporal.R`), não um problema.
+   `>=1` disparava o aviso pra **quase qualquer rede**, inclusive a
+   fixture padrão de 5 nós sem ciclo nenhum e até a própria fixture de
+   `self_regulation=2` (que decai no nó que tem auto-regulação e só
+   "segura" nos demais, nunca cresce) — ruído, não sinal. Corrigido pra
+   `> 1 + tolerância` (estritamente maior): um autovalor exatamente 0 ou
+   puramente "segurando" não dispara nada; só um modo que **de fato
+   amplifica** a cada janela dispara. Reverificado contra as 5 redes já
+   testadas: Mangi (1.72, corretamente sinalizada), `sample_*.csv` (1.90,
+   sinalizada), Gnanapragasam (exatamente 1.00, **não** sinalizada — seu
+   próprio crescimento é inteiramente por `growth_rate`, já explicado no
+   tutorial, não um loop de topologia), fixture padrão de teste (1.00,
+   não sinalizada) e fixture de `self_regulation=2` (1.00, não
+   sinalizada, mudança de expectativa registrada no teste com a
+   explicação).
+
+Testado ponta a ponta rodando o app de verdade contra
+`docs/example_mangi.idpsir.json` (mesmo cenário do relatório que motivou
+o bug: pressão D1+D3 a 100%, resposta R2 a 100%, `c=0.5`): leitura
+estática de suficiência inalterada (Reef ecosystem degradation
+0.03/-0.069/-0.039/Yes/44%, mesmos números já verificados antes desta
+sessão — confirma que o bug e o fix ficaram inteiramente contidos no
+motor temporal); disclosure "Show temporal simulation" com 12 janelas,
+pressão e resposta em modo permanente — o aviso amarelo aparece
+corretamente acima da tabela, e a tabela mostra números crescendo de
+forma muito mais contida que o relato original (~2× por janela nas
+primeiras janelas, não mais ~5×) com veredito honesto (`Partial` quando o
+cenário ainda é menor em módulo que a linha de base, `Failure/worsened`
+quando não é mais — nunca `Neutralized` só por ter cruzado pra negativo).
+Sem erro no console do servidor em nenhum passo. Suíte `testthat` ganhou
+4 testes novos em `test-temporal.R` (a fixture de `self_regulation=2` foi
+re-verificada e seus números atualizados, já que o cap agora se aplica
+por padrão) e a suíte completa segue limpa; checagem de sintaxe limpa.
+
+Durante a investigação, dois arquivos junk (`docs/mangi2007_nodes.csv`/
+`_edges.csv`, duplicatas idênticas de `data/mangi2007_*.csv` deixadas por
+um script de uma sessão anterior) e um `docs/example_mangi.idpsir.json`
+apagado da árvore de trabalho (mas ainda commitado, sem perda de dado)
+foram encontrados — os junks removidos, o savepoint restaurado via
+`git checkout` a partir do commit `c5b21a7`.
+
 ## Próximo
 
 Fase 5 está completa (Marcos A-D). Todos os 4 itens da lista pós-Fase 5 (1:
@@ -3536,6 +3656,19 @@ restantes) quando desenhados. Considerar incluir cenários salvos no savepoint (
 só duram a sessão) se isso vier a ser pedido. Relatório: adicionar seção de
 Comunidades (imagem + tabela) como fast-follow, reaproveitando a mecânica de
 captura já existente.
+
+**Pendências reportadas pelo usuário junto com o bug de divergência temporal
+acima, ainda não endereçadas (trabalhando uma de cada vez, com check-in):**
+- O storyboard já compartilha layout/posições com a aba Graph (ver "Storyboard:
+  controles novos + alinhamento de layout com a aba Graph" acima); a seção
+  temporal do **relatório** (`R/report.R`) ainda chama
+  `compute_graph_layout(graph_to_nodes(graph), schema)` direto em vez de
+  `compute_effective_layout()` — a prancha do relatório não reflete o layout/
+  posições arrastadas configuradas na aba Graph, só a tela reflete.
+- `uncertainty`/`controllability` (nós) continuam categóricos
+  (`low`/`medium`/`high`) — o usuário indicou preferência por trocar pra escala
+  numérica 0-1 (mesmo padrão já usado por `self_regulation`), discussão prévia
+  não registrada em detalhe neste arquivo ainda.
 
 ## Princípios
 

@@ -17,6 +17,7 @@ REPORT_CSS <- "
   .meta { color: #666; font-size: 0.9em; }
   .report-graph-image { max-width: 100%; border: 1px solid #ccc; margin: 12px 0; }
   .report-caption { color: #555; font-size: 0.9em; margin: 4px 0 20px 0; max-width: 700px; }
+  .report-warning { background: #fff3cd; border: 1px solid #ffe69c; color: #664d03; padding: 8px 14px; max-width: 700px; }
 "
 
 format_report_cell <- function(cell) {
@@ -308,6 +309,9 @@ build_full_report_html <- function(
           mode_R = sc$temporal_mode_response %||% "impulse"
         )
 
+        stability_note <- temporal_stability_note(tr$stability)
+        note_tag <- if (!is.null(stability_note)) tags$p(class = "report-warning", stability_note) else NULL
+
         table_df <- format_temporal_table(graph, tr)
         table_tag <- if (nrow(table_df) == 0) {
           tags$p("No Impact factors in this network yet.")
@@ -333,6 +337,7 @@ build_full_report_html <- function(
 
         tagList(
           tags$h4(scenario_name),
+          note_tag,
           table_tag,
           tags$img(class = "report-graph-image", src = img_uri),
           caption_tag(
