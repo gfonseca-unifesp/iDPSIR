@@ -559,10 +559,11 @@
             <li class="sub"><a href="#t-report">Report</a></li>
           </ol>
         </li>
-        <li><a href="#examples">4 · Example networks</a></li>
-        <li><a href="#worked-example">5 · Worked example</a></li>
-        <li><a href="#savepoint">6 · Saving your work</a></li>
-        <li><a href="#glossary">7 · Glossary</a></li>
+        <li><a href="#conventions">4 · Modeling convention: signs</a></li>
+        <li><a href="#examples">5 · Example networks</a></li>
+        <li><a href="#worked-example">6 · Worked example</a></li>
+        <li><a href="#savepoint">7 · Saving your work</a></li>
+        <li><a href="#glossary">8 · Glossary</a></li>
       </ol>
     </nav>
 
@@ -892,7 +893,7 @@ P1,S1,3,0.85,negative,monitoring</pre>
             </div>
             <div class="control">
               <div class="label">Show temporal simulation across discrete time windows<span class="widget">optional</span></div>
-              <p>Runs the same two scenarios forward window by window instead of reading a single instant — useful when a response might, windows later, become a new pressure itself (see the worked example). Set the number of windows and whether each scenario is a one-time impulse or an ongoing/permanent push; a progress indicator shows "Window X of N" while it computes. Shows a table of how each Impact changes window by window, and a "storyboard" — one small graph per window, same layout throughout, node color/size showing how much that factor has moved from zero — downloadable as PNG or SVG and included as a figure if this scenario is added to the report.</p>
+              <p>Runs the same two scenarios forward window by window instead of reading a single instant — useful when a response might, windows later, become a new pressure itself (see the worked example). Set the number of windows and whether each scenario is a one-time impulse or an ongoing/permanent push; a progress indicator shows "Window X of N" while it computes. Shows a table of how each Impact changes window by window, with a <strong>Verdict</strong> per row (see <a href="#conventions">Reading the Verdict</a>), and a "storyboard" — one small graph per window, same layout throughout, node color/size showing how much that factor has moved from zero — downloadable as PNG or SVG and included as a figure if this scenario is added to the report.</p>
             </div>
             <div class="control">
               <div class="label">Save this scenario<span class="widget">button</span></div>
@@ -952,6 +953,88 @@ P1,S1,3,0.85,negative,monitoring</pre>
         </div>
       </section>
 
+      <!-- ============ MODELING CONVENTION ============ -->
+      <section class="block" id="conventions">
+        <div class="kicker">Read this before your first network</div>
+        <h2>Modeling convention: orienting nodes and reading signs</h2>
+        <p class="lead">The app never guesses whether "more" of a factor is good or bad —
+          that's a decision you make when you name a node and sign its edges. Get this
+          right and consistent, and every reading downstream (sufficiency, confidence,
+          temporal Verdict, the storyboard's colors) is trustworthy. Get it inconsistent,
+          and a table can report the opposite of what you intended without any error or
+          warning — the app validates that a sign is <code>positive</code> or
+          <code>negative</code>, not that it means what you think it means.</p>
+
+        <h3>Step 1 — orient each node: decide what "more" means</h3>
+        <div class="table-wrap">
+          <table class="fields">
+            <tr><th>Category</th><th>What "more" means</th><th>Example</th></tr>
+            <tr><td class="key">Driver / Pressure</td><td>More force or stress — more is more pressure.</td><td>fishing effort, population growth</td></tr>
+            <tr><td class="key">State</td><td>The condition itself, measured in its natural/good sense — more is a <strong>better</strong> condition.</td><td><code>Coral cover</code>, <code>Fish stock</code>, <code>Biodiversity</code> — never <code>Coral degradation</code> or <code>Fish stock decline</code></td></tr>
+            <tr><td class="key">Impact</td><td>The problem or damage itself — more is <strong>worse</strong>.</td><td>Catch decline, Fisher income loss</td></tr>
+          </table>
+        </div>
+        <p class="muted" style="font-size:14px">State is the one category worth pausing on: name it as a
+          neutral measurement, not as the problem it's usually associated with. A State
+          named after a problem ("Fish stock decline") quietly bakes a sign assumption
+          into the node itself — one that can silently drift out of sync with whatever
+          the edges actually say.</p>
+
+        <h3>Step 2 — the edge's sign is mechanical</h3>
+        <p>Once every node is oriented, signing an edge is a small, mechanical question:
+          when the source goes up, does the target go up (<code>positive</code>) or down
+          (<code>negative</code>)? Nothing about "good" or "bad" enters at this step — that
+          judgment already happened in Step 1, when you chose what "more" means for each
+          node. With the standard orientation above, the connections this app's schema
+          allows always sign the same way:</p>
+        <div class="table-wrap">
+          <table class="fields">
+            <tr><th>Link</th><th>Sign</th><th>Why</th></tr>
+            <tr><td class="key">Driver → Pressure</td><td><code>positive</code></td><td>more force → more pressure</td></tr>
+            <tr><td class="key">Pressure → State</td><td><code>negative</code></td><td>the pressure reduces the good condition</td></tr>
+            <tr><td class="key">State → Impact</td><td><code>negative</code></td><td>more good condition → less of the problem</td></tr>
+            <tr><td class="key">Response → Driver / Pressure</td><td><code>negative</code></td><td>the response reduces the force/pressure</td></tr>
+            <tr><td class="key">Response → State</td><td><code>positive</code></td><td>the response improves the condition</td></tr>
+            <tr><td class="key">Response → Impact</td><td><code>negative</code></td><td>the response reduces the problem</td></tr>
+          </table>
+        </div>
+
+        <div class="callout">
+          <span class="dot"></span>
+          <div><strong>Golden rule: the same node uses the same orientation on every one
+          of its edges</strong> — incoming and outgoing alike. Almost every sign mistake in
+          a DPSIR network comes from breaking this rule: signing a State as "good" on its
+          incoming edge and as "the problem" on its outgoing edge (or vice versa). See
+          <code>sample_nodes.csv</code>/<code>sample_edges.csv</code>'s own history for a
+          worked example of exactly this mistake, and the Mangi network below for what a
+          consistent, neutral State looks like in practice.</div>
+        </div>
+
+        <h3>Reading the Verdict (temporal simulation)</h3>
+        <p>With an Impact oriented as the problem (Step 1 above): zero means no
+          deviation from doing nothing, a positive value means worse, and a
+          <strong>negative value means better than doing nothing</strong> — the response
+          didn't just help, it pushed the factor past neutral. Each simulated window
+          compares the <strong>baseline</strong> (pressure only) against the
+          <strong>scenario</strong> (pressure and response together) and labels the
+          Impact's scenario value accordingly:</p>
+        <div class="table-wrap">
+          <table class="fields">
+            <tr><th>Verdict</th><th>Condition</th><th>Meaning</th></tr>
+            <tr><td class="key">Neutralized</td><td>scenario ≈ 0</td><td>the response's benefit exactly offsets the pressure's worsening</td></tr>
+            <tr><td class="key">Improved beyond neutral</td><td>scenario &lt; 0</td><td>the response did more than enough — the factor is better than if nothing had happened at all</td></tr>
+            <tr><td class="key">Partial</td><td>0 &lt; scenario &lt; baseline</td><td>still a problem, but smaller than it would be without the response</td></tr>
+            <tr><td class="key">Failure/worsened</td><td>scenario ≥ baseline</td><td>as bad as, or worse than, no response at all</td></tr>
+          </table>
+        </div>
+        <p class="muted" style="font-size:14px">The Verdict is judged by <em>sign</em>, not by
+          how large a number is — a response that overshoots into strongly negative
+          territory is <code>Improved beyond neutral</code>, never
+          <code>Failure/worsened</code>, no matter how big that negative number gets. This
+          also keeps the label consistent with the storyboard's color: bluer always means
+          the factor decreased, so a row marked worse can never show up blue.</p>
+      </section>
+
       <!-- ============ EXAMPLE NETWORKS ============ -->
       <section class="block" id="examples">
         <div class="kicker">Three networks, three sizes</div>
@@ -964,7 +1047,7 @@ P1,S1,3,0.85,negative,monitoring</pre>
         <h3>Fisheries — the smallest possible loop</h3>
         <p>Five nodes, five edges, one closed feedback loop:
           <strong>Coastal tourism growth</strong> (Driver) →
-          <strong>Overfishing</strong> (Pressure) → <strong>Fish stock decline</strong>
+          <strong>Overfishing</strong> (Pressure) → <strong>Fish stock</strong>
           (State) → <strong>Fisher income loss</strong> (Impact) →
           <strong>Fishing quota policy</strong> (Response) → back to Coastal tourism
           growth. No subsystem filters, no temporal simulation needed to see what's
@@ -1011,20 +1094,14 @@ P1,S1,3,0.85,negative,monitoring</pre>
           14 of the other 17 factors, because Responses here loop back into several
           Drivers, Pressures and States at once, not just the one Impact they're aimed
           at.</p>
-        <p class="muted" style="font-size:14px; margin-top:10px">This network also
-          shows the modeling convention every example in this app follows: State
-          nodes are named as <strong>neutral measurements</strong> —
+        <p class="muted" style="font-size:14px; margin-top:10px">This network is also
+          the concrete illustration of the <a href="#conventions">modeling convention</a>
+          above: every State is a <strong>neutral measurement</strong> —
           <strong>Fish stock</strong>, <strong>Coral cover</strong>,
           <strong>Biodiversity</strong> — never pre-judged as "decline" or
-          "degradation". The value judgment belongs on the edges, not the node name:
-          Pressure→State edges here are <code>negative</code> (fishing effort
-          <em>reduces</em> the stock) and State→Impact edges are also
-          <code>negative</code> (a healthier stock <em>reduces</em> catch decline),
-          while Response→State edges are <code>positive</code> (a marine protected
-          area <em>increases</em> stock and coral cover). Naming a State after the
-          problem it's usually associated with (e.g. "Fish stock decline") quietly
-          bakes a sign assumption into the node itself, which can drift out of sync
-          with the edges — worth avoiding when you build your own network.</p>
+          "degradation", so Pressure→State and State→Impact are both
+          <code>negative</code> and Response→State is <code>positive</code>, exactly the
+          standard signing from Step 2 above.</p>
         <div class="code-cluster two">
           <div class="code-card">
             <h4>Download the example</h4>
@@ -1146,6 +1223,19 @@ P1,S1,3,0.85,negative,monitoring</pre>
             <tr><td class="key">Fleet motorization → Loss of traditional culture</td><td>positive</td><td>0.50</td></tr>
             <tr><td class="key">Aid (either program) → Fisher income loss</td><td>negative</td><td>0.60</td></tr>
           </table>
+        </div>
+        <div class="callout">
+          <span class="dot"></span>
+          <div><strong>A deliberate exception to the neutral-State default.</strong>
+          <code>Fish stock</code> follows the standard convention (<a href="#conventions">Step 1</a>):
+          neutral, more is better, so both its edges are <code>negative</code>. <code>Fleet
+          motorization</code> does not — it's oriented the other way on purpose (more
+          motorized capacity is itself more pressure on the system), so <em>both</em> its
+          edges are <code>positive</code> instead. This is still fully consistent with the
+          golden rule: each State uses one orientation across all of its own edges, in and
+          out — Fleet motorization just picked "more is worse" instead of "more is better."
+          Not every State has to default to "more is better"; what matters is that the
+          choice, whichever it is, holds for that node's every edge.</div>
         </div>
         <p class="muted" style="font-size:14px; margin-top:10px">Both aid programs
           (post-tsunami and post-war) link to exactly one factor — Fisher income loss —
@@ -1332,7 +1422,7 @@ P1,S1,3,0.85,negative,monitoring</pre>
         <dl class="glossary">
           <div class="gloss-item"><dt>Driver</dt><dd>An underlying human activity or need, e.g. urban growth, tourism, agriculture.</dd></div>
           <div class="gloss-item"><dt>Pressure</dt><dd>What that activity puts on the environment, e.g. wastewater discharge, overfishing.</dd></div>
-          <div class="gloss-item"><dt>State</dt><dd>The resulting condition of the environment, e.g. water quality, fish stock levels. Convention: name it as a neutral measurement ("Fish stock", not "Fish stock decline") — the direction (good/bad) belongs on the edges, see the Mangi example above.</dd></div>
+          <div class="gloss-item"><dt>State</dt><dd>The resulting condition of the environment, e.g. water quality, fish stock levels. Convention: name it as a neutral measurement ("Fish stock", not "Fish stock decline") — the direction (good/bad) belongs on the edges, see <a href="#conventions">Modeling convention</a>.</dd></div>
           <div class="gloss-item"><dt>Impact</dt><dd>The consequence of that state, e.g. biodiversity loss, public health risk.</dd></div>
           <div class="gloss-item"><dt>Response</dt><dd>A policy or management action addressing any earlier stage in the chain.</dd></div>
           <div class="gloss-item"><dt>Density</dt><dd>How many of the possible connections in the network actually exist — higher means a more tightly linked system.</dd></div>
@@ -1341,6 +1431,7 @@ P1,S1,3,0.85,negative,monitoring</pre>
           <div class="gloss-item"><dt>Sufficiency</dt><dd>Whether a response scenario's mitigation on an Impact is enough to neutralize a pressure scenario's worsening — the primary Scenarios reading, always well-defined regardless of the network's structure.</dd></div>
           <div class="gloss-item"><dt>Neutralized</dt><dd>An Impact's net effect (worsening + mitigation) is zero or negative — the response fully covers the pressure's worsening on that Impact. A positive net, even a small one, means "No."</dd></div>
           <div class="gloss-item"><dt>Temporal simulation</dt><dd>An optional reading that runs a scenario forward window by window (discrete time steps) instead of reading a single instant — useful for seeing whether a response's benefit holds up or erodes over time.</dd></div>
+          <div class="gloss-item"><dt>Verdict</dt><dd>The temporal simulation's per-window label for an Impact — Neutralized, Improved beyond neutral, Partial, or Failure/worsened — judged by the sign of the scenario's value, not its size. Not the same thing as sufficiency's "Neutralized" above; see <a href="#conventions">Reading the Verdict</a>.</dd></div>
           <div class="gloss-item"><dt>Self-regulation</dt><dd>A factor's tendency to return to its own baseline on its own, once nothing is pushing it — e.g. a habitat that recovers. Only affects the optional temporal simulation, not the main sufficiency reading.</dd></div>
           <div class="gloss-item"><dt>Reach</dt><dd>How many factors — and how many Impacts — a response's influence can touch by following the network's links, independent of both the sufficiency and temporal readings.</dd></div>
         </dl>

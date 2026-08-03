@@ -2436,6 +2436,86 @@ ficam pra a próxima etapa (reescrita completa do tutorial/README).
 Suíte `testthat` completa e checagem de sintaxe re-rodadas depois de
 todas as mudanças desta etapa, ambas limpas.
 
+**Quarta e última parte do plano: reescrita do tutorial + README, remoção
+de linguagem de roadmap.** `docs/tutorial.html` ganhou uma seção nova
+inteira, "Modeling convention: orienting nodes and reading signs" (nova
+entrada 4 no sumário, renumerando Example networks/Worked example/Saving/
+Glossary de 4-7 pra 5-8), posicionada **antes** de Example networks —
+pré-requisito pra entender qualquer exemplo, não uma nota lateral dentro
+de um deles. Duas partes: "Step 1 — orient each node" (tabela
+Driver-Pressure/State/Impact, o que "mais" significa em cada um) e "Step
+2 — the edge's sign is mechanical" (tabela das 6 conexões permitidas pelo
+schema com o sinal esperado + o porquê), fechando com o callout "Golden
+rule" (mesmo nó, mesma orientação em toda aresta seguida de "Reading the
+Verdict" — tabela dos 4 vereditos do motor temporal (Neutralized/Improved
+beyond neutral/Partial/Failure-worsened) com a condição exata de cada um,
+e a nota de que o veredito é julgado por sinal, nunca por módulo, pra
+sempre bater com a cor do storyboard.
+
+A nota do Mangi (que já tinha uma explicação de convenção solta, meio
+duplicada) foi **encurtada** pra virar uma referência de volta a essa
+seção nova + a ilustração concreta, em vez de re-derivar o princípio do
+zero — evita as duas versões divergirem com o tempo. A seção do
+Gnanapragasam ganhou um callout novo, "A deliberate exception to the
+neutral-State default", explicando por que `Fleet motorization` foge da
+convenção padrão (orientado "mais é pior" de propósito) sem quebrar a
+regra de ouro (a orientação escolhida ainda vale pra **todas** as arestas
+daquele nó específico) — o Part 3 do plano do usuário, já verificado
+tecnicamente antes desta etapa (ver "Plano externo trazido pelo usuário"
+acima), agora documentado no lugar certo pro leitor. O parágrafo do
+Fisheries teve só a label desatualizada trocada (`Fish stock decline` →
+`Fish stock`) — os números citados (worsening 0.426, mitigation -0.066,
+649% de força necessária) **não mudaram**, confirmado recomputando o
+cenário exato do texto (`D1`@100% pressão, `R1`@100% resposta,
+`scratchpad/verify_fisheries_tutorial_numbers.R`) contra o savepoint já
+corrigido na etapa anterior — bate número por número com o que já estava
+escrito, sem precisar reescrever a narrativa numérica. Glossário ganhou
+uma entrada "Verdict" nova, distinta de "Neutralized" (que continua
+descrevendo o veredito binário da leitura de suficiência, um conceito
+diferente que usa parte do mesmo vocabulário) — e a entrada "State" e a
+descrição do disclosure temporal na referência da aba Scenarios agora
+linkam pra seção nova em vez de duplicar a explicação.
+
+`README.md`: parágrafo "Modeling convention" (Data format) já estava
+correto tecnicamente, só desatualizado na afirmação "All three example
+networks follow this" (agora literalmente verdadeira, não mais
+aspiracional, depois do fix da etapa anterior) — atualizado pra mencionar
+a exceção documentada do Gnanapragasam e linkar pra seção nova do
+tutorial em vez de só "the Mangi example". Removida a seção inteira
+`## Roadmap` (apontava pra `PLANO_iDPSIR.md`, um documento de
+planejamento interno em português) e a nota "`renv`... is still planned"
+— junto com as 3 linhas correspondentes na árvore de arquivos
+(`PLANO_iDPSIR.md`/`ROADMAP_MELHORIAS_iDPSIR.md`/`ROADMAP_FASE9_iDPSIR.md`),
+a pedido explícito do usuário: esta é a primeira versão pública do app,
+e listar documentos de "roadmap"/"ainda planejado" no README lê como "tem
+mais vindo por aí" em vez de "isto é uma versão estável". Os arquivos em
+si **não foram apagados** do repositório (continuam como histórico de
+planejamento interno, só pararam de ser referenciados no README) — decisão
+deliberada, apagar arquivos de planejamento não foi pedido, só a
+linguagem voltada ao usuário. Varredura completa de `README.md` e
+`docs/tutorial.html` por "roadmap"/"planned"/"future"/"coming soon"/
+"TODO" depois do fix: nenhuma ocorrência remanescente fora de prosa
+ilustrativa já revisada (o "not X" de exemplo no parágrafo de convenção,
+e "a future you" no campo `descriptor`, nenhum dos dois sobre o app em
+si).
+
+Verificado ao vivo rodando o app de verdade: `docs/tutorial.html`
+renderizado via `/tutorial/tutorial.html` (não só o arquivo cru) — seção
+nova com 3 tabelas (4/7/5 linhas incluindo cabeçalho) e 1 callout
+próprios, TOC renumerada corretamente (`4 · Modeling convention: signs`
+até `8 · Glossary`), glossário com a entrada "Verdict" presente, 9
+callouts no total na página (confirma o novo do Gnanapragasam também
+renderizou). Screenshot da seção nova confirma formatação consistente
+com o resto do tutorial (mesmas tabelas/tipografia). Suíte `testthat`
+completa e checagem de sintaxe seguem limpas (nenhuma mudança em `R/`
+nesta etapa, só `.md`/`.html`).
+
+Com isso, as quatro partes do plano externo estão completas: (1) Verdict
+corrigido por sinal, (2) escala de cor do storyboard corrigida, (3) os
+três exemplos + `sample_*.csv` padronizados pra Estado neutro (com a
+exceção do Gnanapragasam documentada, não escondida), (4) tutorial e
+README reescritos ensinando a convenção e sem linguagem de versão futura.
+
 ## Próximo
 
 Fase 5 está completa (Marcos A-D). Todos os 4 itens da lista pós-Fase 5 (1:

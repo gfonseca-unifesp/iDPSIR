@@ -101,9 +101,6 @@ iDPSIR/
 ├── tests/
 │   ├── testthat.R             # test runner: Rscript tests/testthat.R
 │   └── testthat/               # tests for the scientific core (loop_analysis, sufficiency, temporal, reach, metrics, io, validate)
-├── PLANO_iDPSIR.md            # restructuring plan and roadmap (in Portuguese)
-├── ROADMAP_MELHORIAS_iDPSIR.md # roadmap towards a JOSS/SoftwareX submission (in Portuguese)
-├── ROADMAP_FASE9_iDPSIR.md    # roadmap for self-regulation and response reach (in Portuguese)
 └── README.md
 ```
 
@@ -140,8 +137,11 @@ configurable, so this order and vocabulary can be adjusted per project.
 it good or bad) belongs on the edges (`interaction_type`), not baked into the node's
 name — naming a State after the problem it's usually associated with quietly assumes
 a sign that can drift out of sync with the actual edges. All three example networks
-follow this; see the Mangi example in the tutorial for a worked illustration of what
-changes (and what doesn't) when a State is renamed neutrally.
+follow this (with one documented, internally-consistent exception in the
+Gnanapragasam network). The app never checks this for you — see the tutorial's
+[Modeling convention](docs/tutorial.html#conventions) section for the full sign table,
+the golden rule that keeps a node's edges consistent, and how to read the temporal
+simulation's Verdict once your signs are in place.
 
 ## Example networks
 
@@ -235,11 +235,3 @@ has four tabs:
 
 A savepoint (`.idpsir.json`) can be downloaded from any step and reloaded later to
 resume a project.
-
-## Roadmap
-
-The full evolution plan (configurable DPSIR schema, wizard interface, savepoint,
-attribute usage, and development phases) is in [`PLANO_iDPSIR.md`](PLANO_iDPSIR.md)
-(in Portuguese).
-
-> Reproducibility: adding `renv` to pin package versions is still planned.
