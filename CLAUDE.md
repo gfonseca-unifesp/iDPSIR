@@ -2280,6 +2280,58 @@ categórico→numérico, bloqueio de preflight fora de [0,1]/não-numérico
 com aceitação do vocabulário antigo) — suíte de `validate` foi de 49 pra
 59 assertivas, suíte completa e checagem de sintaxe seguem limpas.
 
+**Plano externo trazido pelo usuário: convenção de sinais/orientação de
+nó, leitura do Verdict, coerência dos 3 exemplos.** Avaliado tecnicamente
+antes de aceitar (todas as quatro caracterizações de rede do plano
+verificadas linha a linha contra os arquivos reais, não assumidas) —
+confirmadas corretas: Mangi já com Estados neutros (`P→S`/`S→I`
+negativos, `R→S` positivo, sem `Response→Impact`); Fisheries com Estado
+"problema" (`Fish stock decline`, `P→S`/`S→I` positivos — convenção
+oposta à do Mangi, mas internamente consistente); Gnanapragasam com
+mistura deliberada (S1 `Fish stock (CPUE)` neutro, S2 `Fleet
+motorization` "quanto mais pior" de propósito); `data/sample_*.csv` com
+o bug real descrito no plano — Estados nomeados como problema (`Water
+quality decline` etc.) mas `P→S` assinado como se fossem bons (negativo)
+e `S→I` como problema (positivo), o mesmo nó com orientação oposta na
+entrada e na saída.
+
+**Segundo bug real do Verdict, encontrado só ao reavaliar o próprio fix
+da divergência temporal desta sessão** (não visível na primeira rodada de
+testes, porque nenhum deles tinha um cenário onde a resposta ultrapassa
+zero pro lado bom): `format_temporal_table()` julgava o veredito pelo
+**módulo** do valor (`abs(s) < abs(b)` ⇒ "Partial", senão "Failure/
+worsened"), ignorando o sinal — sob a convenção documentada no tutorial
+("Impacto = problema, positivo = pior, negativo = melhor que o neutro"),
+um cenário como baseline=10/scenario=-50 tinha `abs(-50)=50 >= abs(10)=10`
+e caía em "Failure/worsened", quando na verdade é o oposto: a resposta
+não só neutralizou como foi além, deixando o fator melhor que sem
+pressão nenhuma. Confirmado ao vivo contra o cenário real que motivou a
+correção anterior (rede do Mangi, D1+D3 pressão + R2 resposta, ambos
+permanentes): Reef ecosystem degradation na janela 4 (baseline=0.220,
+scenario=-0.209) mostrava "Partial" antes do fix, "Improved beyond
+neutral" depois — e a cor do storyboard (azul = diminuiu) já sempre
+bateu com essa leitura correta, só o rótulo textual estava invertido.
+
+Corrigido julgando pelo **sinal**, não pelo módulo, com um veredito de 4
+vias em vez de 3: `Neutralized` (`|s| ≤ threshold`), `Improved beyond
+neutral` (`s < -threshold` — resposta foi além do necessário),
+`Partial` (`0 < s < b`, ainda problema mas menor que sem resposta),
+`Failure/worsened` (`s ≥ b`, tão ruim ou pior que sem resposta nenhuma).
+Nenhuma UI/relatório tinha o texto dos rótulos hardcoded em lugar
+nenhum (`mod_responses.R`/`report.R` só renderizam o que a tabela já
+traz), então a mudança ficou contida em `R/temporal.R`.
+
+Teste antigo que validava exatamente o comportamento errado (baseline=10/
+scenario=-50 esperando "Failure/worsened") reescrito para o correto
+(`"Improved beyond neutral"`), mais dois casos novos no mesmo teste
+(`Partial` e `Failure/worsened` de verdade, com `s` positivo em ambos) —
+suíte completa (`test-temporal.R`, mesma contagem de blocos, mais
+asserções por teste) e checagem de sintaxe seguem limpas. Testado ao
+vivo de novo contra o mesmo cenário do Mangi: números de suficiência
+estática inalterados (confirma que o bug e o fix ficaram contidos na
+leitura temporal), tabela temporal com o rótulo corrigido, sem erro no
+console do servidor.
+
 ## Próximo
 
 Fase 5 está completa (Marcos A-D). Todos os 4 itens da lista pós-Fase 5 (1:

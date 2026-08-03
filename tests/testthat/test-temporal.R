@@ -258,21 +258,35 @@ test_that("format_temporal_table judges the raw signed value, not a floor-to-zer
   g <- graph_from_data_frame(data.frame(from = character(), to = character()), vertices = nodes, directed = TRUE)
 
   temporal_result <- list(
-    windows = 2,
-    baseline = matrix(c(0, 10, 10), ncol = 1, dimnames = list(NULL, "I1")),
-    scenario = matrix(c(0, -50, 1e-12), ncol = 1, dimnames = list(NULL, "I1"))
+    windows = 4,
+    baseline = matrix(c(0, 10, 10, 10, 10), ncol = 1, dimnames = list(NULL, "I1")),
+    scenario = matrix(c(0, -50, 1e-12, 4, 15), ncol = 1, dimnames = list(NULL, "I1"))
   )
   tbl <- format_temporal_table(g, temporal_result)
 
   # Window 1: scenario overshot to -50, LARGER in magnitude than the
-  # baseline's 10 - genuinely worse, not "neutralized" just because it's
-  # negative (the old floor-to-zero bug would have shown 0/"Neutralized").
+  # baseline's 10 - under the app's convention (Impact = the problem,
+  # positive = worse, ver docs/tutorial.html), a negative Impact means the
+  # response pushed the factor BETTER than the no-response baseline, never
+  # "worse" just because it's large in magnitude. Second real bug, found
+  # only when evaluating a plan the user brought reviewing this exact
+  # table: an earlier version of this fix (see the floor-to-zero fix above)
+  # judged the verdict by abs(s) vs abs(b), which still mislabeled this
+  # exact case "Failure/worsened" - fixed to judge by SIGN, not magnitude.
   expect_equal(tbl$scenario_impact[tbl$window == 1], -50)
-  expect_equal(tbl$verdict[tbl$window == 1], "Failure/worsened")
+  expect_equal(tbl$verdict[tbl$window == 1], "Improved beyond neutral")
 
   # Window 2: scenario is genuinely ~0 (not just negative) - correctly
   # "Neutralized".
   expect_equal(tbl$verdict[tbl$window == 2], "Neutralized")
+
+  # Window 3: scenario=4, baseline=10 - still positive (still a problem)
+  # but smaller than the no-response baseline - "Partial".
+  expect_equal(tbl$verdict[tbl$window == 3], "Partial")
+
+  # Window 4: scenario=15 >= baseline=10 - genuinely at least as bad as no
+  # response at all - "Failure/worsened".
+  expect_equal(tbl$verdict[tbl$window == 4], "Failure/worsened")
 })
 
 test_that("format_temporal_table returns an empty data.frame, not an error, when the graph has no Impact nodes", {

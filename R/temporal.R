@@ -306,12 +306,21 @@ temporal_stability_note <- function(stability) {
 # flor-a-zero escondia essa oscilacao toda vez que x calhava de estar
 # negativo naquela janela especifica, entao a tabela mostrava "Scenario:
 # 0.000, Neutralized" em toda janela, uma ilusao de sucesso permanente
-# construida em cima do mesmo artefato numerico. Mostrando o valor bruto
-# (que pode ser negativo - significa que o cenario moveu esse fator pra
-# ALEM do zero da linha de base, uma leitura em si valida) e julgando o
-# veredito pelo MODULO do valor bruto (nao por "e <= 0"), um valor apenas
-# negativo mas ainda grande em modulo nao e mais confundido com
-# neutralizado.
+# construida em cima do mesmo artefato numerico. Mostra o valor bruto (com
+# sinal) nas duas rodadas.
+#
+# Segundo bug real, corrigido numa revisao posterior (avaliacao de um plano
+# trazido pelo usuario, verificado antes de aceitar - ver CLAUDE.md): a
+# correcao acima ainda julgava o veredito pelo MODULO do valor bruto
+# (`abs(s) < abs(b)` => "Partial", senao "Failure/worsened"), ignorando o
+# SINAL - um cenario que ultrapassa zero pra o lado bom (ex.: baseline=10,
+# scenario=-50, sob a convencao "Impacto = problema, positivo = pior"
+# documentada no tutorial) tinha `abs(-50)=50 >= abs(10)=10`, caindo em
+# "Failure/worsened" quando na verdade e o oposto: a resposta nao so
+# neutralizou como foi ALEM, deixando o fator melhor que o cenario sem
+# pressao nenhuma. Corrigido julgando pelo SINAL, nao pelo modulo: um valor
+# negativo (alem do threshold de ruido numerico) e sempre uma melhora sobre
+# o neutro, nunca uma piora, nao importa quao grande em modulo.
 format_temporal_table <- function(g, temporal_result, threshold = 1e-9) {
   categories <- V(g)$dpsir_category
   is_impact <- !is.null(categories) & categories == "Impact"
@@ -338,7 +347,10 @@ format_temporal_table <- function(g, temporal_result, threshold = 1e-9) {
 
     verdict <- ifelse(
       abs(s) <= threshold, "Neutralized",
-      ifelse(abs(s) < abs(b) - threshold, "Partial", "Failure/worsened")
+      ifelse(
+        s < -threshold, "Improved beyond neutral",
+        ifelse(s >= b - threshold, "Failure/worsened", "Partial")
+      )
     )
 
     data.frame(
