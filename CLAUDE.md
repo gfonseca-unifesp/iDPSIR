@@ -2369,6 +2369,73 @@ teste `testthat` novo (mesmo padrão já estabelecido pra
 `R/scenario_plots.R`/`R/graph.R` — código de desenho verificado ao vivo,
 não por unit test); suíte completa e checagem de sintaxe seguem limpas.
 
+**Terceira parte do plano: Fisheries + `sample_*.csv` padronizados pra
+Estado neutro, como o Mangi.** `docs/example_fisheries.idpsir.json`: S1
+renomeado de "Fish stock decline" pra "Fish stock", `P1→S1` e `S1→I1`
+invertidos de `positive` pra `negative` — editado à mão diretamente no
+JSON (não regenerado via `build_savepoint()`), de propósito: este
+savepoint é mantido **deliberadamente** no formato antigo (ainda com
+`temporal_scale`, sem `self_regulation`/`growth_rate`/etc.) como fixture
+de retrocompatibilidade pra `test-loop_analysis.R`/`test-reach.R`/
+`test-metrics.R` — regenerar via script atual teria apagado essa
+característica proposital.
+
+**Verificado matematicamente antes de aceitar como seguro, não só
+testado depois**: renomear+inverter os dois sinais no mesmo caminho
+causal é uma transformação de similaridade `A' = D·A·D` onde `D` é
+diagonal com `-1` só na posição de S1 (e `1` nas demais) — como
+`D=D⁻¹`, isso preserva os autovalores de `A` exatamente (base de
+`check_stability()`) e, pra qualquer vetor de pressão que não toque S1
+diretamente, preserva bit a bit o efeito de equilíbrio/imediato em
+**todo** nó exceto o próprio S1, que inverte de sinal (esperado — sua
+própria leitura passou pra escala oposta). Confirmado empiricamente
+(`scratchpad/verify_fisheries_flip.R`, comparando contra o conteúdo
+anterior via `git show HEAD:...`): I1 (Fisher income loss) idêntico bit
+a bit (`-0.4667` equilíbrio, `-0.35` imediato, ambos com R1 a 70%),
+autovalores idênticos (rede permanece instável, como sempre foi),
+leitura estática de suficiência idêntica; só o valor de S1 inverteu de
+sinal, exatamente como previsto. Suíte `testthat` completa re-rodada
+depois do fix — nenhum teste hardcoda um valor numérico específico de
+S1 nem depende do sinal de nenhum nó desta rede (confirmado lendo os
+4 arquivos de teste que usam esta fixture antes de editar, não só
+depois) — todos passam sem alteração.
+
+`data/sample_nodes.csv`/`sample_edges.csv` (demo genérico, nunca foi um
+dos 3 exemplos trabalhados — usado só como CSV de referência no README e
+como fixture de `test-sufficiency.R` pra "propagate nunca falha, nem
+nesta rede historicamente singular"): bug real confirmado — os três
+Estados (`Water quality decline`, `Fish stock decline`, `Habitat
+degradation`) tinham nome de problema mas `P→S` assinado como se fossem
+bons (`negative`, mitigando) e `S→I` como problema (`positive`,
+amplificando) — o mesmo nó com orientação oposta na entrada e na saída,
+violando a "regra de ouro" (mesmo nó, mesma orientação em toda aresta).
+Renomeados pra `Water quality`/`Fish stock`/`Habitat quality` (neutro);
+`P→S` já estava `negative` (não precisou mudar); `S→I` invertido de
+`positive` pra `negative` nas 4 arestas que saem de algum Estado
+(`S1→I3`, `S2→I1`, `S2→I2`, `S3→I1`) — agora bate com a convenção do
+Mangi. Verificado com script (`scratchpad/verify_sample_fix.R`):
+preflight de importação sem bloqueio (0 blocking, 1 warning esperado —
+`descriptor` ausente), grafo constrói normalmente, os três Estados agora
+mostram `in=negative` e `out=negative` de forma consistente, e
+`propagate()` continua nunca retornando `NA` nesta rede (a mesma
+regressão já coberta por `test-sufficiency.R`, ainda passando). Esse
+arquivo nunca teve uma leitura numérica "publicada" em lugar nenhum
+(nem tutorial nem README citam um valor específico dele) — só o
+parágrafo "Modeling convention" do README, que já **afirmava** ("All
+three example networks follow this") uma consistência que este arquivo
+ainda não tinha antes deste fix; agora a afirmação é verdadeira de fato,
+não só aspiracional.
+
+`docs/tutorial.html` teve um ajuste pontual de sincronia (o snippet
+`<pre>` de exemplo de CSV de Nós, linha ~669, citava `S1,Water quality
+decline,...` como formato ilustrativo — trocado pra `Water quality`) —
+o resto do texto do tutorial (narrativa do Worked Example de Fisheries,
+que ainda descreve a convenção antiga de sinal pra essa rede) e o README
+ficam pra a próxima etapa (reescrita completa do tutorial/README).
+
+Suíte `testthat` completa e checagem de sintaxe re-rodadas depois de
+todas as mudanças desta etapa, ambas limpas.
+
 ## Próximo
 
 Fase 5 está completa (Marcos A-D). Todos os 4 itens da lista pós-Fase 5 (1:

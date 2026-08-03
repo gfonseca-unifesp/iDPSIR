@@ -65,7 +65,7 @@
     },
     {
       "id": "S1",
-      "label": "Fish stock decline",
+      "label": "Fish stock",
       "dpsir_category": "State",
       "subsystem": "Coastal fisheries",
       "uncertainty": "low",
@@ -106,7 +106,7 @@
       "to": "S1",
       "weight": 3,
       "confidence": 0.85,
-      "interaction_type": "positive",
+      "interaction_type": "negative",
       "evidence_type": "monitoring",
       "reference": "Illustrative citation (not a real source) - Regional Fisheries Catch Monitoring Report, 2023"
     },
@@ -115,7 +115,7 @@
       "to": "I1",
       "weight": 2.5,
       "confidence": 0.8,
-      "interaction_type": "positive",
+      "interaction_type": "negative",
       "evidence_type": "observational",
       "reference": ""
     },
