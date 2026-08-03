@@ -2332,6 +2332,43 @@ estática inalterados (confirma que o bug e o fix ficaram contidos na
 leitura temporal), tabela temporal com o rótulo corrigido, sem erro no
 console do servidor.
 
+**Escala de cor do storyboard corrigida — segunda parte do mesmo plano
+externo.** Confirmado o problema descrito: `draw_temporal_storyboard()`
+(`R/scenario_plots.R`) computava `intensity <- abs(x) / max_abs`
+linearmente, com `max_abs` sendo o maior `|valor|` de **toda** a
+simulação — numa rede divergente (o próprio caso do Mangi que motivou o
+aviso de loop de reforço acima), as últimas janelas podem ser ordens de
+grandeza maiores que as primeiras, então a escala linear pintava as
+janelas iniciais de branco quase puro (intensidade < 0.01), mesmo tendo
+sinal real e legível, enquanto só a última janela ficava saturada.
+Verificado num script standalone antes de aceitar como bug: janela com
+valor 0.22 (Mangi, janela 4) tinha intensidade linear 0.0009 —
+imperceptível — contra `max_abs≈237` (janela 12).
+
+Corrigido com `storyboard_intensity(x, max_abs) = sqrt(|x|/max_abs)`
+(nova função, `R/scenario_plots.R`), compartilhada entre o loop de
+desenho por nó e `draw_storyboard_color_scale()` (a legenda) — a mesma
+função nos dois lugares garante que a cor de um nó e o que a legenda diz
+que aquela cor significa nunca podem divergir. `sqrt()` comprime o topo
+da escala (janelas com valores enormes não dominam tanto) e expande a
+base (valores pequenos mas reais ficam visivelmente distintos de zero) —
+monótona, ainda exatamente 0 em x=0 e 1 em `|x|=max_abs`, então os
+ticks do eixo da legenda (`-max_abs`/`0`/`max_abs`) continuam
+literalmente corretos, só a curva do gradiente entre eles muda. Com o
+mesmo exemplo acima: intensidade de 0.22 sobe de 0.0009 pra 0.03 —
+ainda sutil (é um valor genuinamente pequeno), mas agora visível, não
+mais indistinguível de zero.
+
+Testado ao vivo rodando o app de verdade contra o mesmo cenário do
+Mangi (D1+D3 pressão + R2 resposta, ambos permanentes, 12 janelas):
+screenshot confirma janelas 4-7 mostrando nós em rosa/azul pálido
+claramente visíveis (brancas antes do fix), com saturação crescendo
+progressivamente até a janela 12 (vermelho/azul cheio) — a barra de cor
+lateral com o gradiente completo. Sem erro no console do servidor. Sem
+teste `testthat` novo (mesmo padrão já estabelecido pra
+`R/scenario_plots.R`/`R/graph.R` — código de desenho verificado ao vivo,
+não por unit test); suíte completa e checagem de sintaxe seguem limpas.
+
 ## Próximo
 
 Fase 5 está completa (Marcos A-D). Todos os 4 itens da lista pós-Fase 5 (1:

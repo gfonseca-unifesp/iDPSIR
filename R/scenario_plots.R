@@ -57,6 +57,27 @@ draw_sensitivity_plot <- function(sensitivity, top_n = 10) {
 # A narrow extra column renders the same red/blue scale as a color bar
 # (fast-follow requested after the storyboard shipped: the mapping was only
 # explained in the help text above the plot, not on the figure itself).
+# Color/size intensity for a value against the scale's max |value|, in
+# [0,1]. Real finding, surfaced evaluating a plan the user brought
+# reviewing the storyboard on a diverging network (rede do Mangi): a plain
+# linear `abs(x)/max_abs` is dominated by whichever window ends up with
+# the largest excursion - once a network's temporal simulation diverges
+# (see temporal_stability_note() in R/temporal.R), the LAST windows can be
+# orders of magnitude past the first ones, so the linear scale renders
+# every early window as nearly white (a rounding error next to the huge
+# final ones) even though those early windows are exactly the ones with
+# the clearest, most legible signal. sqrt() compresses the high end
+# (large values stop dominating so completely) while expanding the low
+# end (small-but-real values become visibly distinct from zero) - still
+# monotonic, still exactly 0 at x=0 and 1 at |x|=max_abs, so the color
+# bar's axis ticks (-max_abs/0/max_abs) stay literally true, only the
+# gradient's curve between them changes. Shared by the per-node loop
+# below and draw_storyboard_color_scale() so a node's rendered color and
+# the legend's color-to-value mapping can never drift apart.
+storyboard_intensity <- function(x, max_abs) {
+  pmin(sqrt(pmax(abs(x), 0) / max_abs), 1)
+}
+
 draw_temporal_storyboard <- function(
     g, layout_df, hist_matrix, label_cex = 0.65,
     windows_shown = NULL, panels_per_row = NULL, show_labels = TRUE,
@@ -141,7 +162,7 @@ draw_temporal_storyboard <- function(
 
   for (t in panels) {
     x <- hist_matrix[t + 1, node_order]
-    intensity <- pmin(abs(x) / max_abs, 1)
+    intensity <- storyboard_intensity(x, max_abs)
     node_color <- ifelse(
       x >= 0,
       grDevices::rgb(1, 1 - intensity, 1 - intensity),
@@ -187,7 +208,7 @@ draw_storyboard_color_scale <- function(max_abs) {
 
   n_grad <- 100
   grad_vals <- seq(max_abs, -max_abs, length.out = n_grad)
-  grad_intensity <- pmin(abs(grad_vals) / max_abs, 1)
+  grad_intensity <- storyboard_intensity(grad_vals, max_abs)
   grad_colors <- ifelse(
     grad_vals >= 0,
     grDevices::rgb(1, 1 - grad_intensity, 1 - grad_intensity),
