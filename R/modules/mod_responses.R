@@ -150,7 +150,7 @@ mod_responses_ui <- function(id) {
   )
 }
 
-mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state = NULL, layout_settings = NULL, positions = NULL) {
+mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state = NULL) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
@@ -444,38 +444,16 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
           uiOutput(ns("temporal_stability_note")),
           h5("How each Impact changes, window by window"),
           DTOutput(ns("temporal_table")),
-          h5("Network storyboard"),
+          h5("How each Impact changes over time"),
           p(
             class = "text-muted",
-            "Same layout in every panel (matching the Graph tab's current layout and any dragged positions) -",
-            "only color and size change. Redder = increased from zero in this scenario, bluer = decreased;",
-            "bigger = larger change (see the scale bar on the right). Watch how the pattern spreads or fades",
-            "across windows."
+            "One panel per Impact. The dashed grey line is the baseline (pressure only); the solid line is Net",
+            "(pressure and response together), with each point colored by that window's Verdict. The shaded",
+            "band is the neutralized zone (Net ≤ 0) - a Net point resting in that band means neutralized,",
+            "not merely \"below the baseline\"."
           ),
-          fluidRow(
-            column(3, sliderInput(ns("storyboard_label_cex"), "Label size", min = 0.3, max = 1.5, value = 0.65, step = 0.05)),
-            column(3, checkboxInput(ns("storyboard_show_labels"), "Show labels", value = TRUE)),
-            column(3, sliderInput(ns("storyboard_node_size"), "Node size", min = 0.5, max = 2, value = 1, step = 0.1)),
-            column(3, sliderInput(ns("storyboard_highlight_n"), "Highlight top N most-changed", min = 0, max = 5, value = 0, step = 1))
-          ),
-          fluidRow(
-            column(5, sliderInput(ns("storyboard_window_range"), "Windows to show", min = 0, max = 15, value = c(0, 15), step = 1)),
-            column(3, sliderInput(ns("storyboard_panels_per_row"), "Panels per row (0 = auto)", min = 0, max = 8, value = 0, step = 1)),
-            column(4, selectizeInput(ns("storyboard_category_filter"), "Show only these categories", choices = NULL, multiple = TRUE))
-          ),
-          p(
-            class = "text-muted", style = "font-size: 12.5px;",
-            "\"Show only these categories\" also keeps whatever feeds directly into a shown factor, so an Impact",
-            "never appears with no trace of what's causing it."
-          ),
-          plotOutput(ns("temporal_storyboard"), height = "600px"),
-          plot_download_row(ns, "temporal_storyboard"),
-          tags$hr(),
-          fluidRow(
-            column(4, numericInput(ns("storyboard_export_window"), "Export a single window", value = 0, min = 0, step = 1)),
-            column(4, downloadButton(ns("download_temporal_storyboard_window_png"), "Download PNG", class = "btn-sm", width = "100%")),
-            column(4, downloadButton(ns("download_temporal_storyboard_window_svg"), "Download SVG", class = "btn-sm", width = "100%"))
-          )
+          plotOutput(ns("temporal_chart"), height = "600px"),
+          plot_download_row(ns, "temporal_chart")
         )
       )
     })
@@ -559,138 +537,48 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
         formatRound(columns = c("Baseline", "Net"), digits = 3)
     })
 
-    # Populates "Show only these categories" once the schema is known, all
-    # selected by default (draw_temporal_storyboard() treats "every
-    # category selected" the same as "no filter" - see its own comment).
-    observeEvent(schema(), {
-      categories <- schema_categories(schema())
-      updateSelectizeInput(session, "storyboard_category_filter", choices = categories, selected = categories)
-    })
-
-    # Same layout the Graph tab is currently showing (layout mode, spacing,
-    # and any manually-dragged positions) - see compute_effective_layout()
-    # in R/graph.R, the single source of truth both tabs draw from, and
-    # CLAUDE.md's "storyboard vs Graph tab" feasibility note for why this
-    # is the one thing worth keeping in sync (color is deliberately NOT
-    # shared - the storyboard colors by value-over-time on purpose).
-    # `layout_settings`/`positions` are optional (NULL when this module is
-    # used standalone/tested) - fall back to the Graph tab's own defaults.
-    temporal_layout <- reactive({
-      req(graph())
-      ls <- if (is.null(layout_settings)) NULL else layout_settings()
-      manual_positions <- if (is.null(positions)) NULL else positions()
-      compute_effective_layout(
-        nodes(), schema(),
-        layout_mode = ls$layout_mode %||% "layered",
-        x_spacing = ls$x_spacing %||% 200,
-        y_spacing = ls$y_spacing %||% 80,
-        manual_positions = manual_positions
-      )
-    })
-
-    # Shared by the on-screen plot and every download handler (whole-board
-    # and single-window) so a control never affects one output but not
-    # another. `windows_shown = NULL` means "everything the simulation
-    # computed" - the slider's own upper bound already tracks
-    # `temporal_windows`, but clamping isn't needed here since
-    # draw_temporal_storyboard() already intersects against what actually
-    # exists.
-    storyboard_args <- reactive({
-      list(
-        label_cex = input$storyboard_label_cex,
-        show_labels = isTRUE(input$storyboard_show_labels),
-        node_size_scale = input$storyboard_node_size,
-        category_filter = input$storyboard_category_filter,
-        highlight_top_n = input$storyboard_highlight_n,
-        panels_per_row = input$storyboard_panels_per_row,
-        windows_shown = seq(input$storyboard_window_range[1], input$storyboard_window_range[2])
-      )
-    })
-
-    draw_storyboard_with <- function(hist_matrix, args, windows_override = NULL) {
-      a <- args
-      if (!is.null(windows_override)) a$windows_shown <- windows_override
-      do.call(draw_temporal_storyboard, c(list(g = graph(), layout_df = temporal_layout(), hist_matrix = hist_matrix), a))
-    }
-
-    # Grid size (for PNG/SVG pixel dimensions) has to mirror exactly what
-    # draw_temporal_storyboard() itself will compute - duplicated here
-    # deliberately kept minimal (same two lines the function uses
-    # internally) rather than having the drawing function report its own
-    # grid back, which would mean rendering twice.
-    storyboard_grid_size <- function(n_panels, panels_per_row) {
-      ncol_grid <- if (is.null(panels_per_row) || panels_per_row < 1) ceiling(sqrt(n_panels)) else min(panels_per_row, n_panels)
-      nrow_grid <- ceiling(n_panels / ncol_grid)
-      list(ncol = ncol_grid, nrow = nrow_grid)
-    }
-
-    output$temporal_storyboard <- renderPlot({
+    # Revisao 1 (guia externo sobre o relatorio como material
+    # suplementar): substitui o storyboard de paineis-de-rede por um
+    # grafico de linha por Impacto (plot_temporal_storyboard(), novo em
+    # R/scenario_plots.R) - ver o motivo real (nao so' estetico) no
+    # cabecalho daquela funcao. Nao precisa mais de layout/posicoes do
+    # grafo (o grafico e' so' valor x janela, sem rede desenhada), entao
+    # `temporal_layout`/`layout_settings`/`positions` (que so' existiam
+    # pra alimentar o storyboard antigo) saem daqui e do restante da
+    # cadeia (mod_graph.R's retorno, mod_wizard.R, R/report.R,
+    # mod_report.R) - nenhum outro consumidor os usava.
+    temporal_chart_df <- reactive({
       tr <- temporal_result()
       req(tr)
-      draw_storyboard_with(tr$scenario, storyboard_args())
+      format_temporal_table(graph(), tr)
     })
 
-    output$download_temporal_storyboard_png <- downloadHandler(
-      filename = function() paste0("temporal_storyboard_", Sys.Date(), ".png"),
-      content = function(file) {
-        tr <- temporal_result()
-        req(tr)
-        args <- storyboard_args()
-        grid <- storyboard_grid_size(length(args$windows_shown), args$panels_per_row)
-        render_plot_png(
-          function() draw_storyboard_with(tr$scenario, args),
-          file, width = 260 * (grid$ncol + 0.35), height = 260 * grid$nrow
-        )
-      }
-    )
-
-    output$download_temporal_storyboard_svg <- downloadHandler(
-      filename = function() paste0("temporal_storyboard_", Sys.Date(), ".svg"),
-      content = function(file) {
-        tr <- temporal_result()
-        req(tr)
-        args <- storyboard_args()
-        grid <- storyboard_grid_size(length(args$windows_shown), args$panels_per_row)
-        render_plot_svg(
-          function() draw_storyboard_with(tr$scenario, args),
-          file, width = 2.7 * (grid$ncol + 0.35), height = 2.7 * grid$nrow
-        )
-      }
-    )
-
-    # Clamped (not just passed through) so a window number the user typed
-    # past what was actually simulated can't fall through to
-    # draw_temporal_storyboard()'s own "nothing matched, show everything"
-    # fallback (correct for the main plot, where showing everything beats
-    # showing nothing - wrong here, where it would silently squeeze every
-    # panel into the single-panel image size below instead of exporting
-    # the one window asked for).
-    single_export_window <- reactive({
+    output$temporal_chart <- renderPlot({
       tr <- temporal_result()
       req(tr)
-      pmin(pmax(input$storyboard_export_window, 0), nrow(tr$scenario) - 1)
+      plot_temporal_storyboard(temporal_chart_df(), reinforcing_warning = isTRUE(tr$stability$unbounded))
     })
 
-    output$download_temporal_storyboard_window_png <- downloadHandler(
-      filename = function() paste0("temporal_storyboard_window_", single_export_window(), "_", Sys.Date(), ".png"),
+    output$download_temporal_chart_png <- downloadHandler(
+      filename = function() paste0("temporal_chart_", Sys.Date(), ".png"),
       content = function(file) {
         tr <- temporal_result()
         req(tr)
         render_plot_png(
-          function() draw_storyboard_with(tr$scenario, storyboard_args(), windows_override = single_export_window()),
-          file, width = 260 * 1.35, height = 260
+          function() plot_temporal_storyboard(temporal_chart_df(), reinforcing_warning = isTRUE(tr$stability$unbounded)),
+          file, width = 900, height = 700
         )
       }
     )
 
-    output$download_temporal_storyboard_window_svg <- downloadHandler(
-      filename = function() paste0("temporal_storyboard_window_", single_export_window(), "_", Sys.Date(), ".svg"),
+    output$download_temporal_chart_svg <- downloadHandler(
+      filename = function() paste0("temporal_chart_", Sys.Date(), ".svg"),
       content = function(file) {
         tr <- temporal_result()
         req(tr)
         render_plot_svg(
-          function() draw_storyboard_with(tr$scenario, storyboard_args(), windows_override = single_export_window()),
-          file, width = 2.7 * 1.35, height = 2.7
+          function() plot_temporal_storyboard(temporal_chart_df(), reinforcing_warning = isTRUE(tr$stability$unbounded)),
+          file, width = 9.4, height = 7.3
         )
       }
     )

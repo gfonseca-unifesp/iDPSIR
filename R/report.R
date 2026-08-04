@@ -55,9 +55,7 @@ build_full_report_html <- function(
     saved_scenarios = list(),
     selected_scenario_names = character(),
     include_reproducibility = FALSE,
-    include_temporal_section = FALSE,
-    layout_settings = NULL,
-    positions = NULL
+    include_temporal_section = FALSE
 ) {
   # Sequential "Figure N"/"Table N" numbering across the whole report, plus
   # a caption paragraph under each - both requested so the report reads like
@@ -291,32 +289,19 @@ build_full_report_html <- function(
       )
     ))
 
-    # Revisao 1, Fase 7: temporal simulation section - one storyboard + one
-    # window-by-window table per selected scenario. Re-simulates from
-    # sc$p_D/sc$press/sc$temporal_* (captured at "Save this scenario" time,
-    # R/modules/mod_responses.R) rather than storing the whole windows x
-    # nodes history in the scenario object, same "recompute from stored
-    # config" pattern already used for the trajectory chart above. The
-    # layout is computed once (not per scenario) - every panel of every
-    # scenario's storyboard shares the same node positions as the Graph tab.
+    # Revisao 1, Fase 7 (guia externo sobre o relatorio como material
+    # suplementar, revisado depois): secao de simulacao temporal - um
+    # grafico de linha por Impacto (plot_temporal_storyboard(), R/scenario_plots.R)
+    # + uma tabela janela-a-janela por cenario selecionado. Re-simula a
+    # partir de sc$p_D/sc$press/sc$temporal_* (capturados em "Save this
+    # scenario" - R/modules/mod_responses.R) em vez de guardar o historico
+    # inteiro (janelas x nos) no objeto do cenario, mesmo padrao "recompute
+    # a partir da config guardada" ja usado pelo grafico de trajetoria
+    # acima. O grafico de linha nao precisa de layout/posicoes do grafo
+    # (e' so' valor x janela) - `layout_settings`/`positions`, usados so'
+    # pelo storyboard de paineis-de-rede antigo, saem da assinatura desta
+    # funcao junto com ele.
     if (isTRUE(include_temporal_section)) {
-      # Same layout the Graph tab is currently showing (layout mode,
-      # spacing, and any manually-dragged positions) - see
-      # compute_effective_layout() in R/graph.R and mod_responses.R's
-      # temporal_layout for the same pattern already used on-screen.
-      # `layout_settings`/`positions` are optional (NULL when this is
-      # called outside the wizard, e.g. from a script) - falls back to
-      # the same defaults compute_effective_layout() itself uses.
-      ls <- if (is.null(layout_settings)) NULL else layout_settings()
-      manual_positions <- if (is.null(positions)) NULL else positions()
-      temporal_layout <- compute_effective_layout(
-        graph_to_nodes(graph), schema,
-        layout_mode = ls$layout_mode %||% "layered",
-        x_spacing = ls$x_spacing %||% 200,
-        y_spacing = ls$y_spacing %||% 80,
-        manual_positions = manual_positions
-      )
-
       temporal_sections <- lapply(selected_scenario_names, function(scenario_name) {
         sc <- saved_scenarios[[scenario_name]]
         tr <- simulate_temporal_pair(
@@ -329,10 +314,16 @@ build_full_report_html <- function(
         stability_note <- temporal_stability_note(tr$stability)
         note_tag <- if (!is.null(stability_note)) tags$p(class = "report-warning", stability_note) else NULL
 
-        table_df <- format_temporal_table(graph, tr)
-        table_tag <- if (nrow(table_df) == 0) {
+        # Computado uma unica vez - alimenta tanto o grafico (colunas
+        # node/baseline_impact/net_impact/verdict, como
+        # format_temporal_table() as devolve) quanto a tabela em HTML
+        # (renomeadas pra exibicao logo abaixo).
+        raw_df <- format_temporal_table(graph, tr)
+
+        table_tag <- if (nrow(raw_df) == 0) {
           tags$p("No Impact factors in this network yet.")
         } else {
+          table_df <- raw_df
           table_df$id <- NULL
           # "Net" (not "Scenario") - same vocabulary as the sufficiency
           # table's Worsening/Mitigation/Net columns, see the rename note
@@ -343,7 +334,7 @@ build_full_report_html <- function(
             caption_tag(
               "Table", next_table_n(),
               sprintf(
-                "For \"%s\": how each Impact factor changes window by window, comparing a baseline run (pressure only) against the scenario run (pressure and response together) over %d discrete windows.",
+                "For \"%s\": how each Impact factor changes window by window, comparing a baseline run (pressure only) against the net run (pressure and response together) over %d discrete windows.",
                 scenario_name, tr$windows
               )
             )
@@ -351,8 +342,8 @@ build_full_report_html <- function(
         }
 
         img_uri <- plot_to_data_uri(
-          function() draw_temporal_storyboard(graph, temporal_layout, tr$scenario),
-          width = 900, height = 900
+          function() plot_temporal_storyboard(raw_df, reinforcing_warning = isTRUE(tr$stability$unbounded)),
+          width = 900, height = 700
         )
 
         tagList(
@@ -363,7 +354,7 @@ build_full_report_html <- function(
           caption_tag(
             "Figure", next_figure_n(),
             sprintf(
-              "For \"%s\": one panel per discrete time window (same layout throughout) - node color shows whether that factor increased (redder) or decreased (bluer) from zero in this scenario, size shows how large the change is.",
+              "For \"%s\": one panel per Impact - dashed line is the baseline (pressure only), solid line is Net (pressure and response together), points colored by that window's Verdict, shaded band is the neutralized zone (Net ≤ 0).",
               scenario_name
             )
           )
