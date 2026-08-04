@@ -334,7 +334,10 @@ build_full_report_html <- function(
           tags$p("No Impact factors in this network yet.")
         } else {
           table_df$id <- NULL
-          names(table_df) <- c("Impact", "Window", "Baseline", "Scenario", "Verdict")
+          # "Net" (not "Scenario") - same vocabulary as the sufficiency
+          # table's Worsening/Mitigation/Net columns, see the rename note
+          # above format_temporal_table() in R/temporal.R.
+          names(table_df) <- c("Impact", "Window", "Baseline", "Net", "Verdict")
           tagList(
             report_html_table(table_df),
             caption_tag(

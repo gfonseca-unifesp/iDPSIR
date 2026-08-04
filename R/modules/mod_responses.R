@@ -541,7 +541,10 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
       }
 
       df$id <- NULL
-      names(df) <- c("Impact", "Window", "Baseline", "Scenario", "Verdict")
+      # "Net" (not "Scenario") - same vocabulary as the sufficiency table's
+      # Worsening/Mitigation/Net columns, see the rename note above
+      # format_temporal_table() in R/temporal.R.
+      names(df) <- c("Impact", "Window", "Baseline", "Net", "Verdict")
 
       # Real bug, found live testing the Gnanapragasam example (Fase 9, 5
       # Impact nodes): row count here is windows x Impacts, genuinely
@@ -553,7 +556,7 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
       # window past window 2, even though the simulation itself (checked via
       # the storyboard's own panel count) had correctly computed all of them.
       datatable(df, rownames = FALSE, options = list(dom = "tp", pageLength = 15)) %>%
-        formatRound(columns = c("Baseline", "Scenario"), digits = 3)
+        formatRound(columns = c("Baseline", "Net"), digits = 3)
     })
 
     # Populates "Show only these categories" once the schema is known, all

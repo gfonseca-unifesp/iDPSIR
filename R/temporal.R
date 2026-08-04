@@ -321,6 +321,19 @@ temporal_stability_note <- function(stability) {
 # pressao nenhuma. Corrigido julgando pelo SINAL, nao pelo modulo: um valor
 # negativo (alem do threshold de ruido numerico) e sempre uma melhora sobre
 # o neutro, nunca uma piora, nao importa quao grande em modulo.
+#
+# Coluna renomeada de `scenario_impact` pra `net_impact` (guia externo
+# trazido pelo usuario sobre o relatorio como material suplementar,
+# CLAUDE.md): a mesma grandeza (pressao+resposta combinadas) ja se chama
+# `Net` na tabela de suficiencia (`format_sufficiency_table()`,
+# R/sufficiency.R) - "Scenario" nesta tabela era um nome diferente pra a
+# mesma coisa, incoerencia de vocabulario entre as duas leituras.
+# `baseline_impact` nao muda de nome (so a coluna pressao+resposta e'
+# renomeada). O historico de matrizes cru em simulate_temporal_pair()
+# (`list(baseline=, scenario=)`) fica como esta de proposito - nao e' uma
+# "coluna" exposta ao usuario, e' o array interno consumido em ~10 lugares
+# (storyboard antigo, downloads, relatorio); renomear so a saida desta
+# funcao ja resolve a incoerencia de vocabulario com risco bem menor.
 format_temporal_table <- function(g, temporal_result, threshold = 1e-9) {
   categories <- V(g)$dpsir_category
   is_impact <- !is.null(categories) & categories == "Impact"
@@ -328,7 +341,7 @@ format_temporal_table <- function(g, temporal_result, threshold = 1e-9) {
 
   empty <- data.frame(
     id = character(), node = character(), window = integer(),
-    baseline_impact = numeric(), scenario_impact = numeric(),
+    baseline_impact = numeric(), net_impact = numeric(),
     verdict = character(), stringsAsFactors = FALSE
   )
   if (length(impact_ids) == 0) {
@@ -355,7 +368,7 @@ format_temporal_table <- function(g, temporal_result, threshold = 1e-9) {
 
     data.frame(
       id = impact_ids, node = impact_labels, window = t,
-      baseline_impact = unname(b), scenario_impact = unname(s),
+      baseline_impact = unname(b), net_impact = unname(s),
       verdict = verdict, stringsAsFactors = FALSE
     )
   })

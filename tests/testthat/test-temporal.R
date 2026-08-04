@@ -229,18 +229,21 @@ test_that("format_temporal_table reports the response's benefit shrinking over w
   tbl <- format_temporal_table(g, result)
 
   expect_equal(nrow(tbl), 9) # windows 0..8, one Impact node (I1)
-  expect_true(all(c("id", "node", "window", "baseline_impact", "scenario_impact", "verdict") %in% names(tbl)))
+  expect_true(all(c("id", "node", "window", "baseline_impact", "net_impact", "verdict") %in% names(tbl)))
+  # Hard regression guard (Revisao 1, "Net" rename): the old column name
+  # must never come back.
+  expect_false("scenario_impact" %in% names(tbl))
 
   # R1's own feedback into D1 (the "response becomes new pressure" loop)
   # never fully reverses the benefit within these 8 windows in this toy
   # network, but its RELATIVE benefit erodes visibly - full neutralization
   # early (window 2), only partial mitigation by window 8, and the
-  # scenario/baseline ratio grows from 0 to 0.6 - confirmed against
+  # net/baseline ratio grows from 0 to 0.6 - confirmed against
   # scratchpad/test_temporal.R's full run before writing this, not assumed.
   expect_equal(tbl$verdict[tbl$window == 2], "Neutralized")
   expect_equal(tbl$verdict[tbl$window == 8], "Partial")
-  ratio_w7 <- tbl$scenario_impact[tbl$window == 7] / tbl$baseline_impact[tbl$window == 7]
-  ratio_w8 <- tbl$scenario_impact[tbl$window == 8] / tbl$baseline_impact[tbl$window == 8]
+  ratio_w7 <- tbl$net_impact[tbl$window == 7] / tbl$baseline_impact[tbl$window == 7]
+  ratio_w8 <- tbl$net_impact[tbl$window == 8] / tbl$baseline_impact[tbl$window == 8]
   expect_true(ratio_w8 > ratio_w7) # mitigation getting weaker window over window
 })
 
@@ -273,7 +276,7 @@ test_that("format_temporal_table judges the raw signed value, not a floor-to-zer
   # table: an earlier version of this fix (see the floor-to-zero fix above)
   # judged the verdict by abs(s) vs abs(b), which still mislabeled this
   # exact case "Failure/worsened" - fixed to judge by SIGN, not magnitude.
-  expect_equal(tbl$scenario_impact[tbl$window == 1], -50)
+  expect_equal(tbl$net_impact[tbl$window == 1], -50)
   expect_equal(tbl$verdict[tbl$window == 1], "Improved beyond neutral")
 
   # Window 2: scenario is genuinely ~0 (not just negative) - correctly
