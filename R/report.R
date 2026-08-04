@@ -55,7 +55,9 @@ build_full_report_html <- function(
     saved_scenarios = list(),
     selected_scenario_names = character(),
     include_reproducibility = FALSE,
-    include_temporal_section = FALSE
+    include_temporal_section = FALSE,
+    metadata = NULL,
+    savepoint_filename = NULL
 ) {
   # Sequential "Figure N"/"Table N" numbering across the whole report, plus
   # a caption paragraph under each - both requested so the report reads like
@@ -68,110 +70,115 @@ build_full_report_html <- function(
     tags$p(class = "report-caption", tags$strong(paste0(prefix, " ", n, ". ")), text)
   }
 
+  # Recaps one scenario's pressure/response/c as text - used both by the
+  # provenance header's "Scenario definitions" table below and by
+  # "Response sufficiency"'s own per-scenario line further down, so the two
+  # can never describe the same scenario two different ways.
+  scenario_definition_text <- function(sc) {
+    pressure_text <- if (length(sc$pressure_active) == 0) {
+      "none (no pressure scenario)"
+    } else {
+      paste(sprintf("%s at %d%%", sc$pressure_active, round(sc$pressure_strengths[sc$pressure_active])), collapse = ", ")
+    }
+    response_text <- paste(sprintf("%s at %d%%", sc$active, round(sc$strengths[sc$active])), collapse = ", ")
+    list(pressure = pressure_text, response = response_text, c = sc$effect_horizon %||% 0.5)
+  }
+
   sections <- list(
     tags$h1("iDPSIR - Report"),
     tags$style(HTML(REPORT_CSS)),
     tags$p(class = "meta", paste("Generated on", format(Sys.time(), "%Y-%m-%d %H:%M")))
   )
 
-  if (length(selected_snapshot_names) > 0 && length(graph_snapshots) > 0) {
-    snapshot_sections <- lapply(selected_snapshot_names, function(snapshot_name) {
-      snap <- graph_snapshots[[snapshot_name]]
-      tagList(
-        tags$h3(snapshot_name),
-        tags$img(class = "report-graph-image", src = snap$image),
-        caption_tag("Figure", next_figure_n(), snap$caption)
-      )
-    })
-
-    sections <- c(sections, list(tags$h2("Network graph")), snapshot_sections)
-  }
-
-  if (isTRUE(include_general)) {
-    sections <- c(sections, list(
-      tags$h2("General metrics"),
-      report_html_table(compute_general_metrics(graph)),
-      caption_tag(
-        "Table", next_table_n(),
-        "Network-level metrics (density, diameter, transitivity, modularity, number of connected components) computed over the full built graph."
-      )
-    ))
-  }
-
-  if (isTRUE(include_centralities)) {
-    params_text <- sprintf(
-      "Computed with: %s, %s, %s.",
-      if (isTRUE(centrality_params$directed)) "directed graph" else "undirected graph",
-      if (isTRUE(centrality_params$normalized)) "normalized scores" else "raw (non-normalized) scores",
-      if (isTRUE(centrality_params$weighted)) "weighted by edge weight (link strength)" else "unweighted (topology only)"
-    )
-
-    sections <- c(sections, list(
-      tags$h2("Centralities"),
-      report_html_table(compute_all_metrics(
-        graph,
-        directed = isTRUE(centrality_params$directed),
-        normalized = isTRUE(centrality_params$normalized),
-        weighted = isTRUE(centrality_params$weighted)
-      )),
-      caption_tag(
-        "Table", next_table_n(),
-        paste("Node centrality measures (degree, betweenness, closeness, PageRank, eigenvector centrality).", params_text)
-      )
-    ))
-  }
-
-  if (isTRUE(include_descriptors)) {
-    d <- compute_dpsir_descriptors(graph, schema)
-
-    sections <- c(sections, list(
-      tags$h2("DPSIR descriptors"),
-      tags$h3("Nodes by category"),
-      report_html_table(d$count_by_category),
-      caption_tag("Table", next_table_n(), "Number of nodes per DPSIR category in the built graph."),
-      tags$h3("Transitions (edges by source -> target category)"),
-      report_html_table(d$transitions),
-      caption_tag("Table", next_table_n(), "Number of edges observed between each pair of DPSIR categories (source -> target)."),
-      tags$h3("Category x category matrix"),
-      report_html_table(matrix_to_report_df(d$transition_matrix)),
-      caption_tag("Table", next_table_n(), "Same edge counts as the transitions table above, arranged as a source (row) x target (column) matrix."),
-      tags$p(
-        tags$strong("Impacts without Response: "),
-        if (length(d$impacts_without_response) == 0) "none" else paste(d$impacts_without_response, collapse = ", ")
-      ),
-      tags$p(
-        tags$strong("Pressures not covered by Response: "),
-        if (length(d$pressures_without_response) == 0) "none" else paste(d$pressures_without_response, collapse = ", ")
-      ),
-      tags$h3("Average uncertainty/controllability by category (0 = low, 1 = high)"),
-      report_html_table(d$averages_by_category),
-      caption_tag("Table", next_table_n(), "Mean uncertainty and controllability score per DPSIR category, on a 0 (low) to 1 (high) scale.")
-    ))
-
-    dp <- compute_all_driver_impact_pathways(graph, schema)
-    if (isTRUE(dp$available)) {
-      truncated_note <- if (isTRUE(dp$truncated)) {
-        sprintf(" Showing the first %d pathways found - this network may have more.", nrow(dp$table))
-      } else {
-        ""
-      }
-
-      pathways_df <- dp$table[, c("nodes", "length", "score")]
-      names(pathways_df) <- c("Pathway", "Length (nodes)", "Score")
-
-      sections <- c(sections, list(
-        tags$h3("All Driver-to-Impact pathways"),
-        report_html_table(pathways_df),
-        caption_tag(
-          "Table", next_table_n(),
-          paste0(
-            "Every simple causal chain from a Driver to an Impact in this network, ranked by score ",
-            "(mean edge weight x mean confidence x number of links).", truncated_note
-          )
-        )
-      ))
+  # C.1 Provenance header (guia externo sobre o relatorio como material
+  # suplementar) - sempre presente (nao atras de checkbox algum: e' barato
+  # de montar e o objetivo e' todo relatorio abrir com isso, nao importa
+  # quais secoes de analise o usuario tenha escolhido), logo apos o
+  # cabecalho, antes de qualquer analise. `metadata` (project_name/author/
+  # created_at/updated_at/notes, ja existem em todo savepoint - R/io.R)
+  # e `savepoint_filename` (nome do arquivo original, capturado so' no
+  # momento de "Load savepoint" - NULL em New project/Import CSV/Combine
+  # savepoints, onde nao ha um unico arquivo de origem) sao opcionais -
+  # o cabecalho so' mostra o que existir. Nao inventa um numero de versao
+  # do app (nao existe ainda - item 6.1 do roadmap de publicacao segue em
+  # aberto): aponta pra "Reproducibility" (fim do relatorio) pra isso.
+  meta_rows <- list()
+  if (!is.null(metadata)) {
+    if (!is.null(metadata$project_name) && nzchar(metadata$project_name)) {
+      meta_rows <- c(meta_rows, list(tags$p(tags$strong("Network: "), metadata$project_name)))
+    }
+    if (!is.null(metadata$author) && nzchar(metadata$author)) {
+      meta_rows <- c(meta_rows, list(tags$p(tags$strong("Author: "), metadata$author)))
+    }
+    if (!is.null(metadata$notes) && nzchar(metadata$notes)) {
+      meta_rows <- c(meta_rows, list(tags$p(tags$strong("Notes: "), metadata$notes)))
+    }
+    if (!is.null(metadata$created_at) && nzchar(metadata$created_at)) {
+      meta_rows <- c(meta_rows, list(tags$p(
+        tags$strong("Savepoint created: "), metadata$created_at,
+        " - last updated: ", metadata$updated_at %||% metadata$created_at
+      )))
     }
   }
+  if (!is.null(savepoint_filename) && nzchar(savepoint_filename)) {
+    meta_rows <- c(meta_rows, list(tags$p(tags$strong("Savepoint file: "), savepoint_filename)))
+  }
+
+  scenario_def_rows <- if (length(selected_scenario_names) > 0 && length(saved_scenarios) > 0) {
+    do.call(rbind, lapply(selected_scenario_names, function(scenario_name) {
+      d <- scenario_definition_text(saved_scenarios[[scenario_name]])
+      data.frame(Scenario = scenario_name, Pressure = d$pressure, Response = d$response, c = d$c, stringsAsFactors = FALSE)
+    }))
+  } else {
+    NULL
+  }
+
+  sections <- c(sections, list(tags$h2("Report summary")), meta_rows)
+  if (!is.null(scenario_def_rows)) {
+    sections <- c(sections, list(
+      report_html_table(scenario_def_rows),
+      caption_tag(
+        "Table", next_table_n(),
+        "Definition of each selected scenario: which Drivers/Pressures are pushed (and how strongly), which Responses are applied (and how strongly), and how far the effect is traced (c)."
+      )
+    ))
+  }
+  sections <- c(sections, list(
+    tags$p(
+      class = "meta",
+      "See \"Reproducibility\" at the end of this report for the R/package versions and the random seed/",
+      "simulation count behind every resampling-based number above."
+    )
+  ))
+
+  # C.2 Interpretation legend - always shown, once, right after the header.
+  # This (not a second sign-convention explanation buried in a caption
+  # somewhere) is what prevents the baseline-vs-zero misreading that
+  # motivated replacing the old node-panel storyboard (see
+  # R/scenario_plots.R's plot_temporal_storyboard()).
+  sections <- c(sections, list(
+    tags$h2("How to read these results"),
+    tags$div(
+      class = "report-warning",
+      tags$p(
+        tags$strong("Sign convention: "), "+ means the Impact worsens, − means it improves. An Impact is ",
+        tags$strong("neutralized"), " when its net effect is ", tags$strong("≤ 0"),
+        " (the shaded zone in the temporal figures below) - being merely below the baseline means the response helps, not that the Impact is neutralized."
+      ),
+      tags$p(
+        tags$strong("Per-window Verdict colors: "),
+        tags$span(style = "color: #1b8a3a; font-weight: bold;", "green"), " = improved/neutralized (≤ 0), ",
+        tags$span(style = "color: #e0a100; font-weight: bold;", "amber"), " = partial (helped but still > 0), ",
+        tags$span(style = "color: #c0392b; font-weight: bold;", "red"), " = failure (at or above baseline)."
+      )
+    )
+  ))
+
+  # C.3: results-first section order for a supplement - Response
+  # sufficiency (primary reading) -> Reach + Temporal simulation ->
+  # References -> Network characterization (appendix, demoted from where
+  # it used to open the report) -> Reproducibility (stays last, it's about
+  # the report itself, not the network).
 
   # Revisao 1, Fase 3: the sufficiency reading (R/sufficiency.R), one
   # subsection per selected scenario - the primary reading, matching the
@@ -190,12 +197,7 @@ build_full_report_html <- function(
         return(NULL)
       }
 
-      pressure_text <- if (length(sc$pressure_active) == 0) {
-        "none (no pressure scenario)"
-      } else {
-        paste(sprintf("%s at %d%%", sc$pressure_active, round(sc$pressure_strengths[sc$pressure_active])), collapse = ", ")
-      }
-      response_text <- paste(sprintf("%s at %d%%", sc$active, round(sc$strengths[sc$active])), collapse = ", ")
+      scenario_def <- scenario_definition_text(sc)
 
       suff_table <- format_sufficiency_table(sc$sufficiency_df, sc$active, sc$strengths)
       reach_table <- format_reach_over_c_table(sc$sufficiency_reach_over_c)
@@ -203,9 +205,9 @@ build_full_report_html <- function(
       tagList(
         tags$h4(scenario_name),
         tags$p(
-          tags$strong("Pressure: "), pressure_text, tags$br(),
-          tags$strong("Response: "), response_text, tags$br(),
-          tags$strong("How far the effect was traced (c): "), sc$effect_horizon %||% 0.5
+          tags$strong("Pressure: "), scenario_def$pressure, tags$br(),
+          tags$strong("Response: "), scenario_def$response, tags$br(),
+          tags$strong("How far the effect was traced (c): "), scenario_def$c
         ),
         report_html_table(suff_table),
         caption_tag(
@@ -219,7 +221,7 @@ build_full_report_html <- function(
         caption_tag(
           "Table", next_table_n(),
           sprintf(
-            "For \"%s\"'s pressure scenario: every response in the network evaluated alone at full strength - percentage of simulations (resampling each edge's weight within a range set by its confidence) in which that response alone neutralizes each Impact.",
+            "For \"%s\"'s pressure scenario: every response in the network evaluated alone at full strength (\"neutralization confidence\") - percentage of simulations (resampling each edge's weight within a range set by its confidence) in which that response alone neutralizes each Impact.",
             scenario_name
           )
         ),
@@ -394,6 +396,118 @@ build_full_report_html <- function(
         )
       ))
     }
+  }
+
+  # C.3: "Network characterization (appendix)" - the network graph image,
+  # general metrics, centralities and DPSIR descriptors used to open the
+  # report (descriptive-first); demoted here for a supplement, where the
+  # decision outputs above (sufficiency/reach/temporal) are what a reader
+  # wants first. Nothing here is recomputed differently - same functions,
+  # same flags, just moved and demoted from h2 to h3 under one shared
+  # appendix heading.
+  appendix_sections <- list()
+
+  if (length(selected_snapshot_names) > 0 && length(graph_snapshots) > 0) {
+    snapshot_sections <- lapply(selected_snapshot_names, function(snapshot_name) {
+      snap <- graph_snapshots[[snapshot_name]]
+      tagList(
+        tags$h4(snapshot_name),
+        tags$img(class = "report-graph-image", src = snap$image),
+        caption_tag("Figure", next_figure_n(), snap$caption)
+      )
+    })
+
+    appendix_sections <- c(appendix_sections, list(tags$h3("Network graph")), snapshot_sections)
+  }
+
+  if (isTRUE(include_general)) {
+    appendix_sections <- c(appendix_sections, list(
+      tags$h3("General metrics"),
+      report_html_table(compute_general_metrics(graph)),
+      caption_tag(
+        "Table", next_table_n(),
+        "Network-level metrics (density, diameter, transitivity, modularity, number of connected components) computed over the full built graph."
+      )
+    ))
+  }
+
+  if (isTRUE(include_centralities)) {
+    params_text <- sprintf(
+      "Computed with: %s, %s, %s.",
+      if (isTRUE(centrality_params$directed)) "directed graph" else "undirected graph",
+      if (isTRUE(centrality_params$normalized)) "normalized scores" else "raw (non-normalized) scores",
+      if (isTRUE(centrality_params$weighted)) "weighted by edge weight (link strength)" else "unweighted (topology only)"
+    )
+
+    appendix_sections <- c(appendix_sections, list(
+      tags$h3("Centralities"),
+      report_html_table(compute_all_metrics(
+        graph,
+        directed = isTRUE(centrality_params$directed),
+        normalized = isTRUE(centrality_params$normalized),
+        weighted = isTRUE(centrality_params$weighted)
+      )),
+      caption_tag(
+        "Table", next_table_n(),
+        paste("Node centrality measures (degree, betweenness, closeness, PageRank, eigenvector centrality).", params_text)
+      )
+    ))
+  }
+
+  if (isTRUE(include_descriptors)) {
+    d <- compute_dpsir_descriptors(graph, schema)
+
+    appendix_sections <- c(appendix_sections, list(
+      tags$h3("DPSIR descriptors"),
+      tags$h4("Nodes by category"),
+      report_html_table(d$count_by_category),
+      caption_tag("Table", next_table_n(), "Number of nodes per DPSIR category in the built graph."),
+      tags$h4("Transitions (edges by source -> target category)"),
+      report_html_table(d$transitions),
+      caption_tag("Table", next_table_n(), "Number of edges observed between each pair of DPSIR categories (source -> target)."),
+      tags$h4("Category x category matrix"),
+      report_html_table(matrix_to_report_df(d$transition_matrix)),
+      caption_tag("Table", next_table_n(), "Same edge counts as the transitions table above, arranged as a source (row) x target (column) matrix."),
+      tags$p(
+        tags$strong("Impacts without Response: "),
+        if (length(d$impacts_without_response) == 0) "none" else paste(d$impacts_without_response, collapse = ", ")
+      ),
+      tags$p(
+        tags$strong("Pressures not covered by Response: "),
+        if (length(d$pressures_without_response) == 0) "none" else paste(d$pressures_without_response, collapse = ", ")
+      ),
+      tags$h4("Average uncertainty/controllability by category (0 = low, 1 = high)"),
+      report_html_table(d$averages_by_category),
+      caption_tag("Table", next_table_n(), "Mean uncertainty and controllability score per DPSIR category, on a 0 (low) to 1 (high) scale.")
+    ))
+
+    dp <- compute_all_driver_impact_pathways(graph, schema)
+    if (isTRUE(dp$available)) {
+      truncated_note <- if (isTRUE(dp$truncated)) {
+        sprintf(" Showing the first %d pathways found - this network may have more.", nrow(dp$table))
+      } else {
+        ""
+      }
+
+      pathways_df <- dp$table[, c("nodes", "length", "score")]
+      names(pathways_df) <- c("Pathway", "Length (nodes)", "Score")
+
+      appendix_sections <- c(appendix_sections, list(
+        tags$h4("All Driver-to-Impact pathways"),
+        report_html_table(pathways_df),
+        caption_tag(
+          "Table", next_table_n(),
+          paste0(
+            "Every simple causal chain from a Driver to an Impact in this network, ranked by score ",
+            "(mean edge weight x mean confidence x number of links).", truncated_note
+          )
+        )
+      ))
+    }
+  }
+
+  if (length(appendix_sections) > 0) {
+    sections <- c(sections, list(tags$h2("Network characterization (appendix)")), appendix_sections)
   }
 
   if (isTRUE(include_reproducibility)) {

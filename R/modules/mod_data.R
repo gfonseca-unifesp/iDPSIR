@@ -70,6 +70,16 @@ mod_data_server <- function(id, seed = NULL) {
       edges = if (is.null(seed)) create_empty_edges_table() else seed$edges,
       positions = NULL,
       scenario_state = NULL,
+      # Revisao 1 (guia externo sobre o relatorio como material
+      # suplementar): provenance header do relatorio precisa do nome/autor/
+      # notas do savepoint carregado e do nome do arquivo em si - nenhum dos
+      # dois tinha um lugar pra viver depois de carregado (`metadata` de um
+      # savepoint restaurado so' alimentava a notificacao transiente do
+      # Start). NULL em qualquer modo sem um unico arquivo de origem (New
+      # project/Import CSV/Combine savepoints) - o cabecalho so' preenche o
+      # que existir.
+      metadata = NULL,
+      savepoint_filename = NULL,
       loaded = !is.null(seed),
       start_message = "",
       start_blocking = character(),
@@ -182,6 +192,8 @@ mod_data_server <- function(id, seed = NULL) {
       rv$edges <- create_empty_edges_table()
       rv$positions <- NULL
       rv$scenario_state <- NULL
+      rv$metadata <- NULL
+      rv$savepoint_filename <- NULL
       rv$graph <- NULL
       rv$start_blocking <- character()
       rv$start_warnings <- character()
@@ -225,6 +237,8 @@ mod_data_server <- function(id, seed = NULL) {
           rv$edges <- imported$edges
           rv$positions <- NULL
           rv$scenario_state <- NULL
+          rv$metadata <- NULL
+          rv$savepoint_filename <- NULL
           rv$graph <- NULL
           rv$loaded <- TRUE
           rv$start_warnings <- preflight$warnings
@@ -254,6 +268,8 @@ mod_data_server <- function(id, seed = NULL) {
           rv$edges <- restored$edges
           rv$positions <- restored$positions
           rv$scenario_state <- restored$scenario_state
+          rv$metadata <- restored$metadata
+          rv$savepoint_filename <- input$savepoint_file$name
           rv$graph <- NULL
           rv$loaded <- TRUE
           rv$start_message <- paste0(
@@ -289,6 +305,8 @@ mod_data_server <- function(id, seed = NULL) {
           rv$edges <- merged$edges
           rv$positions <- NULL
           rv$scenario_state <- NULL
+          rv$metadata <- NULL
+          rv$savepoint_filename <- NULL
           rv$graph <- NULL
           rv$loaded <- TRUE
 
@@ -823,6 +841,8 @@ mod_data_server <- function(id, seed = NULL) {
       positions = reactive(rv$positions),
       set_positions = function(pos) { rv$positions <- pos },
       scenario_state = reactive(rv$scenario_state),
+      metadata = reactive(rv$metadata),
+      savepoint_filename = reactive(rv$savepoint_filename),
       graph = reactive(rv$graph),
       loaded = reactive(rv$loaded)
     )

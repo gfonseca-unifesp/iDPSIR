@@ -222,7 +222,7 @@ mod_report_ui <- function(id) {
   )
 }
 
-mod_report_server <- function(id, schema, nodes, edges, graph, saved_scenarios, graph_snapshots, centrality_params) {
+mod_report_server <- function(id, schema, nodes, edges, graph, saved_scenarios, graph_snapshots, centrality_params, metadata = NULL, savepoint_filename = NULL) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
@@ -274,7 +274,13 @@ mod_report_server <- function(id, schema, nodes, edges, graph, saved_scenarios, 
         selected_snapshot_names <- if (length(snap_sel) > 0) names(snaps)[snap_sel] else character()
 
         saved <- saved_scenarios()
-        sel <- input$scenarios_table_rows_selected
+        # sort(), not the raw selection - DT's rows_selected comes back in
+        # CLICK order, not row order (a real bug found in a generated
+        # report: selecting Scenario 2 before Scenario 1 listed Scenario 2
+        # first in every section that iterates scenarios). Sorting the row
+        # indices before mapping to names forces ascending table order
+        # (S1, S2, ...) regardless of click order.
+        sel <- sort(input$scenarios_table_rows_selected)
         selected_scenario_names <- if (length(sel) > 0) names(saved)[sel] else character()
 
         page <- build_full_report_html(
@@ -290,7 +296,9 @@ mod_report_server <- function(id, schema, nodes, edges, graph, saved_scenarios, 
           saved_scenarios = saved,
           selected_scenario_names = selected_scenario_names,
           include_reproducibility = isTRUE(input$include_reproducibility),
-          include_temporal_section = isTRUE(input$include_temporal_section)
+          include_temporal_section = isTRUE(input$include_temporal_section),
+          metadata = if (is.null(metadata)) NULL else metadata(),
+          savepoint_filename = if (is.null(savepoint_filename)) NULL else savepoint_filename()
         )
 
         htmltools::save_html(page, file)
