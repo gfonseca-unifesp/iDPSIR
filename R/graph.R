@@ -193,9 +193,13 @@ apply_manual_positions <- function(layout, manual_positions) {
 # right now" - computed layout plus manually-dragged positions, skipped in
 # circular mode (see apply_manual_positions()'s own comment: a position
 # dragged in layered mode would otherwise strand that node off the ring).
-# build_network_visual()/build_community_visual() and mod_responses.R's
-# temporal storyboard all need this exact same logic; extracted here so a
-# future change to it can't update one caller and silently miss another.
+# build_network_visual()/build_community_visual() need this exact same
+# logic; extracted here so a future change to it can't update one caller
+# and silently miss another. (mod_responses.R's temporal disclosure used to
+# be a third caller, back when its figure was a per-window network
+# storyboard - that figure is now a per-Impact line chart with no node
+# positions at all, see R/scenario_plots.R's plot_temporal_storyboard(),
+# so it no longer needs this function.)
 compute_effective_layout <- function(
     nodes, schema, layout_mode = "layered", x_spacing = 200, y_spacing = 80,
     manual_positions = NULL
@@ -423,7 +427,7 @@ build_network_visual <- function(
   # node behind at its old layered coordinates). The position itself is not
   # lost - it stays in the savepoint/manual_positions and re-applies the next
   # time layout_mode is "layered". See compute_effective_layout()'s own
-  # comment - this exact logic is shared with the temporal storyboard.
+  # comment for this logic's other caller.
   layout <- compute_effective_layout(nodes, schema, layout_mode = layout_mode, x_spacing = x_spacing, y_spacing = y_spacing, manual_positions = manual_positions)
   nodes <- merge(nodes, layout, by = "id", sort = FALSE)
 

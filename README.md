@@ -81,7 +81,7 @@ iDPSIR/
 │   ├── temporal.R             # optional discrete-time-window simulation: runs the pressure/response scenario forward window by window (no equilibrium assumption), showing whether a response's benefit holds up or erodes over time
 │   ├── responses.R            # get_feedback_categories/find_response_targets (still used); apply_response and the older scenario-comparison helpers are kept but no longer called, superseded by sufficiency.R/temporal.R
 │   ├── reach.R                # response_reach(): how far a response's influence travels through the network - pure graph traversal, independent of both readings above
-│   ├── scenario_plots.R       # shared trajectory/edge-sensitivity/temporal-storyboard chart drawing, reused on screen, in PNG/SVG downloads, and in the report
+│   ├── scenario_plots.R       # shared trajectory/edge-sensitivity/per-Impact temporal line chart drawing, reused on screen, in PNG/SVG downloads, and in the report
 │   ├── report.R               # self-contained HTML report builder
 │   ├── io.R                   # CSV matrix import, .idpsir.json savepoint read/write, merge_savepoints()
 │   ├── core/                  # shared UI components
@@ -169,7 +169,7 @@ explanation of each; the short version:
   neutralizes its one intended Impact still erodes over time against an independent
   driver trend it can't touch, while the other four Impacts sit entirely outside what
   the response can ever reach. The app's main worked example — full walkthrough in the
-  tutorial, illustrated with a network diagram and a temporal storyboard image.
+  tutorial, illustrated with a network diagram and a per-Impact temporal line chart.
   [`docs/example_gnanapragasam.idpsir.json`](docs/example_gnanapragasam.idpsir.json)
   (pressure/response pre-configured) or the underlying
   [`data/gnanapragasam2026_nodes.csv`](data/gnanapragasam2026_nodes.csv) /
@@ -212,8 +212,9 @@ has four tabs:
   response might, windows later, become a new pressure itself — with a configurable
   number of windows, an impulse/permanent mode for each scenario, a table of how each
   Impact changes window by window, a progress indicator while it computes, and a
-  "storyboard" plotting the network's state per window (downloadable as PNG/SVG, and
-  included as a figure in the report if selected). It's an explicit short-horizon
+  chart — one panel per Impact, dashed baseline vs. solid Net, points colored by that
+  window's Verdict, with the neutralized zone (Net ≤ 0) shaded (downloadable as
+  PNG/SVG, and included as a figure in the report if selected). It's an explicit short-horizon
   integration, not a calibrated forecast: in networks without `self_regulation`/
   `growth_rate` tuned to damp things down, values can grow quickly window over
   window — read it for the *direction* of an indirect, delayed effect (does a
@@ -231,7 +232,15 @@ has four tabs:
 - **Report** — pick which sections (saved graph snapshots, metrics, centralities,
   descriptors, edge references, saved scenarios, reproducibility info — R/package
   versions and the parameters used in the stochastic analyses) go into one
-  self-contained downloadable HTML report.
+  self-contained downloadable HTML report. Every report opens the same way regardless
+  of what's checked: a "Report summary" (network name/author/savepoint file, plus each
+  selected scenario's pressure/response/c definition) and a "How to read these
+  results" legend (sign convention, what "neutralized" means, the Verdict color key) —
+  then the decision-relevant sections (Response sufficiency, Reach, Temporal
+  simulation, References) in that order, with the descriptive material (graph image,
+  general metrics, centralities, DPSIR descriptors) demoted to a "Network
+  characterization (appendix)" section at the end. Scenarios are always listed in
+  ascending order regardless of the order they were selected in.
 
 A savepoint (`.idpsir.json`) can be downloaded from any step and reloaded later to
 resume a project.
