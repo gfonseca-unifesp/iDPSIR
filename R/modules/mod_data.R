@@ -138,8 +138,7 @@ mod_data_server <- function(id, seed = NULL) {
     }
 
     output$start_step <- renderUI({
-      message("[iDPSIR debug] start_step: render begin")
-      result <- tryCatch({
+      tryCatch({
       box(
         width = 12,
         title = "Start",
@@ -211,12 +210,7 @@ mod_data_server <- function(id, seed = NULL) {
           )
         }
       )
-      }, error = function(e) {
-        message("[iDPSIR debug] start_step: ERROR - ", conditionMessage(e))
-        render_step_error(e)
-      })
-      message("[iDPSIR debug] start_step: render end, class(result) = ", paste(class(result), collapse = ", "))
-      result
+      }, error = render_step_error)
     })
     # Step 1 is the only step that is ALREADY visible the instant the page
     # connects - it never transitions from hidden to shown the way steps

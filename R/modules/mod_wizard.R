@@ -64,23 +64,17 @@ mod_wizard_server <- function(id) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
-    message("[iDPSIR debug] mod_wizard_server: session init begin")
     data <- mod_data_server("data")
-    message("[iDPSIR debug] mod_wizard_server: mod_data_server done")
     graph_result <- mod_graph_server("graph", data$schema, data$nodes, data$edges, data$graph, data$positions, data$set_positions)
-    message("[iDPSIR debug] mod_wizard_server: mod_graph_server done")
     responses <- mod_responses_server(
       "responses", data$schema, data$nodes, data$edges, data$graph, data$scenario_state
     )
-    message("[iDPSIR debug] mod_wizard_server: mod_responses_server done")
     metrics_result <- mod_metrics_server("metrics", data$schema, data$graph)
-    message("[iDPSIR debug] mod_wizard_server: mod_metrics_server done")
     mod_report_server(
       "report", data$schema, data$nodes, data$edges, data$graph,
       responses$saved_scenarios, graph_result$graph_snapshots, metrics_result$centrality_params,
       metadata = data$metadata, savepoint_filename = data$savepoint_filename
     )
-    message("[iDPSIR debug] mod_wizard_server: mod_report_server done, session init complete")
 
     output$progress_ui <- renderUI({
       req(input$current_step)
