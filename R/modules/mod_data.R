@@ -60,6 +60,31 @@ mod_data_ui <- function(id) {
 # SERVER
 # =====================================================
 
+# Any of the 5 step renders below can throw for reasons this app doesn't
+# control - e.g. a different bs4Dash/shiny/fontawesome version on the
+# user's machine than the one this was last tested against (global.R only
+# checks packages are PRESENT, never pins a version - see CLAUDE.md,
+# "app nao abre uniforme em todos os computadores"). Shiny's default
+# failure mode for a broken renderUI is a single thin gray line of text
+# sitting right where the step content should be, easy to miss entirely
+# next to the Back/Save/Next buttons that keep rendering fine below it -
+# a user can genuinely perceive that as "the step is just blank". Wrapping
+# every step in this instead surfaces one large, unmissable alert with the
+# exact R error message, so a report like "the Start step shows nothing"
+# turns into an actionable one-liner instead of an unreproducible mystery.
+render_step_error <- function(e) {
+  tags$div(
+    class = "alert alert-danger",
+    tags$strong("This step could not be displayed."),
+    tags$p(conditionMessage(e)),
+    tags$p(
+      class = "text-muted", style = "font-size: 12px;",
+      "This usually means an R package on this computer is a different version than the app expects. ",
+      "Reloading the page is unlikely to fix it on its own - please copy the exact message above when reporting this."
+    )
+  )
+}
+
 mod_data_server <- function(id, seed = NULL) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
@@ -113,6 +138,8 @@ mod_data_server <- function(id, seed = NULL) {
     }
 
     output$start_step <- renderUI({
+      message("[iDPSIR debug] start_step: render begin")
+      result <- tryCatch({
       box(
         width = 12,
         title = "Start",
@@ -184,6 +211,12 @@ mod_data_server <- function(id, seed = NULL) {
           )
         }
       )
+      }, error = function(e) {
+        message("[iDPSIR debug] start_step: ERROR - ", conditionMessage(e))
+        render_step_error(e)
+      })
+      message("[iDPSIR debug] start_step: render end, class(result) = ", paste(class(result), collapse = ", "))
+      result
     })
 
     observeEvent(input$start_new, {
@@ -334,6 +367,7 @@ mod_data_server <- function(id, seed = NULL) {
     output$model_step <- renderUI({
       req(rv$loaded)
 
+      tryCatch({
       box(
         width = 12,
         title = "Model",
@@ -361,6 +395,7 @@ mod_data_server <- function(id, seed = NULL) {
 
         DTOutput(ns("schema_table"))
       )
+      }, error = render_step_error)
     })
 
     output$schema_table <- renderDT({
@@ -423,6 +458,7 @@ mod_data_server <- function(id, seed = NULL) {
     output$nodes_step <- renderUI({
       req(rv$loaded)
 
+      tryCatch({
       box(
         width = 12,
         title = "Nodes",
@@ -436,6 +472,7 @@ mod_data_server <- function(id, seed = NULL) {
         tags$hr(),
         DTOutput(ns("nodes_table"))
       )
+      }, error = render_step_error)
     })
 
     output$nodes_table <- renderDT({
@@ -640,6 +677,7 @@ mod_data_server <- function(id, seed = NULL) {
     output$edges_step <- renderUI({
       req(rv$loaded)
 
+      tryCatch({
       box(
         width = 12,
         title = "Edges",
@@ -653,6 +691,7 @@ mod_data_server <- function(id, seed = NULL) {
         tags$hr(),
         DTOutput(ns("edges_table"))
       )
+      }, error = render_step_error)
     })
 
     output$edges_table <- renderDT({
@@ -776,6 +815,7 @@ mod_data_server <- function(id, seed = NULL) {
     output$review_step <- renderUI({
       req(rv$loaded)
 
+      tryCatch({
       box(
         width = 12,
         title = "Review and build",
@@ -793,6 +833,7 @@ mod_data_server <- function(id, seed = NULL) {
           tags$div(class = "alert alert-info", style = "margin-top: 10px;", rv$graph_message)
         }
       )
+      }, error = render_step_error)
     })
 
     output$validation_summary <- renderUI({

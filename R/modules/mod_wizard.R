@@ -27,16 +27,21 @@ mod_wizard_ui <- function(id) {
     conditionalPanel(condition = step_condition(3), uiOutput(ns("data-nodes_step"))),
     conditionalPanel(condition = step_condition(4), uiOutput(ns("data-edges_step"))),
     conditionalPanel(condition = step_condition(5), uiOutput(ns("data-review_step"))),
-    conditionalPanel(
-      condition = step_condition(6),
-      tabsetPanel(
-        id = ns("explore_tabs"),
-        tabPanel("Graph", mod_graph_ui(ns("graph"))),
-        tabPanel("Scenarios", mod_responses_ui(ns("responses"))),
-        tabPanel("Metrics", mod_metrics_ui(ns("metrics"))),
-        tabPanel("Report", mod_report_ui(ns("report")))
-      )
-    ),
+    # Explore's tabsetPanel (mod_graph_ui/mod_responses_ui/mod_metrics_ui/
+    # mod_report_ui combined) is a LOT of DOM/JS up front - a visNetwork
+    # widget, ~12 collapsible bs4Dash boxes, a dozen+ selectize dropdowns,
+    # sliders. Embedding it here directly (as before) means every fresh
+    # page load ships and initializes all of that immediately, even though
+    # step 1 (Start) is the only thing visible - conditionalPanel only
+    # hides it with CSS display:none, it's still fully in the DOM. On a
+    # user report of the Start step rendering blank with zero error
+    # anywhere (not even Shiny's own client-side error text - see
+    # CLAUDE.md, "app nao abre uniforme em todos os computadores"), that
+    # much upfront JS widget initialization is a real, testable risk
+    # factor for exactly this kind of silent client-side failure - so
+    # Explore is now built server-side via uiOutput/renderUI, the first
+    # time (and only the first time) the user actually reaches step 6.
+    conditionalPanel(condition = step_condition(6), uiOutput(ns("explore_ui"))),
 
     tags$hr(),
     fluidRow(
@@ -59,17 +64,23 @@ mod_wizard_server <- function(id) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
+    message("[iDPSIR debug] mod_wizard_server: session init begin")
     data <- mod_data_server("data")
+    message("[iDPSIR debug] mod_wizard_server: mod_data_server done")
     graph_result <- mod_graph_server("graph", data$schema, data$nodes, data$edges, data$graph, data$positions, data$set_positions)
+    message("[iDPSIR debug] mod_wizard_server: mod_graph_server done")
     responses <- mod_responses_server(
       "responses", data$schema, data$nodes, data$edges, data$graph, data$scenario_state
     )
+    message("[iDPSIR debug] mod_wizard_server: mod_responses_server done")
     metrics_result <- mod_metrics_server("metrics", data$schema, data$graph)
+    message("[iDPSIR debug] mod_wizard_server: mod_metrics_server done")
     mod_report_server(
       "report", data$schema, data$nodes, data$edges, data$graph,
       responses$saved_scenarios, graph_result$graph_snapshots, metrics_result$centrality_params,
       metadata = data$metadata, savepoint_filename = data$savepoint_filename
     )
+    message("[iDPSIR debug] mod_wizard_server: mod_report_server done, session init complete")
 
     output$progress_ui <- renderUI({
       req(input$current_step)
@@ -80,6 +91,31 @@ mod_wizard_server <- function(id) {
           "Step ", input$current_step, " of ", length(WIZARD_STEP_LABELS),
           ": ", WIZARD_STEP_LABELS[input$current_step]
         ))
+      )
+    })
+
+    # Build Explore's tabsetPanel once, the first time step 6 is reached,
+    # and never again - explore_built() only ever flips FALSE -> TRUE, so
+    # re-visiting step 6 later does not re-invalidate/rebuild output$explore_ui
+    # (which would otherwise wipe graph zoom/selection, entered scenario
+    # sliders, etc. every time the user steps away and back).
+    explore_built <- reactiveVal(FALSE)
+
+    observeEvent(input$current_step, {
+      if (identical(input$current_step, length(WIZARD_STEP_LABELS)) && !isTRUE(explore_built())) {
+        explore_built(TRUE)
+      }
+    }, ignoreInit = TRUE)
+
+    output$explore_ui <- renderUI({
+      req(explore_built())
+
+      tabsetPanel(
+        id = ns("explore_tabs"),
+        tabPanel("Graph", mod_graph_ui(ns("graph"))),
+        tabPanel("Scenarios", mod_responses_ui(ns("responses"))),
+        tabPanel("Metrics", mod_metrics_ui(ns("metrics"))),
+        tabPanel("Report", mod_report_ui(ns("report")))
       )
     })
 
