@@ -2516,6 +2516,81 @@ três exemplos + `sample_*.csv` padronizados pra Estado neutro (com a
 exceção do Gnanapragasam documentada, não escondida), (4) tutorial e
 README reescritos ensinando a convenção e sem linguagem de versão futura.
 
+**Bug real, encontrado e corrigido: "app não abre uniforme em todos os
+computadores" — em algumas máquinas, o passo Start aparecia vazio**
+(só "Step 1 of 6: Start" seguido direto dos botões Back/Save/Next, sem os
+4 cards), sem nenhum erro em lugar nenhum. Não reproduzia nesta máquina,
+então o diagnóstico foi feito ao vivo, remotamente, com o usuário testando
+numa máquina afetada (da colaboradora Marcela) e reportando de volta a
+cada passo — nenhuma causa foi assumida sem uma evidência concreta antes
+de seguir pra próxima hipótese:
+
+1. Injetado um erro deliberado em `output$start_step` nesta máquina:
+   confirmou que um erro R real *é* visível (uma linha fina de texto
+   cinza do Shiny) — o que não bate com "nenhuma mensagem em lugar
+   nenhum" que o usuário via de verdade. Descartou erro R como causa.
+2. DevTools (F12) na máquina afetada: sem erro no Console (só um 404 de
+   `favicon.ico`, irrelevante), sem 404 real na aba Network. Inspecionando
+   o elemento exato onde os cards deveriam estar, achado o ponto decisivo:
+   `<div id="wizard-data-start_step" class="shiny-html-output recalculating
+   shiny-bound-output"></div>` — vazio, preso na classe `recalculating`
+   que o Shiny usa enquanto espera o servidor mandar o conteúdo.
+3. R usando 0-0,6% de CPU (não é loop infinito) e, quando testado
+   interromper com Esc, o app "não estava travado" segundo o usuário -
+   a hipótese de bloqueio de I/O foi descartada também.
+4. `message()` de diagnóstico adicionadas em pontos-chave (inicialização
+   de cada module server, início/fim do render de `start_step`) e
+   publicadas numa branch de teste (`debug-start-step`) pro usuário rodar
+   com `shiny::runGitHub(..., ref="debug-start-step")` na máquina afetada.
+   O console mostrou a inicialização inteira completando (todos os module
+   servers logando "done") mas **"start_step: render begin" nunca
+   aparecia** - a função nunca era chamada, sem erro, sem trava.
+
+**Causa raiz confirmada**: `suspendWhenHidden` (default `TRUE` em todo
+`output` do Shiny) só computa uma saída depois que o cliente reporta uma
+transição de escondido pra visível. O passo 1 é o único que já nasce
+visível no instante em que a página conecta - ele nunca "transiciona" de
+escondido pra visível como os passos 2-6 fazem a cada clique real em
+"Next", então não existe o evento de mudança que normalmente dispara essa
+liberação. Em alguma combinação de máquina/navegador/timing, essa saída
+nunca é liberada, e fica presa em `recalculating` pra sempre - sem gerar
+nenhum erro, porque do ponto de vista do Shiny não é uma falha, é só uma
+otimização (não gastar processamento com o que está invisível) que nunca
+recebe o sinal de "na verdade isso é visível desde o início".
+
+**Fix**: `outputOptions(output, "<step>_step", suspendWhenHidden = FALSE)`
+nos 5 passos do formulário em `R/modules/mod_data.R` (`start_step` era o
+único confirmado afetado, mas os outros 4 sofrem do mesmo padrão -
+"escondido -> visível" via `conditionalPanel` - toda vez que o usuário
+avança de passo, então aplicado a todos por consistência e porque o custo
+é desprezível). Testado direto na máquina que reproduzia o problema:
+confirmado que resolveu.
+
+Duas outras mudanças, aditivas e mantidas mesmo não sendo a causa raiz
+(descobertas/testadas durante a mesma investigação, valem a pena por si
+só): (1) `render_step_error()` (`R/modules/mod_data.R`) - os 5 `renderUI`
+de passo agora mostram um `alert-danger` grande com a mensagem de erro
+literal do R, em vez da linha fina e discreta que o Shiny mostra por
+padrão, caso algum deles realmente lance um erro no futuro; (2) a aba
+Explore (`R/modules/mod_wizard.R`) deixou de ser montada inteira (1
+widget `visNetwork`, ~12 `bs4Dash::box()` colapsáveis, mais de uma dezena
+de dropdowns/sliders) no HTML inicial da página - agora só é construída
+(`uiOutput`/`renderUI`, travado num `reactiveVal` pra nunca reconstruir e
+não perder zoom/seleção/cenário configurado) na primeira vez que o passo
+6 é de fato alcançado, reduzindo a quantidade de JS que precisa
+inicializar em qualquer carga de página. Nenhuma das duas resolveu o bug
+sozinha (confirmado: uma build só com essas duas, sem o `outputOptions`,
+ainda falhava na máquina afetada) - só o `outputOptions` resolveu.
+
+Verificado ao vivo, nas duas pontas: nesta máquina (suíte `testthat`
+completa e checagem de sintaxe limpas a cada rodada, fluxo completo
+New project → Model → Nodes → Edges → Review → Build/Rebuild graph →
+Explore sem regressão, incluindo confirmar que a aba Explore preserva
+estado ao ir e voltar do passo 6) e na máquina que de fato reproduzia o
+bug (Start renderizando corretamente depois do fix, confirmado pelo
+usuário). Mensagens de diagnóstico removidas antes de mesclar em `main` -
+eram só andaime pra achar a causa, não fazem sentido em produção.
+
 ## Próximo
 
 Fase 5 está completa (Marcos A-D). Todos os 4 itens da lista pós-Fase 5 (1:
