@@ -218,6 +218,18 @@ mod_data_server <- function(id, seed = NULL) {
       message("[iDPSIR debug] start_step: render end, class(result) = ", paste(class(result), collapse = ", "))
       result
     })
+    # Step 1 is the only step that is ALREADY visible the instant the page
+    # connects - it never transitions from hidden to shown the way steps
+    # 2-6 do on a real "Next" click. Shiny's suspendWhenHidden (default
+    # TRUE) only computes an output once the client reports a hidden ->
+    # visible transition for it; an output that starts visible has no such
+    # transition to report, and on some client/timing combinations the
+    # very first visibility report race-loses against the server's first
+    # reactive flush, leaving the output suspended forever with no error -
+    # matches a live debug session where every module server finished
+    # initializing (logged) but "start_step: render begin" never printed
+    # at all. Forcing it to always compute sidesteps that race entirely.
+    outputOptions(output, "start_step", suspendWhenHidden = FALSE)
 
     observeEvent(input$start_new, {
       rv$schema <- get_default_dpsir_schema()
@@ -397,6 +409,7 @@ mod_data_server <- function(id, seed = NULL) {
       )
       }, error = render_step_error)
     })
+    outputOptions(output, "model_step", suspendWhenHidden = FALSE)
 
     output$schema_table <- renderDT({
       req(rv$schema)
@@ -474,6 +487,7 @@ mod_data_server <- function(id, seed = NULL) {
       )
       }, error = render_step_error)
     })
+    outputOptions(output, "nodes_step", suspendWhenHidden = FALSE)
 
     output$nodes_table <- renderDT({
       datatable(
@@ -693,6 +707,7 @@ mod_data_server <- function(id, seed = NULL) {
       )
       }, error = render_step_error)
     })
+    outputOptions(output, "edges_step", suspendWhenHidden = FALSE)
 
     output$edges_table <- renderDT({
       datatable(
@@ -835,6 +850,7 @@ mod_data_server <- function(id, seed = NULL) {
       )
       }, error = render_step_error)
     })
+    outputOptions(output, "review_step", suspendWhenHidden = FALSE)
 
     output$validation_summary <- renderUI({
       messages <- character()
