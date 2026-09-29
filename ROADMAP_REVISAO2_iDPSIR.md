@@ -32,7 +32,7 @@ A ordem das fases importa: a Fase 0 corrige bugs nos mesmos módulos que as outr
 | D8 | Gatilho **binário**: liga ou desliga todas as arestas de saída do Estado. | Usuário (Q6), 25/09 |
 | D9 | O crescimento (`growth_rate`) **fica no nó**, como hoje. A influência das arestas de saída cresce na proporção (1+g) por meio do valor do nó. O peso da aresta não é multiplicado (evita dupla contagem). | Usuário (Q9), 25/09 |
 | D10 | Um nó com `growth_rate > 0` cresce como tendência exógena mesmo fora do cenário de pressão, nas duas rodadas (baseline e cenário). | Usuário (Q10), 25/09 |
-| D11 | Gatilho na simulação temporal: os dois critérios ("carga na janela" e "nível acumulado do Estado") ficam disponíveis na tela. O usuário escolhe qual usar e pode ver os dois resultados lado a lado. Padrão: carga. | Usuário (Q7), 25/09 |
+| D11 | Gatilho na simulação temporal: os dois critérios ("carga na janela" e "desvio acumulado do Estado") ficam disponíveis na tela. O usuário escolhe qual usar e pode ver os dois resultados lado a lado. **Padrão: desvio acumulado** (revisado em 29/09, P1): o limiar representa uma perda ou acúmulo total, como no estoque de peixe ou no contaminante no sedimento. | Usuário (Q7), 25/09; padrão revisado 29/09 |
 | D12 | Reach: mostrar os dois, o topológico (como hoje) e o efetivo no cenário, que não atravessa Estados com gatilho fechado, lado a lado. | Usuário (Q8), 25/09 |
 | D13 | (Revisada em 29/09 pelas D19 e D22.) Os exemplos passam ao modo estrutural com a classe de cada aresta revisada com o usuário. O app e os exemplos publicados no GitHub e na demo shinylive são atualizados juntos. Arquivo antigo é **convertido** na importação (β = λ·w, preservando os números antigos), com aviso, em vez de bloqueado. | Usuário (Q1), 25/09; revisada 29/09 |
 | D14 | Importância dinâmica D = **sempre pela propagação do app** (`propagate()`, a mesma da leitura de suficiência); Levins não entra como alternativa. No modo estrutural, isso é o equilíbrio de Levins em forma padronizada (β_ij = a_ij/\|a_ii\|; conferido em R), então o aviso de divergência sai. | Usuário (Q2), 25/09; revisada 29/09 |
@@ -48,12 +48,14 @@ A ordem das fases importa: a Fase 0 corrige bugs nos mesmos módulos que as outr
 
 ## Decisões a confirmar
 
-As perguntas Q1–Q10 de 25/09 viraram as decisões D7–D16. Em 29/09, D1 e D2 foram revisadas, D16 foi cancelada, e as decisões do modo estrutural (D17–D23) revisaram D3, D5, D7, D13, D14 e D15. Ficam em aberto:
+As perguntas Q1–Q10 de 25/09 viraram as decisões D7–D16. Em 29/09, D1 e D2 foram revisadas, D16 foi cancelada, e as decisões do modo estrutural (D17–D23) revisaram D3, D5, D7, D13, D14 e D15.
 
-| # | Pergunta | Proposta | Onde entra |
+Nenhuma pendente. As duas perguntas que ficaram abertas foram respondidas pelo usuário em 29/09:
+
+| # | Pergunta | Decisão | Onde entra |
 |---|---|---|---|
-| P1 | Critério padrão do gatilho na temporal: "carga que chega" (D11 atual) ou "desvio acumulado"? Com a D20 os dois diferem. O usuário descreveu o limiar como perda acumulada (estoque, contaminante no sedimento), o que favorece "desvio acumulado". | Desvio acumulado | C3 |
-| P2 | Arquivo antigo que, convertido, fica com \|β\| > 1 (rede sem ciclo com peso > 2): aviso e revisão, ou bloqueio? | Aviso e revisão | 1.5 |
+| P1 | Critério padrão do gatilho na temporal | **Desvio acumulado** (revisa o padrão da D11) | C3 |
+| P2 | Arquivo antigo que, convertido, fica com \|β\| > 1 | **Aviso e revisão**, sem bloqueio | 1.5 |
 
 ---
 
@@ -167,7 +169,7 @@ Bugs encontrados por leitura de código. Todos têm correção pequena.
 **O que fazer:** em `read_savepoint()`, `import_matrices()` e `merge_savepoints()`, arquivo sem `metadata$weight_mode = "structural"`:
 - converter cada peso para **β = λ·w**, com o λ da leitura antiga (c/ρ(W) com ciclo, c sem ciclo; c = `effect_horizon` do savepoint ou 0,5). **Isso preserva exatamente os números da leitura estática antiga**, porque a antiga já era (I − λW)⁻¹p − p;
 - converter `confidence` para faixa (regra da 1.1) e marcar todas as arestas como "convertidas";
-- mostrar um aviso com o λ usado e as arestas com |β| > 1 (redes sem ciclo com peso > 2); ver P2;
+- mostrar um aviso com o λ usado e as arestas com |β| > 1 (redes sem ciclo com peso > 2). Não bloqueia (P2): as arestas ficam marcadas "revisar" na tabela de arestas e no relatório até o usuário confirmar ou editar o valor;
 - gravar `metadata$weight_mode = "structural"` e `metadata$converted_from = list(lambda, c)`;
 - no merge, converter cada arquivo antes de juntar.
 
@@ -413,10 +415,10 @@ O exemplo portuário (tipo Santos) da seção 7 do PDF **não** será implementa
 Com a persistência da D20, o Estado acumula (sr < 1). Por isso "o que chega nesta janela" e "o desvio acumulado" são diferentes, e os dois critérios continuam fazendo sentido. Coincidem só quando o Estado tem sr = 1.
 
 **O que fazer:** em `apply_threshold_gate()`, acrescentar `gate_mode = c("load", "state_level")`, os dois em DP e com direção (C0).
-- `load`: Σ_j β_Sj · x_j(t) (o que chega em t) comparado com z. É o padrão atual da D11; ver P1.
-- `state_level`: x_S(t) comparado com z.
+- `state_level`: x_S(t), o desvio acumulado, comparado com z. **É o padrão** (D11, P1).
+- `load`: Σ_j β_Sj · x_j(t) (o que chega em t) comparado com z. É uma opção.
 - Nos dois modos, o gatilho é reavaliado a cada janela (reversível, sem trava).
-- **Na tela:** seletor "Trigger criterion" com "Load arriving at the State", "Accumulated State level" e "Compare both".
+- **Na tela:** seletor "Trigger criterion" com "Accumulated State level (default)", "Load arriving at the State" e "Compare both".
   - Em "Compare both", rodar a simulação duas vezes e mostrar lado a lado: duas colunas na tabela por Impacto e janela, e dois painéis no gráfico.
   - Destacar as janelas em que os dois critérios discordam.
 - Mostrar, por janela, se cada gatilho estava aberto: coluna na tabela e marca no gráfico.
@@ -444,7 +446,7 @@ Com a persistência da D20, o Estado acumula (sr < 1). Por isso "o que chega nes
 - Conversão de limiar antigo: f = 0,15 com ref = 100 e sem DP reproduz o critério atual `|x|/ref ≥ 0,15`.
 - Direção: um contaminante com z = +8 não abre com desvio negativo.
 - Regressão: rede sem limiar dá resultado idêntico ao da Fase 1 em `sufficiency()` e `simulate_temporal_pair()`.
-- **Exemplo Gnanapragasam** (`activation_threshold = 0,15` em S1, ref = 100): os números mudam pela Fase 1 (β) e pelo critério padrão da C3. Registrar antes e depois e refazer o tutorial.
+- **Exemplo Gnanapragasam** (`activation_threshold = 0,15` em S1, ref = 100): o critério padrão (desvio acumulado) é o mesmo de hoje, e o limiar antigo convertido na C0 (ambas as direções, DP = ref) reproduz a regra atual. Por isso, os números mudam só pela Fase 1 (β) e pela revisão de classes (1.6). Registrar antes e depois e refazer o tutorial.
 - Ciclo I→R→P com gatilho oscilante: `unstable = TRUE` e aviso.
 - `strength_to_neutralize` por bisseção no caso de fechamento do gatilho.
 
@@ -568,7 +570,7 @@ Com a persistência da D20, o Estado acumula (sr < 1). Por isso "o que chega nes
 2. **Fase 1** (modo estrutural): 3–4 dias. 1.1–1.5 antes de qualquer outra fase, porque trocam o motor. A 1.6 (exemplos, com revisão de classes junto com o usuário) pode andar em paralelo com A–D, mas precisa terminar antes de refazer o tutorial.
 3. **Fase A** (modos de resposta e "até neutralizar"): 1–2 dias. A A7 regenera as figuras do tutorial junto com a 1.6.
 4. **Fase B** (relevância): 3–4 dias. Mais simples que antes: sem aviso de Levins, reamostragem pela faixa de β.
-5. **Fase C** (camada de medida e gatilho): 3–4 dias. A C0 (ref, DP, limiar em unidade real, força > 100%) vem antes de C1–C6. Precisa da decisão P1.
+5. **Fase C** (camada de medida e gatilho): 3–4 dias. A C0 (ref, DP, limiar em unidade real, força > 100%) vem antes de C1–C6.
 6. **Fase D** (crescimento): 1–2 dias, junto com ou depois da Fase A (mesmo motor temporal) e depois da C0 (tendência em DP).
 7. **Fases 2, 3 e 4**, em paralelo conforme a disponibilidade. A 2.5 (remover o estabilizador λ) entra junto com a Fase A.
 
@@ -587,9 +589,9 @@ Com a persistência da D20, o Estado acumula (sr < 1). Por isso "o que chega nes
 
 # Anexo — Justificativa do modo estrutural (29/09/2026)
 
-Este anexo registra a discussão que levou ao modo estrutural. **As decisões resultantes já estão nas fases acima (D17–D23).** O que continua aberto está em "Decisões a confirmar" (P1, P2).
+Este anexo registra a discussão que levou ao modo estrutural. **As decisões resultantes já estão nas fases acima (D17–D23).** As perguntas P1 e P2, que ficaram abertas, foram respondidas em 29/09 (ver "Decisões a confirmar").
 
-## X1 — Limiar, valor de referência e leitura estática × temporal (resolvido pelas D20 e D23, exceto P1)
+## X1 — Limiar, valor de referência e leitura estática × temporal (resolvido pelas D11, D20 e D23)
 
 **Leitura proposta pelo usuário:**
 - `reference_value` é o valor inicial, positivo, de qualquer nó.
@@ -721,7 +723,7 @@ Além disso, o r²:
 
 ## X3 — Acomodação do modo estrutural no roadmap (aplicada em 29/09)
 
-O usuário decidiu adotar o modo estrutural (X2) nesta revisão. Esta seção registra a análise fase a fase que orientou a reescrita. **As decisões do X3.4 foram tomadas em 29/09** (Q1: só o estrutural; Q2: a = 1 − sr; Q3: `confidence` vira faixa de β; Q4: exemplos só no estrutural) e aplicadas às fases. Com a Q2, parte do achado 3 do X3.1 vale só para nós com sr = 1 (ver D20 e P1).
+O usuário decidiu adotar o modo estrutural (X2) nesta revisão. Esta seção registra a análise fase a fase que orientou a reescrita. **As decisões do X3.4 foram tomadas em 29/09** (Q1: só o estrutural; Q2: a = 1 − sr; Q3: `confidence` vira faixa de β; Q4: exemplos só no estrutural) e aplicadas às fases. Com a Q2, parte do achado 3 do X3.1 vale só para nós com sr = 1 (ver D20); por isso os dois critérios de gatilho continuam, com o desvio acumulado como padrão (P1).
 
 ### X3.1 — Três achados que simplificam a acomodação (conferidos em R)
 
