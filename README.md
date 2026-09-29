@@ -97,7 +97,8 @@ iDPSIR/
 │   │   └── mod_wizard.R        # wizard shell tying every step/tab together
 │   ├── ui_main.R               # top-level UI (ina_ui)
 │   └── server_main.R           # top-level server (ina_server)
-├── data/                      # example data (sample_nodes.csv, sample_edges.csv, mangi2007_*.csv, gnanapragasam2026_*.csv)
+├── data/                      # example data (sample_nodes.csv, sample_edges.csv, mangi2007_*.csv, gnanapragasam2026_*.csv incl. parameters and observed effort)
+├── data-raw/                  # scripts that build the Sri Lanka example (tables, savepoint, figures)
 ├── docs/                      # getting-started tutorial (tutorial.html) and three example savepoints (example_fisheries/mangi/gnanapragasam.idpsir.json, see Example networks below)
 ├── tests/
 │   ├── testthat.R             # test runner: Rscript tests/testthat.R
@@ -115,9 +116,10 @@ a number in [0, 1], default 0.5 — how much a manager can influence this factor
 directly, not read by any calculation), `self_regulation` (optional, a number in [0, 1],
 default 0.5 — the share of a factor's deviation that fades by itself each time window;
 only used by the optional temporal simulation, see [Self-regulation](#self-regulation)
-below), `growth_rate` (optional, default 0 — a
-factor's own exogenous trend per time window, e.g. population growth, independent of
-any edge), `reference_value` (optional — the factor's initial level in its own units),
+below), `growth_rate` (optional, default 0, greater than −1 — how the factor's
+base level moves by itself per time window, e.g. population growth, independent of any
+edge; only used by the temporal simulation), `growth_cap` (optional — the level, in
+the factor's own units, where that growth stops, e.g. a licence cap), `reference_value` (optional — the factor's initial level in its own units),
 `sd` (optional — its typical variation, a standard deviation in the same units; the
 node form also accepts a coefficient of variation), `threshold_level` (optional, State
 only, blank for most — the level in the factor's own units at which ALL of its outgoing
@@ -231,7 +233,7 @@ deviation has crossed *z* in its direction. It is used by both readings:
   (default) or by the *load* arriving in each window (or both, to compare). A weak but
   steady pressure may never trigger by load and still trigger by accumulation — so the
   two readings can disagree, as in the Gnanapragasam example, where the stock's trigger
-  stays closed in a single instant and opens at window 7.
+  (B_MSY) stays closed in a single instant and opens by accumulation in 2012 (window 8).
 
 Pushes are shares of one standard deviation (100% = 1 SD, up to 500%); a factor with a
 typical variation also takes its push in its own units. Older files with an
@@ -259,19 +261,136 @@ explanation of each; the short version:
   pre-configured) or the underlying
   [`data/mangi2007_nodes.csv`](data/mangi2007_nodes.csv) /
   [`data/mangi2007_edges.csv`](data/mangi2007_edges.csv).
-- **Gnanapragasam et al. 2026** — 13 nodes, 14 edges, an artisanal-fisheries network
-  (*Marine Policy*, 189, 107095) where a response that directly and sufficiently
-  neutralizes its one intended Impact still erodes over time against an independent
-  driver trend it can't touch, while the other four Impacts sit entirely outside what
-  the response can ever reach. The app's main worked example — full walkthrough in the
-  tutorial, illustrated with a network diagram and a per-Impact temporal line chart.
+- **Gnanapragasam et al. 2026** — 17 nodes, 20 edges, Sri Lanka's small-scale fisheries
+  (*Marine Policy*, 189, 107095), one window per year from 2004, parametrized from the
+  paper's own data (see [below](#sri-lanka-example-how-it-was-parametrized)).
+  Post-disaster aid (2005–2012) restores fishers' income and, through the boats it
+  buys, drives effort up and the stock below B_MSY in 2012; the paper's effort quota
+  (25% cut, from 2022) brings it back by 2030. The app's main worked example — full
+  walkthrough in the tutorial.
   [`docs/example_gnanapragasam.idpsir.json`](docs/example_gnanapragasam.idpsir.json)
-  (pressure/response pre-configured) or the underlying
+  (scenario 2005–2030 pre-configured) or the underlying
   [`data/gnanapragasam2026_nodes.csv`](data/gnanapragasam2026_nodes.csv) /
   [`data/gnanapragasam2026_edges.csv`](data/gnanapragasam2026_edges.csv).
 
 Load any of them from the wizard's Start step (Load savepoint), or via CSV import for
 the two that have plain tables.
+
+### Sri Lanka example: how it was parametrized
+
+One window is one year; window 0 is 2004, the last year before the post-tsunami aid, so
+the reference values are 2004 levels. Every value below is either taken from the paper,
+derived from it, calibrated against it, or — where marked — from outside it. The tables
+are built by [`data-raw/gnanapragasam2026_build.R`](data-raw/gnanapragasam2026_build.R),
+which also writes the savepoint; [`data-raw/gnanapragasam2026_figures.R`](data-raw/gnanapragasam2026_figures.R)
+draws the figures.
+
+- **Fishing effort** was digitized exactly from the paper's Fig. 4 (a vector figure):
+  [`data/gnanapragasam2026_effort_observed.csv`](data/gnanapragasam2026_effort_observed.csv),
+  7,181 thousand kW-days in 1990 to 16,531 in 2021. Its SD over that series (4,877) is
+  the model unit of effort, fleet capacity and the quota — the same sample the paper's
+  standardized relationships were estimated on.
+- **Fish stock** comes from the paper's Gordon-Schaefer model: B_MSY = 1.5 × H_MSY =
+  345 kt, so K = 690 kt and, at equilibrium, B(E) = K(1 − E/30,924), which reproduces
+  the paper's Table 4. Its threshold is B_MSY itself (falling): the usual limit
+  reference point, half of B_MSY (a management convention, not in the paper), was tried
+  first and is never crossed at realistic levels, so the stock would never reach its
+  Impacts.
+- **The two aid strengths** were fitted to the observed effort, 2006–2021
+  (R² = 0.93).
+- **Self-regulation**: in the temporal simulation a link passes its strength every
+  window, and a factor with self-regulation *s* settles at strength ÷ *s*. States whose
+  strengths come from an equilibrium (the Schaefer stock, the motorized share) keep
+  *s* = 1 so the static and temporal readings agree; the fleet, whose boats persist,
+  keeps 0.02.
+
+The replay reproduces the paper's benchmarks: the stock falls below B_MSY in 2012 (the
+paper: catch passes H_MSY in 2012) and is at 307 kt in 2021 (≈ 321 kt); with the 25%
+quota from 2022, effort reaches 12,470 thousand kW-days in 2030 (E_MEY = 12,287) and
+the stock 406 kt (413 kt in Table 4).
+
+![Effort and fish stock, observed and simulated](docs/example_gnanapragasam_validation.png)
+
+**Parameters and sources** (`data/gnanapragasam2026_parameters.csv`):
+
+| item | value | source |
+|---|---|---|
+| Window length | 1 year | Annual statistics (article, 1990-2021) |
+| Window 0 | 2004 | Last year before the post-tsunami aid |
+| Effort SD (P1, D3, R3 units) | 4877 thousand kW-days | SD of the 1990-2021 series digitized from Fig. 4 (vector figure) |
+| Effort in 2004 (reference, P1 and D3) | 8328 thousand kW-days | Fig. 4 (digitized) |
+| Fishing effort -> Fish stock (beta) | -0.825 | sqrt(R2 = 0.68), CPUE vs effort (section 3.3); sign: more effort, less stock |
+| Fishing effort -> Fish stock (band) | 0.622 - 1.027 | 95% interval of beta from R2 and n = 32 years |
+| Carrying capacity K | 690 kt | 2 x B_MSY; B_MSY = 1.5 x H_MSY (section 3.5.1, Table 3) |
+| Intrinsic growth r | 1.33 per year | 4 x H_MSY / K (Gordon-Schaefer) |
+| Fish stock in 2004 (reference) | 504.4 kt | Equilibrium K (1 - E / E_max) at the 2004 effort; reproduces Table 4 |
+| Fish stock SD | 108.9 kt | (K / E_max) x effort SD |
+| Fish stock self-regulation | 1 | Biomass taken at its Schaefer equilibrium each year (r = 1.33/yr: recovery rate r B / K about 0.72/yr); sr = 1 keeps the temporal equilibrium equal to B(E) |
+| Fish stock threshold (B_MSY) | 345.2 kt (falling) | B_MSY = 1.5 x H_MSY (article). B_lim = 0.5 B_MSY (convention) was tested and is never crossed |
+| Coastal population growth | 0.8% per year | External (national statistics), not in the article |
+| Coastal population in 2004 | 19.4 million | External (national statistics), not in the article |
+| Per-capita demand growth | 2.3% per year | Consumption doubled over three decades (section 3.1, Fig. 5) |
+| Per-capita demand ceiling | 31 kg per person | Peak of 31 kg in 2016 (section 3.1) |
+| Per-capita demand in 2004 | 23.5 kg per person | 31 kg discounted at 2.3%/yr back to 2004 |
+| Fleet capacity growth | 1% per year | Effort trend 1990-2004 (Fig. 4), before the aid |
+| Fleet capacity self-regulation | 0.02 | Boats persist; effort stayed on a plateau after the aid (Fig. 4) |
+| Post-tsunami aid -> Fleet capacity | 0.34 | Fitted with the post-war aid by least squares to Fig. 4, 2006-2021 (R2 = 0.93; a common value fits worse, R2 = 0.84) |
+| Post-war aid -> Fleet capacity | 0.08 | Fitted with the post-tsunami aid (same fit) |
+| Aid periods | 2005-2009 (windows 1-5); 2010-2012 (windows 6-8) | Section 3.1 and Fig. 6 |
+| Fleet capacity -> Fishing effort | 0.85 (band 0.75 - 0.95) | Effort = boat power x fishing days (section 2.2.1): capacity sets effort; kept below 0.9 so the three drivers of effort explain at most 100% of its variation |
+| Fleet motorization in 2004 / SD | 40% / 15.5 points | Fleet split 60:40 non-motorized before 2004, 60:40 motorized now (section 3.4); SD calibrated to that rise |
+| Effort-based quota -> Fishing effort | 1 (definitional) | The quota cuts effort directly, in effort units |
+| Quota size | 5% of 2021 effort = 827; 25% = 4,133 thousand kW-days | Table 4 (5% = MSY, 25% = MEY) |
+| Flow factors' self-regulation | 1 (no memory) | Effort, demand, catch and income are flows, not stocks |
+| Other edge strengths | classes weak 0.15 / moderate 0.45 / strong 0.80 | Qualitative links (section 3, Table 2) |
+
+**Nodes** (`data/gnanapragasam2026_nodes.csv`, main columns):
+
+| id | label | category | self_regulation | growth_rate | growth_cap | reference_value | sd | threshold_level |
+|---|---|---|---|---|---|---|---|---|
+| D1 | Coastal population | Driver | 0.50 | 0.008 |  |   19.4 |  |  |
+| D2 | Per-capita fish demand | Driver | 1.00 | 0.023 | 31 |   23.5 |  |  |
+| D3 | Fleet capacity (boats x power) | Driver | 0.02 | 0.01 |  | 8328.0 | 4877.0 |  |
+| D4 | Indian trawler incursions | Driver | 1.00 |  |  |  |  |  |
+| P1 | Fishing effort | Pressure | 1.00 |  |  | 8328.0 | 4877.0 |  |
+| P2 | Illegal bottom trawling | Pressure | 1.00 |  |  |  |  |  |
+| S1 | Fish stock (biomass) | State | 1.00 |  |  |  504.4 |  108.9 | 345.2 |
+| S2 | Fleet motorization (% motorized) | State | 1.00 |  |  |   40.0 |   15.5 |  |
+| I1 | Catch decline | Impact | 1.00 |  |  |  |  |  |
+| I2 | Fisher income loss | Impact | 1.00 |  |  |  |  |  |
+| I3 | Conflict with Indian fishermen | Impact | 0.50 |  |  |  |  |  |
+| I4 | Traditional fishing decline | Impact | 0.50 |  |  |  |  |  |
+| I5 | Loss of traditional fishing culture | Impact | 0.30 |  |  |  |  |  |
+| R1 | Post-tsunami aid (2005-2009) | Response | 1.00 |  |  |  |  |  |
+| R2 | Post-war aid (2010-2012) | Response | 1.00 |  |  |  |  |  |
+| R3 | Effort-based quota | Response | 1.00 |  |  |  | 4877.0 |  |
+| R4 | Combating poaching | Response | 1.00 |  |  |  |  |  |
+
+**Edges** (`data/gnanapragasam2026_edges.csv`):
+
+| link | sign | strength | band | source |
+|---|---|---|---|---|
+| Coastal population → Fishing effort | positive | weak |  | class |
+| Per-capita fish demand → Fishing effort | positive | moderate |  | class |
+| Fleet capacity (boats x power) → Fishing effort | positive | 0.850 | 0.75 – 0.95 | given |
+| Indian trawler incursions → Illegal bottom trawling | positive | strong |  | class |
+| Fishing effort → Fish stock (biomass) | negative | 0.825 | 0.622 – 1.027 | r2 |
+| Fishing effort → Fleet motorization (% motorized) | positive | 0.750 |  | calibrated |
+| Illegal bottom trawling → Fish stock (biomass) | negative | moderate |  | class |
+| Fish stock (biomass) → Catch decline | negative | strong |  | class |
+| Fish stock (biomass) → Fisher income loss | negative | moderate |  | class |
+| Fish stock (biomass) → Conflict with Indian fishermen | negative | moderate |  | class |
+| Fleet motorization (% motorized) → Catch decline | positive | moderate |  | class |
+| Fleet motorization (% motorized) → Conflict with Indian fishermen | positive | weak |  | class |
+| Fleet motorization (% motorized) → Traditional fishing decline | positive | strong |  | class |
+| Fleet motorization (% motorized) → Loss of traditional fishing culture | positive | moderate |  | class |
+| Post-tsunami aid (2005-2009) → Fleet capacity (boats x power) | positive | 0.345 |  | calibrated |
+| Post-tsunami aid (2005-2009) → Fisher income loss | negative | moderate |  | class |
+| Post-war aid (2010-2012) → Fleet capacity (boats x power) | positive | 0.085 |  | calibrated |
+| Post-war aid (2010-2012) → Fisher income loss | negative | moderate |  | class |
+| Effort-based quota → Fishing effort | negative | 1.000 | 0.9 – 1 | given |
+| Combating poaching → Indian trawler incursions | negative | moderate |  | class |
+
 
 ## Workflow
 
@@ -309,12 +428,19 @@ has four tabs:
   forward window by window instead of reading a single instant — useful when a
   response might, windows later, become a new pressure itself. Pressure and response
   each run as **"Added every window"** (default: the push is applied again every
-  window) or **"Applied once and held"** (window 1 only; the level it creates fades
-  only through self-regulation). The simulation runs **until the response neutralizes
+  window), **"Applied once and held"** (window 1 only; the level it creates fades
+  only through self-regulation) or **"For a number of windows"** (a start window and a
+  duration per factor, e.g. an aid programme that ran five years). A factor's
+  `growth_rate` moves its base level by itself in both runs — even when it is not in
+  the scenario (on by default) — optionally up to its `growth_cap`; growth and
+  self-regulation are separate (self-regulation fades the deviation the network causes,
+  growth moves the base level), and an **Edge intensity by window** table (CSV) shows
+  what each link out of a growing factor or a thresholded State passes on. The simulation runs **until the response neutralizes
   the Impact** (default, up to 50 windows, editable: it stops at the first window in
   which every Impact the response reaches, and that the pressure has already worsened,
   is at or below zero — or reports "Not neutralized within N windows"), or for a
-  **fixed number of windows**. A table shows how each Impact changes window by window
+  **fixed number of windows**; **Continue after neutralizing** keeps running N more
+  windows, since with a growing trend a neutralization may not last. A table shows how each Impact changes window by window
   (the stop window highlighted), with a "Neutralized (relative)" label when the net
   value is within a tolerance of the baseline (default 5%) and not growing — the
   tolerance only labels the table, it never stops the run. An option runs the baseline

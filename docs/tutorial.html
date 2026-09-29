@@ -660,7 +660,8 @@ cd iDPSIR</pre>
                     <tr><td class="key">controllability</td><td>Optional number in [0, 1], default 0.5</td></tr>
                     <tr><td class="key">descriptor</td><td>Optional free-text description of what this factor represents</td></tr>
                     <tr><td class="key">self_regulation</td><td>Optional number in [0, 1], default 0.5 — the share of this factor's deviation that fades by itself each window; only used by the optional temporal simulation (see <a href="#self-regulation">Self-regulation</a>)</td></tr>
-                    <tr><td class="key">growth_rate</td><td>Optional number, default 0 — a factor's own exogenous trend per time window, independent of any edge</td></tr>
+                    <tr><td class="key">growth_rate</td><td>Optional number, default 0 — how the factor's base level moves by itself per time window (greater than −1)</td></tr>
+                    <tr><td class="key">growth_cap</td><td>Optional — the level (own units) where that growth stops, e.g. a licence cap</td></tr>
                     <tr><td class="key">reference_value</td><td>Optional — the factor's initial level, in its own units (e.g. 100 t)</td></tr>
                     <tr><td class="key">sd</td><td>Optional — its typical variation in the same units (standard deviation); with it, thresholds and pushes can be given in real units</td></tr>
                     <tr><td class="key">threshold_level</td><td>Optional, State only — the level, in the factor's own units, at which it passes its effect on (see Scenarios below)</td></tr>
@@ -743,7 +744,7 @@ P1,S1,negative,0.55,,monitoring</pre>
                 <tr><td class="key">controllability</td><td>Optional number in [0, 1], default 0.5 — how much a manager can influence this factor directly (0 = not at all, 1 = fully). Not read by any calculation.</td></tr>
                 <tr><td class="key">descriptor</td><td>Optional — a short, plain-language description of what this factor represents. Purely documentation: not read by any calculation, just there so someone reading the network later (including a future you) doesn't have to guess what a node means.</td></tr>
                 <tr><td class="key">self_regulation</td><td>Optional number in [0, 1], default 0.5. The share of this factor's deviation that fades by itself each time window: 0 = accumulates like a stock, 1 = no memory. The form shows a guide (half-life, build-up); see <a href="#self-regulation">Self-regulation</a>. Only used by the Scenarios tab's optional temporal simulation.</td></tr>
-                <tr><td class="key">growth_rate</td><td>Optional number, default 0. This factor's own exogenous trend per time window (e.g. population growth), independent of any edge — also only used by the temporal simulation.</td></tr>
+                <tr><td class="key">Growth rate and ceiling</td><td>Optional, default 0 / blank. How this factor's base level moves by itself each window (e.g. +0.8% for population growth), independent of any edge, and optionally the level where it stops (in the factor's own units; needs the initial level). Only used by the temporal simulation, where the trend runs in both the baseline and the scenario, even when the factor is not in the scenario. It is not self-regulation: self-regulation is how a deviation caused by the network fades, growth is how the base level itself moves. Without a typical variation (SD), the trend is measured as a fraction of the initial level.</td></tr>
                 <tr><td class="key">Measurement (initial level, typical variation)</td><td>Optional. The factor's initial level in its own units (e.g. 100 t of stock) and its typical variation — a standard deviation, or a coefficient of variation that the form converts. The model works in standard deviations; with these two numbers, results, thresholds and pushes can be read and entered in real units (the Scenarios tab then offers "or, in units" next to each push, and the temporal simulation shows a <strong>Change relative to initial values</strong> table).</td></tr>
                 <tr><td class="key">endpoint_class / value</td><td>Impact factors only. Endpoint class: <em>ecological</em> (default), <em>ecosystem service</em> or <em>human welfare</em>. A service or welfare Impact also gets a social value v (0–1); <strong>Elicit values (swing weights)</strong> on this step helps set it: rate how much it matters to take each one from its worst to its best level (100 for the most important). Used to prioritize Impacts on the Scenarios tab.</td></tr>
                 <tr><td class="key">Threshold level and direction</td><td>Optional, State factors only, blank for most. The level, in the factor's own units, at which ALL of its outgoing links switch on together (e.g. the stock falling to 85 t) — before that, the State does not pass its effect on. Direction <em>auto</em> reads it from the initial level (below it = the State must fall, above = it must rise); <em>either direction</em> counts any move of that size. Used by both readings: in the sufficiency reading the State's deviation in the scenario decides it (a <strong>State triggers</strong> table shows whether the response closes a trigger the pressure opens), and in the temporal simulation it is checked window by window. Older files with a fraction (activation_threshold) are converted on load. Thresholded States get a thick border on the graph.</td></tr>
@@ -913,7 +914,7 @@ P1,S1,negative,0.55,,monitoring</pre>
             </div>
             <div class="control">
               <div class="label">Show temporal simulation across discrete time windows<span class="widget">optional</span></div>
-              <p>Runs the same two scenarios forward window by window instead of reading a single instant — useful when a response might, windows later, become a new pressure itself (see the worked example). Pressure and response each run as <strong>Added every window</strong> (default) or <strong>Applied once and held</strong> (window 1 only; the level it creates fades only through self-regulation). <strong>Simulation length</strong>: <em>until the response neutralizes the Impact</em> (default, up to 50 windows — it stops at the first window in which every Impact the response reaches, and that the pressure has already worsened, is at or below zero; otherwise it says "Not neutralized within N windows") or a <em>fixed number of windows</em>. Optional: a neutralization tolerance (default 5% of the baseline, which only labels the table as "Neutralized (relative)"), and a baseline without any response (ignoring Impact → Response links). With a thresholded State, a <strong>Trigger criterion</strong>: <em>accumulated State level</em> (default — has the State deviated beyond the critical point, adding up every window?), <em>load arriving at the State</em> (did what arrived in this window pass the limit?), or <em>compare both</em>; a table then shows each trigger open or closed window by window. Factors with an initial level get a <strong>Change relative to initial values</strong> table, in their own units, with the window in which a threshold was crossed. A progress indicator shows "Window X of N" while it computes. Shows a table of how each Impact changes window by window, with a <strong>Verdict</strong> per row (see <a href="#conventions">Reading the Verdict</a>), and a chart — one panel per Impact, dashed baseline vs. solid Net, each Net point colored by that window's Verdict, with the neutralized zone (Net ≤ 0) shaded — downloadable as PNG or SVG and included as a figure if this scenario is added to the report.</p>
+              <p>Runs the same two scenarios forward window by window instead of reading a single instant — useful when a response might, windows later, become a new pressure itself (see the worked example). Pressure and response each run as <strong>Added every window</strong> (default), <strong>Applied once and held</strong> (window 1 only; the level it creates fades only through self-regulation) or <strong>For a number of windows</strong> (a start window and a duration per factor — e.g. an aid programme that ran for five years). When a factor has a growth rate, <strong>Apply growth trends even to factors outside the pressure scenario</strong> (on by default) moves its base level in both runs, and <strong>Edge intensity by window</strong> shows what each link out of a growing factor or a thresholded State passes on in each window (downloadable as CSV). <strong>Simulation length</strong>: <em>until the response neutralizes the Impact</em> (default, up to 50 windows — it stops at the first window in which every Impact the response reaches, and that the pressure has already worsened, is at or below zero; otherwise it says "Not neutralized within N windows") or a <em>fixed number of windows</em>; with a growing trend a neutralization may not last, so <strong>Continue after neutralizing</strong> keeps running N more windows. Optional: a neutralization tolerance (default 5% of the baseline, which only labels the table as "Neutralized (relative)"), and a baseline without any response (ignoring Impact → Response links). With a thresholded State, a <strong>Trigger criterion</strong>: <em>accumulated State level</em> (default — has the State deviated beyond the critical point, adding up every window?), <em>load arriving at the State</em> (did what arrived in this window pass the limit?), or <em>compare both</em>; a table then shows each trigger open or closed window by window. Factors with an initial level get a <strong>Change relative to initial values</strong> table, in their own units, with the window in which a threshold was crossed. A progress indicator shows "Window X of N" while it computes. Shows a table of how each Impact changes window by window, with a <strong>Verdict</strong> per row (see <a href="#conventions">Reading the Verdict</a>), and a chart — one panel per Impact, dashed baseline vs. solid Net, each Net point colored by that window's Verdict, with the neutralized zone (Net ≤ 0) shaded — downloadable as PNG or SVG and included as a figure if this scenario is added to the report.</p>
             </div>
             <div class="control">
               <div class="label">Save this scenario<span class="widget">button</span></div>
@@ -1193,14 +1194,12 @@ P1,S1,negative,0.55,,monitoring</pre>
         </div>
 
         <h3>Gnanapragasam et al. 2026 — the deepest example in the app</h3>
-        <p>13 nodes, 14 edges, and the network the rest of this tutorial's worked
-          example is built on: a response that fully covers the one Impact it targets,
-          watch that success quietly erode over 15 simulated windows against a driver
-          it can't touch, while the same response's own side effect worsens two other
-          Impacts the pressure scenario never does — and two more Impacts sit
-          completely outside its reach no matter what. Continue to the next section
-          for the full walkthrough, with every table and both figures below generated
-          from this exact file.</p>
+        <p>17 factors, 20 links, one window per year from 2004: Sri Lanka's small-scale
+          fisheries, parametrized from the paper's own data (the fishing-effort series, a
+          Gordon-Schaefer stock model, the recommended effort cuts). Post-disaster aid restores
+          fishers' income and, through the boats it buys, drives effort up and the stock below
+          B<sub>MSY</sub>; the paper's effort quota brings it back. The full walkthrough is the
+          next section.</p>
         <div class="code-cluster two">
           <div class="code-card">
             <h4>Download the example</h4>
@@ -1220,289 +1219,166 @@ P1,S1,negative,0.55,,monitoring</pre>
       <!-- ============ WORKED EXAMPLE ============ -->
       <section class="block" id="worked-example">
         <div class="kicker">See it in action</div>
-        <h2>Worked example: it works, but not forever — and not for everyone</h2>
-        <p class="lead">Everything above is easier to follow with a real network in
-          front of you. This one is adapted from a real paper — Gnanapragasam et al.
-          2026, Marine Policy, on artisanal fisheries in northern Sri Lanka — and walks
-          through both readings: the static <strong>sufficiency</strong> check, and the
-          optional <strong>temporal simulation</strong> that shows a response's own
-          success quietly eroding over time, for reasons that have nothing to do with
-          the response itself.</p>
+        <h2>Worked example: the aid that became a pressure</h2>
+        <p class="lead">This network is built from a published study — Gnanapragasam,
+          Ratnasiri &amp; Fleming 2026, <em>Marine Policy</em> 189, 107095, on Sri Lanka's
+          small-scale fisheries — and parametrized from its own numbers: 32 years of fishing
+          effort, a Gordon-Schaefer model of the stock, and the effort cuts it recommends.
+          One window is one year, starting in 2004. It shows the three things the temporal
+          simulation adds to the static reading: <strong>growth trends</strong>,
+          <strong>pushes that last a set number of years</strong>, and a
+          <strong>threshold</strong> crossed by accumulation.</p>
 
-        <div class="code-cluster">
+        <div class="code-cluster two">
           <div class="code-card">
             <h4>Download the example</h4>
-            <p class="muted">A ready-to-load savepoint — no need to type anything in.
-              On the wizard's <strong>Start</strong> step, choose
-              <strong>Load savepoint</strong> and pick this file. It comes with the
-              pressure and response scenario below already configured, ready for
-              <strong>Apply scenario</strong>.</p>
+            <p class="muted">On the wizard's <strong>Start</strong> step choose
+              <strong>Load savepoint</strong>. The scenario below (2005–2030) is already
+              configured.</p>
             <pre><a href="example_gnanapragasam.idpsir.json" download>example_gnanapragasam.idpsir.json</a></pre>
+          </div>
+          <div class="code-card">
+            <h4>Where every number comes from</h4>
+            <p class="muted">Each value and its source, the effort series digitized from the
+              paper's Fig. 4, and the script that builds the tables.</p>
+            <pre><a href="../data/gnanapragasam2026_parameters.csv" download>gnanapragasam2026_parameters.csv</a></pre>
+            <pre><a href="../data/gnanapragasam2026_effort_observed.csv" download>gnanapragasam2026_effort_observed.csv</a></pre>
           </div>
         </div>
 
         <div class="callout warn">
           <span class="dot"></span>
-          <div><strong>This example is illustrative, not the paper's own model.</strong>
-          The strengths, thresholds, growth rate, and self-regulation values here are the
-          author's reasoned interpretation of the qualitative story in Gnanapragasam et
-          al. 2026 — including giving the fishers/boats trend a standing growth rate
-          instead of a cause, which the paper itself leaves open — not numbers
-          extracted from the paper's own bioeconomic model, which fits real
-          catch/effort data with methods this app doesn't attempt to reproduce. Treat
-          this network the way you'd treat any DPSIR diagram you build yourself: one
-          useful, structured lens on the system, worth checking against expert judgment
-          before acting on it.</div>
+          <div><strong>What comes from the paper and what does not.</strong> From the paper:
+          the effort series, the effort → stock strength (r² = 0.68), the stock benchmarks
+          (MSY, MEY, B<sub>MSY</sub>), the growth of fish demand and its 2016 peak, the aid
+          periods and the effort cuts. Derived from it: the stock's scale and SD (from the
+          Gordon-Schaefer equilibrium) and the two aid strengths, calibrated so the simulated
+          effort follows the observed one. Not in the paper: population growth (national
+          statistics) and the links the paper describes only qualitatively, which use the
+          app's strength classes. Read it as a structured, checkable interpretation of the
+          study, not as the study's own model.</div>
         </div>
 
         <h3>The story</h3>
-        <p>After the 2004 tsunami and, later, the end of a long civil war, aid programs
-          replaced fishing boats and gear lost by coastal communities in northern Sri
-          Lanka. The paper is explicit about what that aid was for: compensating
-          <strong>fisher income loss</strong> — the human cost of a shrinking catch —
-          not growing the fleet. This network takes that at face value: both aid
-          programs (<strong>Response</strong>) link directly to Fisher income loss
-          (Impact), the thing they were actually designed to fix — and to <em>nothing
-          else</em>.</p>
-        <p>Everything else in the network is driven by the pressure side instead.
-          Fishing effort — pushed by population growth, demand growth, and the number
-          of fishers and boats (the latter given its own small standing
-          <code>growth_rate</code>, since the paper observes this trend without pinning
-          down a cause) — does two things: it depletes the fish stock (feeding catch
-          decline, income loss, and conflict with Indian fishermen), and it drives
-          fleet motorization directly, independent of any aid program. That growing
-          motorized fleet then compounds catch decline and conflict further, on top of
-          what the fish-stock route already causes, and separately accelerates the
-          decline of traditional (non-motorized) fishing and the culture built around
-          it. The result: the aid's own causal footprint and the pressure's causal
-          footprint don't overlap anywhere in this network.</p>
+        <p>Fishing effort in Sri Lanka rose 130% between 1990 and 2021. The paper traces most
+          of it to <strong>livelihood aid</strong>: after the 2004 tsunami (2005–2009) and
+          the end of the civil war (2010–2012), donors replaced — and over-replaced — boats
+          and gear. The aid was meant to restore fishers' income, and it did; it also grew
+          the fleet, the fleet's effort pushed the stock below the level of maximum
+          sustainable yield, and catches fell from 2014. The paper's own answer is an
+          <strong>effort-based quota</strong>: 5% less effort brings it to MSY, 25% to the
+          economic optimum (MEY). Illegal trawling by Indian boats adds pressure throughout.</p>
         <figure class="figure">
-          <img src="example_gnanapragasam_network.png" alt="Network diagram of the Gnanapragasam example: Drivers on the left feeding Fishing effort, which feeds Fish stock and Fleet motorization, which together feed five Impacts; the two Response nodes link only to Fisher income loss.">
-          <figcaption><strong>Figure 1.</strong> The full network, colored by DPSIR category (see legend) and edge color by effect (green = positive, red = negative). Note how both Response nodes (purple, right) have exactly one outgoing edge each, both landing on Fisher income loss — nothing else in the diagram touches purple.</figcaption>
+          <img src="example_gnanapragasam_network.png" alt="Network diagram: four Drivers (population, fish demand, fleet capacity, Indian trawler incursions) feed two Pressures (fishing effort, illegal trawling), which feed two States (fish stock, fleet motorization), which feed five Impacts. Four Responses: two aid programmes to fleet capacity and fisher income, a quota to fishing effort, and anti-poaching to the incursions.">
+          <figcaption><strong>Figure 1.</strong> The network (17 factors, 20 links), colored by DPSIR category; green links increase their target, red ones decrease it. The two aid programmes each have two links: the intended one (less income loss) and the side effect (more fleet capacity).</figcaption>
+        </figure>
+
+        <h3>How it was parametrized</h3>
+        <div class="table-wrap">
+          <table class="fields">
+            <tr><th>Factor or link</th><th>Value</th><th>Source</th></tr>
+            <tr><td class="key">Fishing effort</td><td>8,328 thousand kW-days in 2004; SD 4,877</td><td>Fig. 4, digitized (1990–2021)</td></tr>
+            <tr><td class="key">Fishing effort → Fish stock</td><td>−0.82 (band 0.62–1.03)</td><td>√r², r² = 0.68, n = 32 years</td></tr>
+            <tr><td class="key">Fish stock</td><td>504 kt in 2004; SD 109 kt; threshold 345 kt (B<sub>MSY</sub>), falling</td><td>Gordon-Schaefer: K = 690 kt, B(E) = K(1 − E/30,924)</td></tr>
+            <tr><td class="key">Per-capita fish demand</td><td>+2.3% per year, ceiling 31 kg</td><td>Doubled in three decades, peaked at 31 kg in 2016</td></tr>
+            <tr><td class="key">Coastal population</td><td>+0.8% per year</td><td>National statistics (not in the paper)</td></tr>
+            <tr><td class="key">Fleet capacity</td><td>+1% per year; self-regulation 0.02 (boats persist)</td><td>Effort trend 1990–2004, before the aid</td></tr>
+            <tr><td class="key">Post-tsunami aid → Fleet capacity</td><td>0.345, windows 1–5 (2005–2009)</td><td>Calibrated to Fig. 4</td></tr>
+            <tr><td class="key">Post-war aid → Fleet capacity</td><td>0.085, windows 6–8 (2010–2012)</td><td>Calibrated to Fig. 4</td></tr>
+            <tr><td class="key">Effort-based quota → Fishing effort</td><td>1 (cuts effort directly); 85% = 4,145 thousand kW-days ≈ 25%</td><td>Table 4 (5% = MSY, 25% = MEY)</td></tr>
+            <tr><td class="key">Other links</td><td>weak 0.15 / moderate 0.45 / strong 0.80</td><td>Qualitative in the paper (Table 2)</td></tr>
+          </table>
+        </div>
+        <p>Two choices are worth knowing. States whose strengths come from an equilibrium
+          relationship (the Schaefer stock, the motorized share) keep self-regulation 1: in
+          the temporal simulation a link passes its strength every window, and a factor with
+          self-regulation <em>s</em> settles at strength ÷ <em>s</em>, so anything below 1 would
+          inflate them. And the stock's threshold is B<sub>MSY</sub>, from the paper; the usual
+          collapse limit (half of B<sub>MSY</sub>, a management convention) was tried first
+          and is never crossed at realistic levels, so the stock would never reach its
+          Impacts. One State breaks the neutral-name default on purpose: <code>Fleet
+          motorization</code> is oriented "more is worse" (more motorized capacity is more
+          pressure), so all its links are <code>positive</code> — still consistent with the
+          <a href="#conventions">golden rule</a>, since the orientation holds for every one of
+          its links.</p>
+
+        <h3>Does the model reproduce what happened?</h3>
+        <p>Before asking about policy, check the replay. Open <strong>Scenarios</strong>,
+          click <strong>Apply scenario</strong>, then open <strong>Temporal simulation</strong>
+          and tick <strong>Show temporal simulation</strong>. The responses run
+          <em>For a number of windows</em>: each aid only in its own years, the quota and
+          anti-poaching from 2022 (window 18). The table <strong>Change relative to initial
+          values</strong> gives effort and stock in their own units.</p>
+        <figure class="figure">
+          <img src="example_gnanapragasam_validation.png" alt="Two panels. Left: observed fishing effort 1990-2021 (points) and simulated effort 2004-2030 (line); the simulated line follows the rise during the aid years and the plateau near 17,000, then drops to about 12,470 with the quota. Right: simulated fish stock falling below B_MSY in 2012, staying near 305-307 kt until 2021, and recovering to about 406 kt with the quota; the article's reference points (321 kt in 2021, 413 kt with a 25% cut) are marked.">
+          <figcaption><strong>Figure 2.</strong> Left: fishing effort, observed (paper, Fig. 4) and simulated; the dashed line is the same network with no response at all. Right: the simulated fish stock and the B<sub>MSY</sub> threshold, with the paper's own reference points.</figcaption>
         </figure>
         <div class="table-wrap">
           <table class="fields">
-            <tr><th>Link</th><th>Effect</th><th>Strength (beta)</th></tr>
-            <tr><td class="key">Population growth → Fishing effort</td><td>positive</td><td>0.75</td></tr>
-            <tr><td class="key">Fish demand growth → Fishing effort</td><td>positive</td><td>0.75</td></tr>
-            <tr><td class="key">Fishers/boats → Fishing effort</td><td>positive</td><td>1.25</td></tr>
-            <tr><td class="key">Fishing effort → Fish stock</td><td>negative</td><td>1.00</td></tr>
-            <tr><td class="key">Fishing effort → Fleet motorization</td><td>positive</td><td>0.75</td></tr>
-            <tr><td class="key">Fish stock → Catch decline</td><td>negative</td><td>1.00</td></tr>
-            <tr><td class="key">Fish stock → Fisher income loss</td><td>negative</td><td>0.75</td></tr>
-            <tr><td class="key">Fish stock → Conflict with Indian fishermen</td><td>negative</td><td>0.50</td></tr>
-            <tr><td class="key">Fleet motorization → Catch decline</td><td>positive</td><td>0.75</td></tr>
-            <tr><td class="key">Fleet motorization → Conflict with Indian fishermen</td><td>positive</td><td>0.50</td></tr>
-            <tr><td class="key">Fleet motorization → Traditional fishing decline</td><td>positive</td><td>1.00</td></tr>
-            <tr><td class="key">Fleet motorization → Loss of traditional culture</td><td>positive</td><td>0.75</td></tr>
-            <tr><td class="key">Post-tsunami aid → Fisher income loss</td><td>negative</td><td>1.00</td></tr>
-            <tr><td class="key">Post-war aid → Fisher income loss</td><td>negative</td><td>1.25</td></tr>
+            <tr><th></th><th>Simulated</th><th>Paper</th></tr>
+            <tr><td class="key">Effort, 2005–2021</td><td>follows the series (R² = 0.93)</td><td>Fig. 4</td></tr>
+            <tr><td class="key">Stock falls below B<sub>MSY</sub></td><td>2012 (window 8)</td><td>catch passes H<sub>MSY</sub> in 2012, falls from 2014</td></tr>
+            <tr><td class="key">Stock in 2021</td><td>307 kt</td><td>≈ 321 kt (Schaefer equilibrium, Table 4)</td></tr>
+            <tr><td class="key">Effort in 2030 with the 25% quota</td><td>12,470</td><td>E<sub>MEY</sub> = 12,287</td></tr>
+            <tr><td class="key">Stock in 2030 with the 25% quota</td><td>406 kt</td><td>413 kt (Table 4)</td></tr>
           </table>
         </div>
+        <p>Without any response (dashed lines) effort only creeps up with the growth trends
+          (to about 11,200 by 2030) and the stock never drops below B<sub>MSY</sub>: in this
+          model, the overfishing is the aid's doing.</p>
+
+        <h3>Growth: the world moves even outside the scenario</h3>
+        <p>Three factors have a growth rate: population (+0.8%/year), per-capita demand
+          (+2.3%/year) and fleet capacity (+1%/year). None of them is in the pressure scenario,
+          yet their base level moves in both runs — with and without the response — because
+          <strong>Apply growth trends even to factors outside the pressure scenario</strong>
+          is ticked. Demand stops at its 31 kg <strong>ceiling</strong> in 2017 (window 13):
+          in <strong>Edge intensity by window</strong>, the link demand → effort grows
+          0.010, 0.021 … then stays at 0.144. That table is the place to see growth at work:
+          each link out of a growing factor passes a little more every window, in proportion
+          to (1 + growth rate), never compounding twice.</p>
         <div class="callout">
           <span class="dot"></span>
-          <div><strong>A deliberate exception to the neutral-State default.</strong>
-          <code>Fish stock</code> follows the standard convention (<a href="#conventions">Step 1</a>):
-          neutral, more is better, so both its edges are <code>negative</code>. <code>Fleet
-          motorization</code> does not — it's oriented the other way on purpose (more
-          motorized capacity is itself more pressure on the system), so <em>both</em> its
-          edges are <code>positive</code> instead. This is still fully consistent with the
-          golden rule: each State uses one orientation across all of its own edges, in and
-          out — Fleet motorization just picked "more is worse" instead of "more is better."
-          Not every State has to default to "more is better"; what matters is that the
-          choice, whichever it is, holds for that node's every edge.</div>
-        </div>
-        <p class="muted" style="font-size:14px; margin-top:10px">Both aid programs
-          (post-tsunami and post-war) link to exactly one factor — Fisher income loss —
-          with the post-war program weighted slightly stronger, reflecting it being the
-          larger of the two efforts. Neither aid program has any other link, direct or
-          indirect: everything else in the network (fishing effort, the fish stock, fleet
-          motorization, and the four other Impacts) is completely outside what either
-          program can reach, by construction.</p>
-
-        <h3>Is the response enough?</h3>
-        <p>The example savepoint already has this configured: a <strong>pressure
-          scenario</strong> with <strong>Coastal population growth</strong> and
-          <strong>Fish demand and consumption growth</strong> at 100%, and a
-          <strong>response scenario</strong> with both <strong>Post-tsunami aid</strong>
-          and <strong>Post-war aid</strong> at 100%. In <strong>Scenarios</strong>,
-          click <strong>Apply scenario</strong>.</p>
-        <p class="muted" style="font-size:14px">These strengths were converted from the
-          network's earlier relative weights so that this static reading stays exactly as
-          before. Several are at or above 1, and the Review step warns that the edges
-          arriving at three factors would "explain" more than 100% of their variation —
-          a sign that, read as standardized coefficients, some of them are on the high
-          side. Revisit them if you adapt this network.</p>
-        <div class="table-wrap">
-          <table class="fields">
-            <tr><th>Impact</th><th>Worsening</th><th>Mitigation</th><th>Net</th><th>Neutralizes?</th></tr>
-            <tr><td class="key">Catch decline</td><td>0.844</td><td>0.000</td><td>0.844</td><td>No</td></tr>
-            <tr><td class="key">Fisher income loss</td><td>0.000</td><td>-2.250</td><td>-2.250</td><td><strong>Yes</strong></td></tr>
-            <tr><td class="key">Conflict with Indian fishermen</td><td>0.563</td><td>0.000</td><td>0.563</td><td>No</td></tr>
-            <tr><td class="key">Traditional fishing decline</td><td>1.125</td><td>0.000</td><td>1.125</td><td>No</td></tr>
-            <tr><td class="key">Loss of traditional culture</td><td>0.844</td><td>0.000</td><td>0.844</td><td>No</td></tr>
-          </table>
-        </div>
-        <p>Only one row has a non-zero Mitigation. <strong>Fisher income loss</strong>
-          is the response's sole target. Every other Impact reads Mitigation exactly
-          <strong>0.000</strong>, not because the response fails against them, but
-          because it has no causal path to them at all — worsening carries straight
-          through as Net, untouched.</p>
-        <p>Notice also that Fisher income loss has <strong>no worsening at all</strong>
-          in this reading. That is the <strong>Fish stock</strong> trigger at work (see
-          <em>A threshold worth knowing about</em> below): in a single
-          instant, this pressure lowers the stock by 1.5 model units, far short of its
-          collapse point, so the stock does not pass its effect on — and the stock is the
-          only route from the pressure to income. For the same reason, Catch decline and
-          Conflict with Indian fishermen only show what arrives through their second
-          route, Fleet motorization. The <strong>State triggers</strong> table under the
-          results says so explicitly: Fish stock (CPUE), threshold 85 (either way),
-          deviation −1.5, closed before and after the response.</p>
-
-        <div class="callout">
-          <span class="dot"></span>
-          <div><strong>Notice this network has no loop at all.</strong> No Impact here
-          links back to either Response — unlike the app's other example networks. The
-          sufficiency reading doesn't need one: the propagated effect above is still
-          well-defined, which is exactly the point of building it this way. A response
-          doesn't need to create a feedback loop for its effects to matter — and, as
-          the table above shows, a response can be a clean, unambiguous success on the
-          one thing it targets, while four other things get worse around it entirely
-          on their own.</div>
+          <div><strong>Growth is not self-regulation.</strong> Self-regulation is how a
+          deviation <em>caused by the network</em> fades; growth is how the factor's
+          <em>own base level</em> moves by itself. Because the trend is the same with and
+          without the response, it does not change the difference between the two runs —
+          unless it pushes a State across its threshold.</div>
         </div>
 
-        <h3>How confident is that, response by response?</h3>
-        <p>Evaluated alone at full strength against the same pressure scenario, neither
-          aid program ever neutralizes <strong>Catch decline</strong>, <strong>Conflict
-          with Indian fishermen</strong>, <strong>Traditional fishing decline</strong>
-          or <strong>Loss of traditional culture</strong> in any of 300 simulations
-          that resample edge strengths within their uncertainty ranges —
-          <strong>0%</strong> for all four, consistent with the response having no path
-          to any of them. Against <strong>Fisher income loss</strong> both reach
-          <strong>100%</strong> — but read that with the previous paragraph in mind: in
-          this instant there is nothing to neutralize, because the Fish stock trigger
-          is closed. Whether the aid really holds income once the stock does collapse is
-          a question for the temporal simulation below.</p>
-
-        <h3>Reach</h3>
-        <p>This is where the redesigned network reads most starkly: <strong>1 factor
-          reached, including 1 of 5 Impacts</strong>. Not "reached weakly" or "reached
-          indirectly" — reached, full stop, and only that one. No strength can ever make
-          either aid program
-          touch Catch decline, Conflict with Indian fishermen, Traditional fishing
-          decline, or Loss of traditional culture, because there is no edge, direct or
-          indirect, from either Response node into anything but Fisher income loss.
-          That's not a limitation of the analysis; it's the network telling you,
-          precisely and quantitatively, what this response can and cannot possibly
-          influence, independent of magnitude — a response can be perfectly targeted
-          and still leave 80% of a system's problems completely unaddressed, simply
-          because nothing connects it to them.</p>
-
-        <h3>Temporal simulation: does "Yes" last?</h3>
-        <p>The sufficiency reading above is a single instant — everything happening at
-          once, and by that reading, Fisher income loss is a clean success. Open
-          <strong>Show temporal simulation across discrete time windows</strong>. With
-          the defaults (both pushes added every window, run until neutralized) the answer
-          is quick: <strong>neutralized at window 7</strong> — an aid program renewed
-          every window keeps up. But the aid was a single delivery, not a recurring
-          program. So also check the pressure box for <strong>Number of fishers and
-          boats</strong> at around 30% — representing that independent growth trend
-          actually happening, in parallel, alongside population and demand — and set
-          <strong>Response</strong> to <em>Applied once and held</em>. Run until
-          neutralized, the app now reports <strong>Not neutralized within 50
-          windows</strong>. To see why, switch <strong>Simulation length</strong> to a
-          fixed number of windows, 15.</p>
-        <div class="table-wrap">
-          <table class="fields">
-            <tr><th>Impact</th><th>Window 5 (Baseline / Net)</th><th>Window 10 (Baseline / Net)</th><th>Window 15 (Baseline / Net)</th></tr>
-            <tr><td class="key">Fisher income loss</td><td>0.0 / −9.0</td><td>194.9 / 174.6</td><td>1,020.1 / 988.6</td></tr>
-            <tr><td class="key">Catch decline</td><td>5.3 / 5.3</td><td>476.3 / 476.3</td><td>2,744.4 / 2,744.4</td></tr>
-            <tr><td class="key">Conflict with Indian fishermen</td><td>3.5 / 3.5</td><td>274.2 / 274.2</td><td>1,602.9 / 1,602.9</td></tr>
-            <tr><td class="key">Traditional fishing decline</td><td>7.0 / 7.0</td><td>288.7 / 288.7</td><td>1,845.7 / 1,845.7</td></tr>
-            <tr><td class="key">Loss of traditional culture</td><td>5.3 / 5.3</td><td>216.5 / 216.5</td><td>1,384.3 / 1,384.3</td></tr>
-          </table>
-        </div>
-        <p>One row tells a different story than the other four (values are abstract
-          model units, not real catch/income figures — what matters is the shape and
-          the comparison, not the raw size). <strong>Fisher income loss</strong> starts
-          strong — through window 5 the pressure hasn't reached it yet (baseline 0) and the
-          aid already pushes it below zero (−9.0); at window 6, when the pressure arrives,
-          it is within 5% of the baseline (0.53 against 11.78, "Neutralized (relative)") —
-          but from window 7 the gap steadily narrows: net is 90% of the baseline at window
-          10 and 97% at window 15. The aid never reverses and never actually makes
-          income loss worse; it simply has a fixed, one-time effect against a driver
-          (the growing fleet) that keeps compounding every window, so its relative
-          contribution fades toward irrelevance without ever crossing back to "worse
-          than doing nothing." The other four — <strong>Catch decline</strong>,
-          <strong>Conflict with Indian fishermen</strong>, <strong>Traditional fishing
-          decline</strong>, and <strong>Loss of traditional culture</strong> — are all
-          <em>identical</em> between baseline and net, at every single window, and
-          they all grow (Traditional fishing decline and Loss of traditional culture
-          used to have a zero baseline in the network's earlier design, when the aid
-          still had a side channel into fleet motorization; now that channel is gone,
-          they're driven by the same pressure trend as everything else, so they're
-          never zero once fishing effort starts moving fleet motorization). The
-          chart below plots exactly this: four panels turning red in lockstep — Net
-          overlapping the baseline the whole way, never dipping into the shaded
-          neutralized zone — while Fisher income loss starts green (Neutralized, then
-          Improved beyond neutral through window 5, light green at window 6), turns amber
-          (Partial) from window 7 onward, and stays amber through window 15 — the gap
-          keeps narrowing, but within this run it never actually closes back to "as bad
-          as no response."</p>
-        <figure class="figure">
-          <img src="example_gnanapragasam_temporal_chart.png" alt="Five line-chart panels, one per Impact, each plotting baseline (dashed) and Net (solid, points colored by that window's Verdict) across 15 windows. Four panels show Net tracking the baseline exactly, growing steeply and staying red (Failure/worsened) once they start moving. The Fisher income loss panel starts green (Neutralized/Improved beyond neutral) through window 5, light green (Neutralized, relative) at window 6, then turns amber (Partial) from window 7 through window 15.">
-          <figcaption><strong>Figure 2.</strong> The same simulation as the table above, window by window — one panel per Impact, dashed line is the baseline (pressure only), solid line is Net (pressure and response together), points colored by that window's Verdict, shaded band is the neutralized zone (Net ≤ 0). This is exactly what the app's own "How each Impact changes over time" chart (in the temporal disclosure) produces for this scenario — generated here as a static image so it's visible without loading the app.</figcaption>
-        </figure>
-
-        <div class="callout">
-          <span class="dot"></span>
-          <div><strong>Why the numbers grow so fast.</strong> This network's feedback
-          paths aren't damped enough to settle down within 15 windows (population,
-          demand, and the fishers/boats trend all keep compounding every window) — by
-          design, so the shape of the trend is visible within a short, readable table.
-          Treat this as a demonstration of <em>direction and relative comparison</em>
-          (is the gap closing or opening? is a row identical across both columns or
-          not?), not a forecast of real catch numbers over real years.</div>
-        </div>
+        <h3>The aid: fixed income while it lasted</h3>
+        <table class="fields">
+          <tr><th>Fisher income loss</th><th>No response</th><th>With the scenario</th><th>Verdict</th></tr>
+          <tr><td class="key">2012 (window 8)</td><td>0.00</td><td>−0.45</td><td>Improved beyond neutral</td></tr>
+          <tr><td class="key">2021 (window 17)</td><td>0.00</td><td>0.82</td><td>Failure/worsened</td></tr>
+          <tr><td class="key">2030 (window 26)</td><td>0.00</td><td>0.00</td><td>Neutralized</td></tr>
+        </table>
+        <p>While the aid ran it pushed income loss below zero. After 2012 it stopped, but the
+          boats it bought stayed (fleet capacity has self-regulation 0.02), effort stayed on
+          its plateau, and once the stock crossed B<sub>MSY</sub> its trigger opened and
+          income loss, catch decline and conflict all started to rise — in 2021 income loss is
+          worse than with no aid at all. The quota and anti-poaching from 2022 bring the stock
+          back above B<sub>MSY</sub>, the trigger closes, and income loss is neutralized by
+          2030. The other Impacts improve too but stay above the no-response run, because the
+          motorized fleet the aid built does not go away.</p>
 
         <h3>A threshold worth knowing about</h3>
-        <p>The <strong>Fish stock</strong> factor has a threshold: an initial level of
-          100 and a <strong>threshold level of 85</strong>, in either direction (this
-          file predates threshold directions; its old setting, 0.15 of the reference,
-          was converted on load). Once the stock has moved 15 units, <em>all three</em>
-          of its outgoing links — to Catch decline, Fisher income loss, and Conflict
-          with Indian fishermen — switch on together, instead of each scaling from the
-          very first unit of decline. That's a real fisheries phenomenon (a collapse
-          threshold), and setting it on the State factor itself keeps all three targets
-          waiting for the same collapse point.</p>
-        <p>The static reading and the temporal simulation disagree here, and on
-          purpose. In a single instant the pressure moves the stock by 1.5 units, so
-          the trigger stays closed and the sufficiency table shows no worsening of
-          income at all. Window after window, though, the deviation <em>accumulates</em>
-          (the stock has little self-regulation), and it crosses the 15 units at
-          <strong>window 7</strong> with the defaults (window 6 in the scenario with
-          the fleet trend) — only then does income loss start to move. This is exactly
-          the case the <strong>Trigger criterion</strong> setting is for: by the
-          default, <em>accumulated State level</em>, a weak but steady pressure can
-          still cross a threshold; by <em>load arriving at the State</em>, only what
-          arrives within one window counts. Choose <em>Compare both</em> to see the
-          windows where the two disagree. The table <strong>Change relative to initial
-          values</strong> shows the stock in its own units (starting at 100) and the
-          window in which the threshold was crossed.</p>
-        <p class="muted" style="font-size:14px">Because the stock has no typical
-          variation (SD) set, its threshold is measured in model units (15 units = 15
-          standard deviations of the model). Give a factor its typical variation in the
-          node form (the SD, or a coefficient of variation) and its threshold, initial
-          level and pushes are all read in real units.</p>
-        <p>The threshold's effect shows up unevenly in the table above, though, and
-          that's worth understanding rather than mistaking for an inconsistency:
-          <strong>Catch decline</strong> and <strong>Conflict with Indian fishermen</strong>
-          each have a <em>second</em>, ungated route in — from Fleet motorization, which
-          has no threshold of its own — so both are already moving by window 4 from
-          that route alone. <strong>Fisher income loss</strong> has no such alternative;
-          the Fish stock link is its only route in, so its baseline stays at exactly zero
-          through window 5 and only starts moving at window 6, the moment Fish stock's
-          own threshold is finally crossed.</p>
+        <p>Apply the scenario and look at the static <strong>State triggers</strong> table:
+          Fish stock (biomass), threshold 345 kt (falling) = −1.46 SD, deviation −0.36 with
+          the pressure alone, closed before and after. In a single instant, illegal trawling
+          does not overfish the stock — so the static reading shows no worsening for any
+          Impact, and every response "neutralizes" trivially. The problem only appears over
+          time: the fleet's effort accumulates year after year, the stock crosses B<sub>MSY</sub>
+          in 2012, and from then on the stock's effects switch on. This is the case the
+          <strong>Trigger criterion</strong> exists for: by accumulated level (the default)
+          the trigger opens; a single window's load never gets there.</p>
+        <p class="muted" style="font-size:14px">Try the paper's smallest option: give the quota 827
+          thousand kW-days (the 5% cut that brings effort to MSY) in its <strong>or, in
+          units</strong> field, instead of the 85% slider. The stock
+          only reaches about 327 kt by 2030 — still below B<sub>MSY</sub> — and the trigger
+          stays open; with anti-poaching too it reaches about 345 kt, right at the threshold.
+          The paper's own conclusion — a modest cut is a start, the MEY cut restores the
+          stock — comes out of the model.</p>
       </section>
 
       <!-- ============ SAVEPOINT ============ -->

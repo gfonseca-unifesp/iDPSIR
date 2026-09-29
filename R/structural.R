@@ -150,7 +150,13 @@ check_effect_matrix <- function(g) {
 
 # Warning (1.1): sum of beta^2 arriving at a node above 1 means the network
 # would explain more than 100% of that factor's variation.
+# Revisao 2, Fase D: edges leaving a Response are left out - a response is a
+# policy lever set by the scenario, not part of the factor's observed
+# variation (e.g. a quota that cuts effort one-to-one).
 explained_variance_warnings <- function(nodes, edges) {
+  if (nrow(edges) == 0) return(character())
+  from_cat <- nodes$dpsir_category[match(edges$from, nodes$id)]
+  edges <- edges[!from_cat %in% "Response", , drop = FALSE]
   if (nrow(edges) == 0) return(character())
   s <- tapply(as.numeric(edges$weight)^2, edges$to, sum)
   over <- s[s > 1 + 1e-9]
@@ -217,6 +223,32 @@ self_regulation_warnings <- function(nodes) {
       "'%s' has an activation threshold and self-regulation 0: its accumulated deviation never fades on its own, so once its trigger opens it only closes if a response pushes it back.",
       nodes$label[stuck]
     ))
+  }
+  out
+}
+
+# Revisao 2, Fase D: growth notes for the Review step.
+growth_warnings <- function(nodes) {
+  if (nrow(nodes) == 0 || !"growth_rate" %in% names(nodes)) return(character())
+  gr <- suppressWarnings(as.numeric(nodes$growth_rate)); gr[is.na(gr)] <- 0
+  ref <- if ("reference_value" %in% names(nodes)) suppressWarnings(as.numeric(nodes$reference_value)) else rep(NA_real_, nrow(nodes))
+  sd <- if ("sd" %in% names(nodes)) suppressWarnings(as.numeric(nodes$sd)) else rep(NA_real_, nrow(nodes))
+  cap <- if ("growth_cap" %in% names(nodes)) suppressWarnings(as.numeric(nodes$growth_cap)) else rep(NA_real_, nrow(nodes))
+  out <- character()
+  frac <- gr != 0 & (is.na(sd))
+  if (any(frac)) {
+    out <- c(out, sprintf(
+      "'%s' grows %+.1f%% per window but has no typical variation (SD): its trend is measured as a fraction of its initial level (1 = the whole base level), so compare it with pushes in the same terms.",
+      nodes$label[frac], 100 * gr[frac]
+    ))
+  }
+  nocap_ref <- !is.na(cap) & is.na(ref)
+  if (any(nocap_ref)) {
+    out <- c(out, sprintf("'%s' has a growth ceiling but no initial level: the ceiling is read against a base level of 1.", nodes$label[nocap_ref]))
+  }
+  reached <- !is.na(cap) & !is.na(ref) & gr > 0 & cap <= ref
+  if (any(reached)) {
+    out <- c(out, sprintf("'%s' already starts at or above its growth ceiling, so its trend stays at zero.", nodes$label[reached]))
   }
   out
 }

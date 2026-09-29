@@ -496,7 +496,9 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
       temporal_mode_pressure = "permanent", temporal_mode_response = "permanent",
       temporal_stop_rule = "until_neutralized", temporal_max_windows = 50,
       temporal_windows = 5, temporal_tol_rel = 5, baseline_without_response = FALSE,
-      temporal_gate_mode = "state_level"
+      temporal_gate_mode = "state_level",
+      # Revisao 2, Fase D.
+      temporal_trends_outside = TRUE, temporal_continue_after = 0
     )
     present <- function(v) !is.null(v) && length(v) == 1 && !is.na(v)
     temporal_setting <- function(name, state = NULL) {
@@ -505,12 +507,44 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
       temporal_defaults[[name]]
     }
     temporal_settings <- function(state = NULL) {
-      setNames(lapply(names(temporal_defaults), temporal_setting, state = state), names(temporal_defaults))
+      out <- setNames(lapply(names(temporal_defaults), temporal_setting, state = state), names(temporal_defaults))
+      out$temporal_schedule <- temporal_schedule(state)
+      out
+    }
+
+    # Revisao 2, Fase D: "For a number of windows" - start and duration per
+    # pushed factor (live inputs when present, else the saved schedule).
+    schedule_ids <- function() {
+      sc <- current_scenario()
+      if (is.null(sc)) return(character())
+      ids <- c(names(sc$p_D)[sc$p_D != 0], names(sc$press)[sc$press != 0])
+      unique(ids[!is.na(ids)])
+    }
+    temporal_schedule <- function(state = NULL) {
+      saved <- state$temporal_schedule
+      if (is.null(saved) || !is.data.frame(saved)) {
+        saved <- data.frame(id = character(), start = numeric(), duration = numeric(), stringsAsFactors = FALSE)
+      }
+      ids <- union(isolate(schedule_ids()), saved$id)
+      if (length(ids) == 0) return(saved)
+      rows <- lapply(ids, function(id) {
+        s_in <- input[[paste0("sched_start_", id)]]
+        d_in <- input[[paste0("sched_dur_", id)]]
+        k <- match(id, saved$id)
+        data.frame(
+          id = id,
+          start = if (present(s_in)) s_in else if (!is.na(k)) saved$start[k] else 1,
+          duration = if (present(d_in)) d_in else if (!is.na(k)) saved$duration[k] else 1,
+          stringsAsFactors = FALSE
+        )
+      })
+      do.call(rbind, rows)
     }
 
     mode_help <- c(
       permanent = "The push is added again every window, so its effect keeps building up. Use for an ongoing pressure or a management effort that keeps being applied. A response can overshoot and push the Impact below zero.",
-      impulse = "The push is applied in window 1 only; the level it creates stays in the system (it fades only if that factor has self-regulation). Use for a one-off event or measure."
+      impulse = "The push is applied in window 1 only; the level it creates stays in the system (it fades only if that factor has self-regulation). Use for a one-off event or measure.",
+      window = "The push is added in every window of a period you set per factor (start and duration below), then stops - e.g. an aid programme that ran for five years."
     )
     output$mode_help_pressure <- renderUI(helpText(mode_help[[input$temporal_mode_pressure %||% "permanent"]]))
     output$mode_help_response <- renderUI(helpText(mode_help[[input$temporal_mode_response %||% "permanent"]]))
@@ -521,7 +555,9 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
       # section re-render (and untick "Show temporal simulation") every time
       # one of them changes - they are only used as starting values.
       ts <- isolate(temporal_settings(seed_state()))
-      mode_choices <- c("Added every window (default)" = "permanent", "Applied once and held" = "impulse")
+      mode_choices <- c("Added every window (default)" = "permanent", "Applied once and held" = "impulse",
+                        "For a number of windows" = "window")
+      has_growth <- any(build_growth_rate_vector(graph()) != 0)
 
       tagList(
         checkboxInput(ns("show_temporal"), "Show temporal simulation across discrete time windows (optional)", value = FALSE),
@@ -544,6 +580,23 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
               uiOutput(ns("mode_help_response"))
             )
           ),
+          conditionalPanel(
+            condition = sprintf("input['%s'] == 'window' || input['%s'] == 'window'", ns("temporal_mode_pressure"), ns("temporal_mode_response")),
+            uiOutput(ns("schedule_controls"))
+          ),
+          # Revisao 2, Fase D (D10).
+          if (has_growth) {
+            tagList(
+              checkboxInput(
+                ns("temporal_trends_outside"), "Apply growth trends even to factors outside the pressure scenario",
+                value = !isFALSE(ts$temporal_trends_outside)
+              ),
+              helpText(
+                "A factor with a growth rate moves its base level by itself every window, in the baseline and in the",
+                "scenario alike - so the difference between them does not depend on growth unless a threshold is crossed."
+              )
+            )
+          },
           fluidRow(
             column(6,
               selectInput(
@@ -554,7 +607,9 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
               ),
               conditionalPanel(
                 condition = sprintf("input['%s'] == 'until_neutralized'", ns("temporal_stop_rule")),
-                numericInput(ns("temporal_max_windows"), "Maximum windows", value = ts$temporal_max_windows, min = 1, max = 200, step = 1)
+                numericInput(ns("temporal_max_windows"), "Maximum windows", value = ts$temporal_max_windows, min = 1, max = 200, step = 1),
+                # Revisao 2, item D4: with a growing trend, neutralizing may be temporary.
+                numericInput(ns("temporal_continue_after"), "Continue after neutralizing (windows)", value = ts$temporal_continue_after %||% 0, min = 0, max = 100, step = 1)
               ),
               conditionalPanel(
                 condition = sprintf("input['%s'] == 'fixed'", ns("temporal_stop_rule")),
@@ -586,8 +641,10 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
           },
           uiOutput(ns("temporal_stop_note")),
           uiOutput(ns("temporal_stability_note")),
+          uiOutput(ns("temporal_growth_note")),
           uiOutput(ns("temporal_gates_section")),
           uiOutput(ns("temporal_levels_section")),
+          uiOutput(ns("temporal_intensity_section")),
           h5("How each Impact changes, window by window"),
           DTOutput(ns("temporal_table")),
           h5("How each Impact changes over time"),
@@ -627,6 +684,64 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
     # runs - simulate_temporal_pair() itself (R/temporal.R) stays a pure,
     # Shiny-free function; the progress bar is wired in only through the
     # optional `on_step` callback it exposes for exactly this purpose.
+    output$schedule_controls <- renderUI({
+      sc <- current_scenario()
+      req(sc)
+      # Only the groups set to "For a number of windows".
+      ids <- c(
+        if (identical(input$temporal_mode_pressure, "window")) names(sc$p_D)[sc$p_D != 0],
+        if (identical(input$temporal_mode_response, "window")) names(sc$press)[sc$press != 0]
+      )
+      req(length(ids) > 0)
+      sched <- isolate(temporal_schedule(seed_state()))
+      labs <- nodes()$label[match(ids, nodes()$id)]
+      tagList(
+        tags$h6("Period of each push (for a number of windows)"),
+        lapply(seq_along(ids), function(i) {
+          k <- match(ids[i], sched$id)
+          fluidRow(
+            column(6, tags$p(style = "margin-top: 30px;", labs[i])),
+            column(3, numericInput(ns(paste0("sched_start_", ids[i])), "Start window", value = if (is.na(k)) 1 else sched$start[k], min = 1, step = 1)),
+            column(3, numericInput(ns(paste0("sched_dur_", ids[i])), "Windows", value = if (is.na(k)) 1 else sched$duration[k], min = 1, step = 1))
+          )
+        })
+      )
+    })
+
+    # Revisao 2, item D3: which factors carry a growth trend.
+    output$temporal_growth_note <- renderUI({
+      gr <- build_growth_rate_vector(graph())
+      gr <- gr[gr != 0]
+      req(length(gr) > 0)
+      labs <- V(graph())$label[match(names(gr), V(graph())$name)]
+      tags$p(class = "text-muted", sprintf("Factors with a growth trend: %s.", paste(sprintf("%s (%+.1f%%/window)", labs, 100 * gr), collapse = ", ")))
+    })
+
+    intensity_table <- reactive({
+      tr <- temporal_result()
+      req(tr, ncol(tr$edge_intensity) > 0)
+      edge_intensity_table(graph(), tr)
+    })
+    output$temporal_intensity_section <- renderUI({
+      tr <- temporal_result()
+      req(tr, ncol(tr$edge_intensity) > 0)
+      tagList(
+        h5("Edge intensity by window"),
+        p(class = "text-muted",
+          "What each edge leaving a growing factor or a thresholded State passes on in each window: strength x the",
+          "source's level (deviation + trend), in the scenario run. A closed trigger passes nothing."),
+        DTOutput(ns("temporal_intensity_table")),
+        downloadButton(ns("download_intensity_csv"), "Download CSV", class = "btn-sm")
+      )
+    })
+    output$temporal_intensity_table <- renderDT({
+      datatable(intensity_table(), rownames = FALSE, options = list(dom = "tp", pageLength = 10, scrollX = TRUE))
+    })
+    output$download_intensity_csv <- downloadHandler(
+      filename = function() paste0("edge_intensity_", Sys.Date(), ".csv"),
+      content = function(file) utils::write.csv(intensity_table(), file, row.names = FALSE)
+    )
+
     temporal_result <- reactive({
       sc <- current_scenario()
       req(sc, isTRUE(input$show_temporal))
@@ -645,6 +760,9 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
             max_windows = max(1, ts$temporal_max_windows %||% 50),
             baseline_without_response = isTRUE(ts$baseline_without_response),
             gate_mode = if (identical(ts$temporal_gate_mode, "load")) "load" else "state_level",
+            schedule = ts$temporal_schedule,
+            trends_outside = !isFALSE(ts$temporal_trends_outside),
+            continue_after = ts$temporal_continue_after %||% 0,
             on_step = function(t, total) {
               incProgress(1 / total, detail = sprintf("Window %d of %d", t, total))
             }
@@ -668,7 +786,9 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
         windows = max(1, ts$temporal_windows %||% 5),
         mode_D = ts$temporal_mode_pressure, mode_R = ts$temporal_mode_response,
         stop_rule = ts$temporal_stop_rule, max_windows = max(1, ts$temporal_max_windows %||% 50),
-        baseline_without_response = isTRUE(ts$baseline_without_response), gate_mode = "load"
+        baseline_without_response = isTRUE(ts$baseline_without_response), gate_mode = "load",
+        schedule = ts$temporal_schedule, trends_outside = !isFALSE(ts$temporal_trends_outside),
+        continue_after = ts$temporal_continue_after %||% 0
       )
     })
 

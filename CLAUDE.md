@@ -2651,7 +2651,21 @@ limiar no Review. **Mudança no exemplo Gnanapragasam:** a leitura temporal fica
 estática S1 desvia −1,5 contra z = −15, o gatilho fecha e a renda deixa de piorar (Catch decline
 2,344 → 0,844, Conflict 1,313 → 0,563, confiança 100%/100%); o tutorial foi reescrito como
 ilustração de estático vs. acumulação (abre na janela 7; 6 por carga) — decisão pendente com o
-usuário (manter / dar sd a S1 / tirar o limiar).
+usuário (manter / dar sd a S1 / tirar o limiar). Usuário escolheu (a).
+**Fase D concluída (branch `revisao2-faseD`), crescimento como tendência (D9, D10, D24):**
+`temporal_step()` faz `dev(t+1) = (1 − sr)·dev + B·x + p`, `x = dev + trend`;
+`build_trend_matrix()` (base = ref·(1+g)^t, com `growth_cap` opcional, escala `node_scale()`:
+DP; senão ref se o fator cresce; senão 1), tendência nas duas rodadas (`trends_outside`),
+modo `window` com `schedule` (id/start/duration), `continue_after`, `edge_intensity` +
+`edge_intensity_table()` (tela, CSV, relatório). `growth_cap` em validate/preflight/form/
+tooltip; g ≤ −1 bloqueia, > 0,5 avisa; `growth_warnings()` no Review; variação explicada
+ignora arestas de Resposta. `temporal_level_table()` usa `node_scale()` e reporta o cruzamento
+na janela do nível (w − 1). **Exemplo Gnanapragasam refeito do artigo** (PDF na raiz, não
+versionado): `data-raw/gnanapragasam2026_build.R` (CSVs de nós/arestas/parâmetros/esforço
+observado + savepoint) e `data-raw/gnanapragasam2026_figures.R`; 17 nós/20 arestas, janela
+0 = 2004, limiar do estoque = B_MSY (B_lim nunca cruza); `tests/testthat/test-growth.R`.
+Lição: um fator com autorregulação s se assenta em β/s no temporal — Estados calibrados por
+equilíbrio precisam de s = 1.
 
 Fase 5 está completa (Marcos A-D). Todos os 4 itens da lista pós-Fase 5 (1:
 exemplo didático, 2a: passos até neutralizar, 2b: threshold opcional por

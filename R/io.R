@@ -107,7 +107,11 @@ build_savepoint <- function(schema, nodes, edges, positions = NULL, metadata = l
       temporal_windows = scenario_state$temporal_windows,
       temporal_tol_rel = scenario_state$temporal_tol_rel,
       baseline_without_response = scenario_state$baseline_without_response,
-      temporal_gate_mode = scenario_state$temporal_gate_mode
+      temporal_gate_mode = scenario_state$temporal_gate_mode,
+      # Revisao 2, Fase D.
+      temporal_trends_outside = scenario_state$temporal_trends_outside,
+      temporal_continue_after = scenario_state$temporal_continue_after,
+      temporal_schedule = if (is.data.frame(scenario_state$temporal_schedule) && nrow(scenario_state$temporal_schedule) > 0) scenario_state$temporal_schedule else NULL
     )
   }
   if (!is.null(scenario_state_json)) scenario_state_json <- Filter(Negate(is.null), scenario_state_json)
@@ -322,7 +326,11 @@ read_savepoint <- function(path, convert_legacy = TRUE) {
       temporal_windows = ss_val(ss$temporal_windows) %||% 5,
       temporal_tol_rel = ss_val(ss$temporal_tol_rel) %||% 5,
       baseline_without_response = isTRUE(ss$baseline_without_response),
-      temporal_gate_mode = ss_val(ss$temporal_gate_mode) %||% "state_level"
+      temporal_gate_mode = ss_val(ss$temporal_gate_mode) %||% "state_level",
+      # Revisao 2, Fase D.
+      temporal_trends_outside = if (is.null(ss_val(ss$temporal_trends_outside))) TRUE else isTRUE(ss$temporal_trends_outside),
+      temporal_continue_after = ss_val(ss$temporal_continue_after) %||% 0,
+      temporal_schedule = if (is.null(ss$temporal_schedule) || length(ss$temporal_schedule) == 0) NULL else as.data.frame(ss$temporal_schedule, stringsAsFactors = FALSE)
     )
   }
 

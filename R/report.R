@@ -329,7 +329,11 @@ build_full_report_html <- function(
           stop_rule = sc$temporal_stop_rule %||% "until_neutralized",
           max_windows = max(1, sc$temporal_max_windows %||% 50),
           baseline_without_response = isTRUE(sc$baseline_without_response),
-          gate_mode = if (identical(sc$temporal_gate_mode, "load")) "load" else "state_level"
+          gate_mode = if (identical(sc$temporal_gate_mode, "load")) "load" else "state_level",
+          # Revisao 2, Fase D.
+          schedule = sc$temporal_schedule,
+          trends_outside = !isFALSE(sc$temporal_trends_outside),
+          continue_after = sc$temporal_continue_after %||% 0
         )
 
         stability_note <- temporal_stability_note(tr$stability)
@@ -384,6 +388,18 @@ build_full_report_html <- function(
           )
         } else NULL
 
+        # Revisao 2, item D3: edge intensity by window.
+        int_df <- edge_intensity_table(graph, tr)
+        int_tag <- if (nrow(int_df) > 0) {
+          tagList(
+            report_html_table(int_df),
+            caption_tag("Table", next_table_n(), sprintf(
+              "For \"%s\": what each edge leaving a growing factor or a thresholded State passes on per window (strength x source level, deviation + growth trend), in the scenario run.",
+              scenario_name
+            ))
+          )
+        } else NULL
+
         tagList(
           tags$h4(scenario_name),
           note_tag,
@@ -391,6 +407,7 @@ build_full_report_html <- function(
           gate_tag,
           table_tag,
           level_tag,
+          int_tag,
           tags$img(class = "report-graph-image", src = img_uri),
           caption_tag(
             "Figure", next_figure_n(),

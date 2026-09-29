@@ -20,6 +20,7 @@ create_empty_nodes_table <- function() {
     controllability = numeric(),
     self_regulation = numeric(),
     growth_rate = numeric(),
+    growth_cap = numeric(),
     reference_value = numeric(),
     sd = numeric(),
     threshold_level = numeric(),
@@ -528,7 +529,7 @@ mod_data_server <- function(id, seed = NULL) {
       d <- defaults %||% list(
         id = "", label = "", dpsir_category = schema_categories(rv$schema)[1],
         subsystem = "", uncertainty = 0.5, controllability = 0.5,
-        self_regulation = DEFAULT_SELF_REGULATION, growth_rate = 0, reference_value = NA_real_,
+        self_regulation = DEFAULT_SELF_REGULATION, growth_rate = 0, growth_cap = NA_real_, reference_value = NA_real_,
         sd = NA_real_, threshold_level = NA_real_, threshold_direction = "auto", descriptor = "",
         endpoint_class = "ecological", value_v = 1
       )
@@ -572,15 +573,24 @@ mod_data_server <- function(id, seed = NULL) {
             tags$tr(tags$td("1"), tags$td("-"), tags$td("1x"), tags$td("monthly income, catch in the window"))
           )
         ),
-        numericInput(
-          ns("nm_growth_rate"), "Growth rate (optional)",
-          value = d$growth_rate %||% 0, step = 0.01
+        fluidRow(
+          column(6, numericInput(
+            ns("nm_growth_rate"), "Growth rate per window (optional)",
+            value = d$growth_rate %||% 0, step = 0.01
+          )),
+          column(6, numericInput(
+            ns("nm_growth_cap"), "Growth ceiling (optional, own units)",
+            value = num_or_na(d$growth_cap), min = 0, step = 1
+          ))
         ),
         tags$p(
           class = "text-muted", style = "font-size: 12px;",
           "Leave at 0 for most factors. Only used by the Scenarios tab's discrete-window",
-          "simulation: a factor's own trend over time, independent of the network's links",
-          "(e.g. population growth, a rising consumption trend)."
+          "simulation: how this factor's base level moves by itself each window (e.g. population",
+          "growth, a rising consumption trend), in both the baseline and the scenario, whether or not",
+          "the factor is in the scenario. Self-regulation is different: it is how a deviation caused",
+          "by the network fades. The ceiling stops the base level at that value (e.g. a licence cap",
+          "on the fleet); it needs the initial level."
         ),
         # Revisao 2, item C0 (D23): measurement layer, in the factor's own units.
         tags$h6("Measurement (optional)", style = "margin-top: 10px;"),
@@ -767,6 +777,20 @@ mod_data_server <- function(id, seed = NULL) {
         showNotification("The typical variation must be greater than 0 (or left blank).", type = "error")
         return()
       }
+      growth_rate <- num(input$nm_growth_rate)
+      if (is.na(growth_rate)) growth_rate <- 0
+      if (growth_rate <= -1) {
+        showNotification("The growth rate must be greater than -1 (the base level would change sign).", type = "error")
+        return()
+      }
+      if (growth_rate > 0.5) {
+        showNotification("A growth rate above 0.5 per window is unusual - check the window length.", type = "warning")
+      }
+      growth_cap <- num(input$nm_growth_cap)
+      if (!is.na(growth_cap) && growth_cap <= 0) {
+        showNotification("The growth ceiling must be greater than 0 (or left blank).", type = "error")
+        return()
+      }
       threshold_level <- if (identical(input$nm_category, "State")) num(input$nm_threshold_level) else NA_real_
       if (!is.na(threshold_level) && is.na(reference_value)) {
         showNotification("A threshold level needs the initial level (reference value).", type = "error")
@@ -781,7 +805,8 @@ mod_data_server <- function(id, seed = NULL) {
         uncertainty = input$nm_uncertainty,
         controllability = input$nm_controllability,
         self_regulation = self_regulation,
-        growth_rate = input$nm_growth_rate %||% 0,
+        growth_rate = growth_rate,
+        growth_cap = growth_cap,
         reference_value = reference_value,
         sd = sd_value,
         threshold_level = threshold_level,
@@ -1097,7 +1122,7 @@ mod_data_server <- function(id, seed = NULL) {
         }
         notes <- c(notes, explained_variance_warnings(normalize_dpsir_nodes(rv$nodes), e))
       }
-      if (length(messages) == 0) notes <- c(notes, self_regulation_warnings(normalize_dpsir_nodes(rv$nodes)))
+      if (length(messages) == 0) notes <- c(notes, self_regulation_warnings(normalize_dpsir_nodes(rv$nodes)), growth_warnings(normalize_dpsir_nodes(rv$nodes)))
       if (length(messages) == 0) {
         notes <- c(notes, tryCatch(
           threshold_warnings(build_igraph(rv$nodes, rv$edges, rv$schema)),

@@ -23,6 +23,17 @@
 #
 #   x_i(t+1) = x_i(t) + growth_rate_i * x_i(t) + sum_j gate_ji(t) * (lambda*W)[i,j] * x_j(t) + p_i(t)
 #
+# REVISAO 2, FASE D (D9, D10, D24) - this equation is superseded:
+#   dev_i(t+1) = (1 - sr_i) * dev_i(t) + sum_j gate_ji(t) * B[i,j] * x_j(t) + p_i(t)
+#   x_i(t)     = dev_i(t) + trend_i(t)
+#   trend_i(t) = (base_i(t) - ref_i) / DP_i,  base_i(t) = ref_i * (1 + g_i)^t
+#                (optionally held at growth_cap_i, the ceiling in own units)
+# Self-regulation acts only on the deviation the network causes; growth is
+# only the trend of the factor's base level, the same in the baseline and
+# the scenario runs. Edges transmit x, so the influence of a growing factor
+# grows in proportion (1 + g) without double counting. The notes below
+# describe the older engine and are kept as history.
+#
 # `lambda*W` (nao o W bruto de build_interaction_matrix()) - ver o
 # comentario dentro de simulate_temporal_pair() pra por que: sem esse
 # fator de contracao, uma rede cujo raio espectral de W passe de 1
@@ -139,9 +150,82 @@ apply_threshold_gate <- function(W, x, threshold_matrix, reference_values) {
 # Revisao 2, item C3: the State gates come from R/triggers.R (threshold as a
 # level with a direction, D23; criterion "state_level" or "load", D11).
 # Returns the new state and which gates were open in this window.
-temporal_step <- function(x, W, growth_rate, th, g, gate_mode, p) {
+temporal_step <- function(dev, trend_next, trend_now, W, th, g, gate_mode, p) {
+  # Revisao 2, Fase D (D24): the gate and the edges see the level x = dev +
+  # trend; self-regulation (the diagonal of W, -sr) acts on dev only.
+  x <- dev + trend_now
   gated <- temporal_gate_matrix(W, x, th, g, gate_mode)
-  list(x = x + growth_rate * x + as.numeric(gated$W %*% x) + p, open = gated$open)
+  B <- gated$W
+  sr <- -diag(B)
+  diag(B) <- 0
+  new_dev <- (1 - sr) * dev + as.numeric(B %*% x) + p
+  list(dev = new_dev, x = new_dev + trend_next, open = gated$open, B = B, x_used = x)
+}
+
+# Revisao 2, Fase D (D24, D10): the base-level trend of every node, in the
+# engine's units (standard deviations), for windows 0..n_windows.
+#   base(t) = ref * (1 + g)^t, held at growth_cap (own units) when set;
+#   trend(t) = (base(t) - ref) / DP.
+# ref blank -> 1. DP = sd when given; without sd, DP = ref, so the trend is
+# a fraction of the base level (roadmap D1). g <= -1 is rejected upstream.
+build_trend_matrix <- function(g, n_windows, growth_rate = NULL, active = NULL) {
+  ids <- V(g)$name
+  n <- length(ids)
+  num <- function(attr, default) {
+    v <- igraph::vertex_attr(g, attr)
+    if (is.null(v)) return(rep(default, n))
+    v <- suppressWarnings(as.numeric(v))
+    v
+  }
+  gr <- if (is.null(growth_rate)) build_growth_rate_vector(g) else growth_rate[ids]
+  gr[is.na(gr)] <- 0
+  ref <- num("reference_value", NA_real_)
+  sd <- num("sd", NA_real_)
+  cap <- num("growth_cap", NA_real_)
+  ref_eff <- ifelse(is.na(ref) | ref <= 0, 1, ref)
+  dp <- ifelse(is.na(sd) | sd <= 0, ref_eff, sd)
+  if (!is.null(active)) gr[!ids %in% active] <- 0
+  tt <- 0:n_windows
+  M <- matrix(0, nrow = length(tt), ncol = n, dimnames = list(NULL, ids))
+  for (i in which(gr != 0)) {
+    base <- ref_eff[i] * (1 + gr[i])^tt
+    if (!is.na(cap[i])) base <- if (gr[i] > 0) pmin(base, max(cap[i], ref_eff[i])) else pmax(base, min(cap[i], ref_eff[i]))
+    M[, i] <- (base - ref_eff[i]) / dp[i]
+  }
+  M
+}
+
+# Revisao 2, Fase D: the scale (one model unit, in the factor's own units)
+# of each node: its SD when given; otherwise its initial level when it has a
+# growth trend (the trend is then a fraction of the base level, roadmap D1);
+# otherwise 1 (the model's own units, as for thresholds - Fase C).
+node_scale <- function(g) {
+  ids <- V(g)$name
+  num <- function(attr) {
+    v <- igraph::vertex_attr(g, attr)
+    if (is.null(v)) rep(NA_real_, length(ids)) else suppressWarnings(as.numeric(v))
+  }
+  sd <- num("sd"); ref <- num("reference_value")
+  gr <- build_growth_rate_vector(g)[ids]
+  out <- ifelse(!is.na(sd) & sd > 0, sd, ifelse(gr != 0 & !is.na(ref) & ref > 0, ref, 1))
+  setNames(out, ids)
+}
+
+# Revisao 2, Fase D: is node i pushed in window t?
+#   permanent: every window; impulse: window 1 only;
+#   window: from `start` for `duration` windows (per node, `schedule`).
+push_active <- function(mode, t, ids, schedule = NULL) {
+  if (mode == "permanent") return(rep(TRUE, length(ids)))
+  if (mode == "impulse") return(rep(t == 1, length(ids)))
+  start <- rep(1, length(ids)); dur <- rep(1, length(ids))
+  if (!is.null(schedule) && nrow(schedule) > 0) {
+    k <- match(ids, schedule$id)
+    has <- !is.na(k)
+    start[has] <- suppressWarnings(as.numeric(schedule$start[k[has]]))
+    dur[has] <- suppressWarnings(as.numeric(schedule$duration[k[has]]))
+  }
+  start[is.na(start)] <- 1; dur[is.na(dur)] <- 1
+  t >= start & t < start + dur
 }
 
 # Runs two rounds side by side - baseline (p_D only) and scenario
@@ -172,14 +256,17 @@ temporal_step <- function(x, W, growth_rate, th, g, gate_mode, p) {
 # `on_step(t, windows)` (Revisao 1, Fase 6) is an optional progress
 # callback, so this engine stays Shiny-free.
 simulate_temporal_pair <- function(g, p_D, p_R, windows = 5,
-                                    mode_D = c("permanent", "impulse"),
-                                    mode_R = c("permanent", "impulse"),
+                                    mode_D = c("permanent", "impulse", "window"),
+                                    mode_R = c("permanent", "impulse", "window"),
                                     stop_rule = c("until_neutralized", "fixed"),
                                     max_windows = 50,
                                     tol_abs = 1e-9,
                                     baseline_without_response = FALSE,
                                     gate_mode = c("state_level", "load"),
                                     growth_rate = NULL,
+                                    schedule = NULL,
+                                    trends_outside = TRUE,
+                                    continue_after = 0,
                                     on_step = NULL) {
   stopifnot(inherits(g, "igraph"))
   if (missing(stop_rule) && !missing(windows)) stop_rule <- "fixed"
@@ -188,6 +275,8 @@ simulate_temporal_pair <- function(g, p_D, p_R, windows = 5,
   stop_rule <- match.arg(stop_rule)
   gate_mode <- match.arg(gate_mode)
   n_windows <- if (stop_rule == "fixed") windows else max_windows
+  continue_after <- max(0, as.integer(continue_after %||% 0))
+  if (stop_rule == "until_neutralized") n_windows <- n_windows + continue_after
   stopifnot(n_windows >= 1)
 
   W <- build_interaction_matrix(g)
@@ -212,6 +301,9 @@ simulate_temporal_pair <- function(g, p_D, p_R, windows = 5,
 
   if (is.null(growth_rate)) growth_rate <- build_growth_rate_vector(g)
   th <- state_thresholds(g)
+  # Revisao 2, Fase D (D10): the trend runs in both rounds; with
+  # trends_outside = FALSE only for the factors in the pressure/response
+  # scenarios.
 
   # Revisao 2, item 0.3: align by name (R/sufficiency.R), never by position.
   p_D <- unname(align_press_vector(p_D, node_names, "pressure scenario"))
@@ -224,8 +316,23 @@ simulate_temporal_pair <- function(g, p_D, p_R, windows = 5,
   active_responses <- node_names[p_R != 0]
   reached_impacts <- intersect(response_reach(g, active_responses)$reached_ids, impact_ids)
 
-  x_baseline <- setNames(rep(0, n), node_names)
-  x_scenario <- setNames(rep(0, n), node_names)
+  trend <- build_trend_matrix(
+    g, n_windows, growth_rate,
+    active = if (isTRUE(trends_outside)) NULL else node_names[p_D != 0 | p_R != 0]
+  )
+  dev_baseline <- setNames(rep(0, n), node_names)
+  dev_scenario <- setNames(rep(0, n), node_names)
+  x_baseline <- dev_baseline + trend[1, ]
+  x_scenario <- dev_scenario + trend[1, ]
+
+  # Revisao 2, Fase D (D3): effective intensity of the edges that leave a
+  # growing factor or a thresholded State, B[to, from] * x_from(t), in the
+  # scenario round (gated).
+  from_ids <- unique(c(node_names[growth_rate[node_names] != 0], th$id))
+  edge_ends <- if (igraph::ecount(g) > 0) igraph::ends(g, igraph::E(g), names = TRUE) else matrix(character(), 0, 2)
+  track <- edge_ends[edge_ends[, 1] %in% from_ids, , drop = FALSE]
+  intensity <- matrix(NA_real_, nrow = n_windows, ncol = nrow(track),
+                      dimnames = list(NULL, if (nrow(track) > 0) paste(track[, 1], track[, 2], sep = "->") else NULL))
   hist_baseline <- matrix(0, nrow = n_windows + 1, ncol = n, dimnames = list(NULL, node_names))
   hist_scenario <- matrix(0, nrow = n_windows + 1, ncol = n, dimnames = list(NULL, node_names))
 
@@ -235,11 +342,13 @@ simulate_temporal_pair <- function(g, p_D, p_R, windows = 5,
   gates_scenario <- gates_baseline
 
   for (t in seq_len(n_windows)) {
-    p_D_t <- if (mode_D == "impulse" && t > 1) rep(0, n) else p_D
-    p_R_t <- if (mode_R == "impulse" && t > 1) rep(0, n) else p_R
+    p_D_t <- ifelse(push_active(mode_D, t, node_names, schedule), p_D, 0)
+    p_R_t <- ifelse(push_active(mode_R, t, node_names, schedule), p_R, 0)
 
-    step_b <- temporal_step(x_baseline, W_baseline, growth_rate, th, g, gate_mode, p_D_t)
-    step_s <- temporal_step(x_scenario, W, growth_rate, th, g, gate_mode, p_D_t + p_R_t)
+    step_b <- temporal_step(dev_baseline, trend[t + 1, ], trend[t, ], W_baseline, th, g, gate_mode, p_D_t)
+    step_s <- temporal_step(dev_scenario, trend[t + 1, ], trend[t, ], W, th, g, gate_mode, p_D_t + p_R_t)
+    dev_baseline <- setNames(step_b$dev, node_names)
+    dev_scenario <- setNames(step_s$dev, node_names)
     x_baseline <- setNames(step_b$x, node_names)
     x_scenario <- setNames(step_s$x, node_names)
     if (nrow(th) > 0) {
@@ -256,12 +365,30 @@ simulate_temporal_pair <- function(g, p_D, p_R, windows = 5,
       considered <- reached_impacts[x_baseline[reached_impacts] > tol_abs]
       if (length(considered) > 0 && all(x_scenario[considered] <= tol_abs)) {
         neutralized_at <- t
-        if (stop_rule == "until_neutralized") {
+        if (stop_rule == "until_neutralized" && continue_after == 0) {
           ran <- t
           break
         }
       }
     }
+    # Revisao 2, item D4: "continue N more windows" after neutralizing -
+    # with a growing trend the neutralization may be temporary.
+    if (stop_rule == "until_neutralized" && !is.na(neutralized_at) && t >= neutralized_at + continue_after) {
+      ran <- t
+      break
+    }
+    if (stop_rule == "until_neutralized" && is.na(neutralized_at) && t >= n_windows - continue_after) {
+      ran <- t
+      break
+    }
+  }
+
+  # Intensity at window t = gated B[to, from] * x_from(t), from the history.
+  for (t in seq_len(ran)) {
+    if (nrow(track) == 0) break
+    xt <- hist_scenario[t + 1, ]
+    Wg <- temporal_gate_matrix(W, xt, th, g, gate_mode)$W
+    intensity[t, ] <- Wg[track[, c(2, 1), drop = FALSE]] * xt[track[, 1]]
   }
 
   list(
@@ -276,7 +403,12 @@ simulate_temporal_pair <- function(g, p_D, p_R, windows = 5,
     thresholds = th,
     gates_baseline = gates_baseline[seq_len(ran), , drop = FALSE],
     gates_scenario = gates_scenario[seq_len(ran), , drop = FALSE],
-    stability = stability
+    stability = stability,
+    # Revisao 2, Fase D.
+    trend = trend[seq_len(ran + 1), , drop = FALSE],
+    edge_intensity = intensity[seq_len(ran), , drop = FALSE],
+    continue_after = continue_after,
+    growth_rate = growth_rate[node_names]
   )
 }
 
@@ -413,4 +545,16 @@ format_temporal_table <- function(g, temporal_result, threshold = 1e-9, tol_rel 
   })
 
   do.call(rbind, rows)
+}
+
+# Revisao 2, item D3: the edge-intensity table - one row per tracked edge,
+# one column per window (strength x source level, scenario run).
+edge_intensity_table <- function(g, tr) {
+  m <- tr$edge_intensity
+  if (is.null(m) || ncol(m) == 0) return(data.frame())
+  ends <- do.call(rbind, strsplit(colnames(m), "->", fixed = TRUE))
+  lab <- function(id) V(g)$label[match(id, V(g)$name)]
+  df <- data.frame(Edge = paste(lab(ends[, 1]), "->", lab(ends[, 2])), check.names = FALSE, stringsAsFactors = FALSE)
+  for (t in seq_len(nrow(m))) df[[paste("Window", t)]] <- round(m[t, ], 3)
+  df
 }

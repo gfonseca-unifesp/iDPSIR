@@ -178,15 +178,18 @@ temporal_level_table <- function(g, tr) {
   keep <- !is.na(ref) & !placeholder
   if (!any(keep)) return(data.frame())
   last <- nrow(tr$scenario)
-  sd_eff <- ifelse(is.na(sd), 1, sd)
+  # Revisao 2, Fase D: the same scale the engine used for the trend.
+  sd_eff <- unname(node_scale(g)[ids])
   lb <- ref + sd_eff * tr$baseline[last, ids]
   ls <- ref + sd_eff * tr$scenario[last, ids]
   crossed <- rep("", length(ids))
   if (nrow(tr$thresholds) > 0) {
     for (k in seq_len(nrow(tr$thresholds))) {
       i <- match(tr$thresholds$id[k], ids)
+      # The gate of window w reads the level of window w - 1, so the level
+      # crossed the threshold in window w - 1.
       w <- which(tr$gates_scenario[, k])[1]
-      crossed[i] <- if (is.na(w)) "not crossed" else sprintf("window %d", w)
+      crossed[i] <- if (is.na(w)) "not crossed" else sprintf("window %d", w - 1)
     }
   }
   data.frame(

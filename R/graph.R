@@ -234,6 +234,11 @@ build_node_tooltip <- function(nodes) {
   level <- if ("threshold_level" %in% names(nodes)) suppressWarnings(as.numeric(nodes$threshold_level)) else rep(NA_real_, nrow(nodes))
   dirn <- if ("threshold_direction" %in% names(nodes)) as.character(nodes$threshold_direction) else rep("auto", nrow(nodes))
   threshold_text <- ifelse(is.na(level), "-", paste0(signif(level, 4), ifelse(dirn %in% "both", " (either direction)", "")))
+  # Revisao 2, Fase D: growth trend of the base level and its ceiling.
+  gr <- if ("growth_rate" %in% names(nodes)) suppressWarnings(as.numeric(nodes$growth_rate)) else rep(0, nrow(nodes))
+  gcap <- if ("growth_cap" %in% names(nodes)) suppressWarnings(as.numeric(nodes$growth_cap)) else rep(NA_real_, nrow(nodes))
+  growth_text <- ifelse(is.na(gr) | gr == 0, "-", paste0(sprintf("%+.1f%%", 100 * gr), " per window",
+                                                         ifelse(is.na(gcap), "", paste0(", ceiling ", signif(gcap, 4)))))
 
   glue::glue(
     "<b>{tooltip_text(nodes$label)}</b><br>",
@@ -242,6 +247,7 @@ build_node_tooltip <- function(nodes) {
     "Subsystem: {tooltip_text(nodes$subsystem)}<br>",
     "Uncertainty: {ifelse(is.na(nodes$uncertainty), '-', round(as.numeric(nodes$uncertainty), 2))}<br>",
     "Controllability: {ifelse(is.na(nodes$controllability), '-', round(as.numeric(nodes$controllability), 2))}<br>",
+    "Growth: {growth_text}<br>",
     "Threshold: {threshold_text}"
   )
 }

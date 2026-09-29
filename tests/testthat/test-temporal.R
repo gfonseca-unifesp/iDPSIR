@@ -71,13 +71,13 @@ test_that("build_growth_rate_vector/build_reference_values fall back to 0/1 on a
 test_that("temporal_step matches a hand-computed single window", {
   g <- build_test_network()
   W <- build_interaction_matrix(g)
-  growth_rate <- build_growth_rate_vector(g)
   th <- state_thresholds(g)
 
   x0 <- zero_press(g)
   p <- build_press_vector(g, active_ids = "D1", strengths = c(D1 = 1))
 
-  x1 <- setNames(temporal_step(x0, W, growth_rate, th, g, "state_level", p)$x, names(x0))
+  # Revisao 2, Fase D: temporal_step(dev, trend_next, trend_now, ...).
+  x1 <- setNames(temporal_step(x0, x0, x0, W, th, g, "state_level", p)$x, names(x0))
 
   # x=0 everywhere, so W %*% x contributes nothing on the first step - only
   # the direct external push on D1 shows up.

@@ -532,6 +532,14 @@ Com a persistência da D20, o Estado acumula (sr < 1). Por isso "o que chega nes
 - Baseline e cenário recebem a mesma tendência: com resposta nula, o líquido é igual ao baseline. Sem gatilho, cenário − baseline é igual ao caso com g = 0.
 - Regressão: com `growth_rate = 0` em todos os nós, o resultado é idêntico ao da Fase A.
 
+**Executada (branch `revisao2-faseD`, 29/09):** D1–D5 como especificado, os quatro casos de referência batem com tolerância 1e-6. Acréscimos e ajustes pedidos pelo usuário ao reler o artigo:
+- **Modo "For a number of windows"** (início e duração por fator), além de impulso/permanente — as ajudas duraram 5 e 3 anos.
+- **Teto opcional do crescimento** (`growth_cap`, unidades próprias; piso quando g < 0).
+- **"Continue after neutralizing"** (D4) como número de janelas extras.
+- **Escala sem DP** (`node_scale()`): DP quando há; senão o nível inicial se o fator cresce (tendência como fração do nível de base, como a D1 pede); senão 1 (o mesmo dos limiares da Fase C, que reproduz o limiar antigo).
+- A checagem de "variação explicada > 100%" passou a ignorar arestas que saem de Respostas (alavancas de política, não variação observada).
+- **Exemplo Gnanapragasam refeito** a partir do artigo (PDF lido): janela = 1 ano, janela 0 = 2004; esforço digitalizado da Fig. 4 (vetorial); estoque pelo Gordon-Schaefer do artigo; ajudas → frota calibradas (R² = 0,93); cota de esforço (Tabela 4) e combate à pesca ilegal como Respostas. **Limiar do estoque = B_MSY (345 kt), não B_lim**: B_lim (convenção, 0,5 B_MSY) nunca é cruzado em níveis realistas e cortaria o estoque dos Impactos; B_MSY cruza em 2012, como no artigo. Estados calibrados por equilíbrio ficam com autorregulação 1 (um fator com autorregulação s se assenta em β/s). Tabelas, fontes e script em `data-raw/`.
+
 **Pronto quando:**
 - crescimento e autorregulação são parâmetros independentes;
 - a influência das arestas de um fator em crescimento cresce na proporção (1 + g) por janela, sem dupla contagem, mesmo com o nó fora do cenário;

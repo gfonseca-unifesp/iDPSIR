@@ -29,7 +29,7 @@ get_known_dpsir_node_fields <- function() {
   c(
     "id", "label", "dpsir_category", "subsystem", "uncertainty", "controllability",
     "self_regulation", "growth_rate", "reference_value", "activation_threshold", "descriptor",
-    "endpoint_class", "value_v", "sd", "threshold_level", "threshold_direction"
+    "endpoint_class", "value_v", "sd", "threshold_level", "threshold_direction", "growth_cap"
   )
 }
 
@@ -200,6 +200,34 @@ preflight_import_nodes <- function(nodes_raw, schema = get_default_dpsir_schema(
           bad_range + 1, numeric_vals[bad_range]
         ))
       }
+    }
+  }
+
+  # Revisao 2, item D4: growth rate (g <= -1 would flip the base level's
+  # sign; above 0.5 per window is unusual) and the optional growth ceiling.
+  if (nrow(nodes_raw) > 0 && "growth_rate" %in% present) {
+    raw <- nodes_raw$growth_rate
+    vals <- suppressWarnings(as.numeric(raw))
+    filled <- !.pf_is_blank(raw)
+    bad <- which(filled & is.na(vals))
+    if (length(bad) > 0) {
+      blocking <- c(blocking, sprintf("Nodes file, row %d: growth_rate '%s' is not a number.", bad + 1, trimws(as.character(raw))[bad]))
+    }
+    low <- which(filled & !is.na(vals) & vals <= -1)
+    if (length(low) > 0) {
+      blocking <- c(blocking, sprintf("Nodes file, row %d: growth_rate %s must be greater than -1.", low + 1, vals[low]))
+    }
+    high <- which(filled & !is.na(vals) & vals > 0.5)
+    if (length(high) > 0) {
+      warn <- c(warn, sprintf("Nodes file, row %d: growth_rate %s is above 0.5 per window - check the window length.", high + 1, vals[high]))
+    }
+  }
+  if (nrow(nodes_raw) > 0 && "growth_cap" %in% present) {
+    raw <- nodes_raw$growth_cap
+    vals <- suppressWarnings(as.numeric(raw))
+    bad <- which(!.pf_is_blank(raw) & (is.na(vals) | vals <= 0))
+    if (length(bad) > 0) {
+      blocking <- c(blocking, sprintf("Nodes file, row %d: growth_cap '%s' must be a number greater than 0.", bad + 1, trimws(as.character(raw))[bad]))
     }
   }
 
@@ -540,6 +568,15 @@ normalize_dpsir_nodes <- function(nodes) {
   } else {
     nodes$reference_value <- suppressWarnings(as.numeric(nodes$reference_value))
     nodes$reference_value[!is.na(nodes$reference_value) & nodes$reference_value <= 0] <- NA_real_
+  }
+  # Revisao 2, Fase D: optional ceiling (or floor, for a negative growth
+  # rate) of the base level reached through growth, in the factor's own
+  # units. Blank = no ceiling.
+  if (!"growth_cap" %in% names(nodes)) {
+    nodes$growth_cap <- NA_real_
+  } else {
+    nodes$growth_cap <- suppressWarnings(as.numeric(nodes$growth_cap))
+    nodes$growth_cap[!is.na(nodes$growth_cap) & nodes$growth_cap <= 0] <- NA_real_
   }
   if (!"sd" %in% names(nodes)) {
     nodes$sd <- NA_real_
