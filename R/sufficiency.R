@@ -1,69 +1,36 @@
 # =====================================================
-# RESPONSE SUFFICIENCY - "TWO PUSHES" MODEL (Revisao 1)
+# RESPONSE SUFFICIENCY - "TWO PUSHES" MODEL
 # =====================================================
 #
-# Replaces -A^-1*press (R/loop_analysis.R's press_perturbation(), the
-# primary Scenarios output through Fase 5-9) as the main reading of a
-# scenario's effect. That equilibrium reading requires the network to be
-# "stable" in the eigenvalue sense - something no network this app can
-# build ever is by default (the schema forbids a node acting on itself, so
-# the interaction matrix's diagonal, and therefore its trace/eigenvalue
-# sum, is always zero) - and, worse, in a genuinely unstable network it can
-# silently INVERT the sign of a prediction. Confirmed on a real network,
-# not hypothetically: running the Mangi et al. 2007 network
-# (manuscrito/mangi2007_*.csv) through the equilibrium engine shows Gear
-# restrictions (R2) producing +0.81 ("worsening") on Reef ecosystem
-# degradation, when gear restrictions should intuitively reduce reef
-# pressure - see manuscrito/idpsir_report_2026-07-28_GF.html.
+# Revisao 1 introduced this reading in place of the old equilibrium engine
+# (-A^-1 press, R/loop_analysis.R), which needed a "stable" network and, on
+# the Mangi et al. 2007 network, silently inverted a sign (gear restrictions
+# "worsening" the reef). See CLAUDE.md for that history.
 #
-# DPSIR is a static, structural model - what matters is whether a planned
-# response's effect covers a pressure's effect, not the transient path a
-# dynamical system would take to get there (that framing fits a
-# predator-prey system, not a management scenario). This file replaces the
-# dynamic-equilibrium reading with a static one: a *discounted, dominated-
-# by-short-paths* propagated effect that is provably well-defined for any
-# signed weighted network, regardless of stability.
+# Revisao 2, Fase 1 (structural mode, decisions D17-D21): every edge is a
+# standardized path coefficient beta (R/structural.R), and the effect of a
+# push p is the path-analysis total effect
 #
-# Phi(p) = (I - lambda*W)^-1 * p - p = lambda*W*p + lambda^2*W^2*p + ...
+#   Phi(p) = (I - B)^-1 p - p = B p + B^2 p + ...
 #
-# W is the signed interaction matrix WITHOUT a self-regulation diagonal
-# (build_signed_matrix() below) - unlike build_interaction_matrix() in
-# R/loop_analysis.R, there is no per-node self-regulation term here at all;
-# instead, lambda = c/rho(W) (c in (0,1), default 0.5) is a single global
-# "reach" factor. Since lambda*rho(W) = c < 1 by construction, (I -
-# lambda*W) is *never* singular, for any W - this is what eliminates both
-# the stability requirement and the sign-inversion failure mode. The
-# Neumann-series form above also makes explicit that the effect is
-# dominated by short causal paths (lambda^k shrinks geometrically), whose
-# sign is always the intuitive one - long, indirect loops can't flip it.
+# - products of beta along each path, summed over paths. There is no longer a
+# global reach factor c: a response far from an Impact is attenuated by the
+# product of the betas (< 1) on its path. The series converges, and (I - B) is
+# invertible, whenever rho(B) < 1 - checked when the graph is built
+# (check_effect_matrix()) and again here as a guard. For an acyclic network B
+# is nilpotent (rho = 0) and the series simply stops at the longest path.
 #
-# Two independent perturbation vectors (both user-controlled, built with
-# build_press_vector() from R/loop_analysis.R, unchanged): p_D (a "pressure
-# scenario" - Drivers/Pressures pushed) and p_R (a "response scenario" -
-# Responses activated at a strength). Because propagate() is linear in p,
-# Phi(p_D + p_R) = Phi(p_D) + Phi(p_R) - the two are always computed
-# separately and summed, never re-run combined.
+# In a DAG this equals the old reading with beta = c * weight; with cycles
+# the old lambda = c / rho(W) is reproduced by converting an older file with
+# beta = lambda * weight (convert_legacy_weights()), so older savepoints keep
+# their static numbers exactly.
 #
-# Special case, found building the Gnanapragasam et al. 2026 example
-# network (Fase 9): a purely ACYCLIC causal network (no loop anywhere - a
-# real, valid DPSIR network, not a degenerate one) has rho(W) = 0 too,
-# since a DAG's matrix is nilpotent (every eigenvalue exactly 0) - same
-# value spectral_radius() returns for a truly edge-less W. propagate()
-# tells the two apart explicitly (see its own comments) rather than
-# treating "no cycle" the same as "no edges at all".
+# Two independent pushes (built with build_press_vector()): p_D, the pressure
+# scenario, and p_R, the response scenario. Phi is linear in p, so the two are
+# computed separately and summed.
 
-# Signed interaction matrix with NO diagonal term - deliberately reuses
-# build_interaction_matrix() (R/loop_analysis.R) for the sign/weight
-# extraction logic, then zeroes the diagonal explicitly. This is also what
-# makes an old self_regulation value on a loaded savepoint harmlessly
-# inert without any special-case "ignore it" code: even if
-# V(g)$self_regulation still exists and build_interaction_matrix() fills a
-# non-zero diagonal from it, this function discards that diagonal anyway.
-build_signed_matrix <- function(g) {
-  A <- build_interaction_matrix(g)
-  diag(A) <- 0
-  A
-}
+# Kept as an alias while callers move to effect_matrix() (Fase 4 removes it).
+build_signed_matrix <- function(g) effect_matrix(g)
 
 # Spectral radius = max modulus of the eigenvalues, NOT max real part -
 # eigenvalues of a network with cycles are routinely complex (documented
@@ -78,66 +45,26 @@ spectral_radius <- function(W) {
   max(Mod(eigen(W, only.values = TRUE)$values))
 }
 
-# c in (0,1) is the "reach" the UI exposes (plain-language slider, no
-# mention of lambda/spectral radius on screen) - lambda is derived from it
-# fresh each call, never a user-facing number itself.
-propagate <- function(W, p, c = 0.5) {
-  stopifnot(is.matrix(W), nrow(W) == ncol(W))
-  stopifnot(c > 0, c < 1)
+propagate <- function(B, p) {
+  stopifnot(is.matrix(B), nrow(B) == ncol(B))
 
-  n <- nrow(W)
-
-  if (all(W == 0)) {
-    # Truly no edges - nothing to propagate through, so the effect beyond
-    # the direct push itself is exactly zero everywhere.
-    return(setNames(rep(0, n), rownames(W)))
+  n <- nrow(B)
+  if (all(B == 0)) {
+    return(setNames(rep(0, n), rownames(B)))
   }
 
-  rho <- spectral_radius(W)
-
-  # Real bug, found building the Gnanapragasam et al. 2026 example network
-  # (Revisao 1, Fase 9): a purely acyclic causal network (a DAG - e.g. one
-  # where a Response's edges never loop back through an Impact) has a
-  # NILPOTENT W - every eigenvalue is exactly 0, same as spectral_radius()
-  # returns for a truly edge-less matrix, but the two cases are NOT the
-  # same. The old code treated both as "nothing to propagate through" and
-  # returned all-zero here - silently discarding a real, well-defined
-  # effect for every acyclic network (confirmed against a hand-built 3-node
-  # A->B->C chain: propagate() returned all-zero when it should have shown
-  # a nonzero effect at B and C). A nilpotent W has NO eigenvalue to divide
-  # by (so `c / rho` is undefined), but (I - lambda*W) is invertible for
-  # ANY lambda in this case (its eigenvalues are all exactly 1 regardless
-  # of lambda) - so `c` is used directly as lambda instead. The Neumann
-  # series lambda*W*p + lambda^2*W^2*p + ... still terminates after
-  # finitely many terms (the DAG's longest path length) and is generally
-  # non-zero: an effect propagates through a DAG exactly like it does
-  # through a network with cycles, it just can't loop back and compound.
-  lambda <- if (rho == 0) c else c / rho
-  M <- diag(n) - lambda * W
-  solved <- tryCatch(solve(M, p), error = function(e) NULL)
-
-  if (is.null(solved)) {
-    # Should not happen - (I - lambda*W) is invertible either way: when
-    # rho > 0, lambda*rho(W) = c < 1 guarantees it directly; when rho == 0
-    # (a DAG), its eigenvalues are all exactly 1 regardless of lambda.
-    # Kept as a defensive fallback, not an expected code path, matching
-    # press_perturbation()'s own singular-matrix handling in R/loop_analysis.R.
-    warning("Propagation matrix is unexpectedly singular even at c < 1.", call. = FALSE)
-    return(setNames(rep(NA_real_, n), rownames(W)))
+  rho <- spectral_radius(B)
+  if (rho >= 1 - 1e-9) {
+    stop(sprintf(
+      "The network's feedback loops amplify without bound (spectral radius %.2f, it must be below 1). Lower the strength of the edges on the loop.",
+      rho
+    ), call. = FALSE)
   }
 
-  setNames(as.numeric(solved) - p, rownames(W))
+  solved <- solve(diag(n) - B, as.numeric(p))
+  setNames(as.numeric(solved) - as.numeric(p), rownames(B))
 }
 
-# One row per Impact node. `strength_to_neutralize` is a dimensionless
-# RATIO on whatever p_R currently represents (propagate() is linear in p,
-# so this is exact, not an approximation): >1 means the planned response
-# needs to be stronger to fully neutralize the worsening, <1 means it's
-# already more than enough. For a scenario built from a single active
-# response at a given strength, the caller multiplies this ratio by that
-# strength to show an absolute "how strong would it need to be" number -
-# sufficiency() itself stays agnostic to what p_R is made of (one response
-# or several combined), since only the ratio composes cleanly in that case.
 # Revisao 2, item 0.3: press vectors are aligned to the network BY NAME,
 # never by position. A scenario saved before a node was added used to be
 # silently recycled by as.numeric() (wrong numbers, no error). A named vector
@@ -169,7 +96,12 @@ align_press_vector <- function(p, node_names, what = "scenario") {
   out
 }
 
-sufficiency <- function(g, p_D, p_R, c = 0.5, threshold = 1e-9) {
+# One row per Impact. `strength_to_neutralize` is a dimensionless ratio on
+# whatever p_R represents (Phi is linear in p): > 1 means the planned
+# response must be stronger to cover the worsening, < 1 means it already
+# more than covers it. The screen multiplies it by the strength of a single
+# active response (format_sufficiency_table()).
+sufficiency <- function(g, p_D, p_R, threshold = 1e-9) {
   stopifnot(inherits(g, "igraph"))
 
   node_names <- V(g)$name
@@ -189,9 +121,9 @@ sufficiency <- function(g, p_D, p_R, c = 0.5, threshold = 1e-9) {
     return(empty)
   }
 
-  W <- build_signed_matrix(g)
-  worsening <- propagate(W, p_D, c)[impact_ids]
-  mitigation <- propagate(W, p_R, c)[impact_ids]
+  B <- effect_matrix(g)
+  worsening <- propagate(B, p_D)[impact_ids]
+  mitigation <- propagate(B, p_R)[impact_ids]
   net <- worsening + mitigation
 
   strength_to_neutralize <- ifelse(
@@ -212,15 +144,26 @@ sufficiency <- function(g, p_D, p_R, c = 0.5, threshold = 1e-9) {
   )
 }
 
-# Same resampling philosophy as robustness_check() (R/loop_analysis.R,
-# Marco D of Fase 5): each edge's weight is resampled within a range set by
-# its confidence, `net` is recomputed under the resampled network, and the
-# result reports the % of simulations in which the Impact was still
-# neutralized. This is what makes the edges' `confidence` field decide
-# something concrete: whether a "yes, this response covers it" verdict
-# actually holds up once you account for how uncertain the underlying
-# links are.
-sufficiency_confidence <- function(g, p_D, p_R, c = 0.5, n_simulations = 300, spread = 0.5, seed = 42, threshold = 1e-9) {
+# Runs `expr` with a fixed RNG seed and restores the caller's RNG state
+# afterwards, so resampling is reproducible without touching the global
+# stream (base-R stand-in for withr::with_seed(), roadmap item 2.4).
+with_local_seed <- function(seed, expr) {
+  had_seed <- exists(".Random.seed", envir = globalenv(), inherits = FALSE)
+  if (had_seed) old <- get(".Random.seed", envir = globalenv())
+  on.exit({
+    if (had_seed) assign(".Random.seed", old, envir = globalenv())
+    else if (exists(".Random.seed", envir = globalenv(), inherits = FALSE)) rm(".Random.seed", envir = globalenv())
+  })
+  set.seed(seed)
+  expr
+}
+
+# Revisao 2, item 1.4 (D15/D21): each edge's beta is resampled uniformly
+# within its uncertainty band [weight_low, weight_high]; `net` is recomputed
+# and the result is the % of simulations in which the Impact is still
+# neutralized. Draws that would make the loops amplify (rho(B) >= 1) are
+# skipped and counted in the `skipped` attribute.
+sufficiency_confidence <- function(g, p_D, p_R, n_simulations = 300, seed = 42, threshold = 1e-9) {
   stopifnot(inherits(g, "igraph"))
   stopifnot(n_simulations >= 1)
 
@@ -235,74 +178,36 @@ sufficiency_confidence <- function(g, p_D, p_R, c = 0.5, n_simulations = 300, sp
     return(data.frame(id = character(), node = character(), neutralized_pct = numeric(), stringsAsFactors = FALSE))
   }
 
-  confidence <- E(g)$confidence
-  confidence[is.na(confidence)] <- 0.5
   base_weight <- E(g)$weight
-  variation <- (1 - confidence) * spread
+  low <- E(g)$weight_low
+  high <- E(g)$weight_high
+  if (is.null(low)) low <- base_weight
+  if (is.null(high)) high <- base_weight
+  low[is.na(low)] <- base_weight[is.na(low)]
+  high[is.na(high)] <- base_weight[is.na(high)]
 
-  matches <- matrix(0L, nrow = n_simulations, ncol = length(impact_ids), dimnames = list(NULL, impact_ids))
+  matches <- matrix(NA_integer_, nrow = n_simulations, ncol = length(impact_ids), dimnames = list(NULL, impact_ids))
   g_sim <- g
 
-  set.seed(seed)
-  for (sim in seq_len(n_simulations)) {
-    multiplier <- runif(length(base_weight), 1 - variation, 1 + variation)
-    E(g_sim)$weight <- base_weight * multiplier
+  with_local_seed(seed, {
+    for (sim in seq_len(n_simulations)) {
+      E(g_sim)$weight <- runif(length(base_weight), low, high)
+      B_sim <- effect_matrix(g_sim)
+      if (spectral_radius(B_sim) >= 1 - 1e-9) next
+      net_sim <- propagate(B_sim, p_D)[impact_ids] + propagate(B_sim, p_R)[impact_ids]
+      matches[sim, ] <- as.integer(net_sim <= threshold)
+    }
+  })
 
-    W_sim <- build_signed_matrix(g_sim)
-    worsening_sim <- propagate(W_sim, p_D, c)[impact_ids]
-    mitigation_sim <- propagate(W_sim, p_R, c)[impact_ids]
-    net_sim <- worsening_sim + mitigation_sim
-
-    matches[sim, ] <- as.integer(net_sim <= threshold)
-  }
-
-  data.frame(
+  skipped <- sum(is.na(matches[, 1]))
+  out <- data.frame(
     id = impact_ids,
     node = if (!is.null(V(g)$label)) V(g)$label[is_impact] else impact_ids,
-    neutralized_pct = unname(colMeans(matches)[impact_ids]) * 100,
+    neutralized_pct = unname(colMeans(matches, na.rm = TRUE)[impact_ids]) * 100,
     stringsAsFactors = FALSE
   )
-}
-
-# Recomputes the neutralization verdict (net <= threshold) across a grid of
-# reach values `cs` and flags any Impact whose verdict flips somewhere in
-# that grid - a boundary case, worth surfacing rather than hiding behind
-# whichever single `c` the scenario happened to use.
-sufficiency_reach_over_c <- function(g, p_D, p_R, cs = c(0.2, 0.35, 0.5, 0.65, 0.8), threshold = 1e-9) {
-  stopifnot(inherits(g, "igraph"))
-
-  node_names <- V(g)$name
-  p_D <- align_press_vector(p_D, node_names, "pressure scenario")
-  p_R <- align_press_vector(p_R, node_names, "response scenario")
-  categories <- V(g)$dpsir_category
-  is_impact <- !is.null(categories) & categories == "Impact"
-  impact_ids <- node_names[is_impact]
-
-  if (length(impact_ids) == 0) {
-    return(data.frame(id = character(), node = character(), flips = logical(), stringsAsFactors = FALSE))
-  }
-
-  W <- build_signed_matrix(g)
-
-  verdicts <- vapply(cs, function(c_val) {
-    worsening <- propagate(W, p_D, c_val)[impact_ids]
-    mitigation <- propagate(W, p_R, c_val)[impact_ids]
-    (worsening + mitigation) <= threshold
-  }, logical(length(impact_ids)))
-
-  if (length(impact_ids) == 1) {
-    verdicts <- matrix(verdicts, nrow = 1, dimnames = list(impact_ids, NULL))
-  }
-  colnames(verdicts) <- paste0("c_", cs)
-
-  df <- data.frame(
-    id = impact_ids,
-    node = if (!is.null(V(g)$label)) V(g)$label[is_impact] else impact_ids,
-    stringsAsFactors = FALSE
-  )
-  df <- cbind(df, as.data.frame(verdicts))
-  df$flips <- apply(verdicts, 1, function(row) length(unique(row)) > 1)
-  df
+  attr(out, "skipped") <- skipped
+  out
 }
 
 # =====================================================
@@ -345,19 +250,4 @@ format_sufficiency_table <- function(suff_df, active_ids, strengths_pct) {
     check.names = FALSE,
     stringsAsFactors = FALSE
   )
-}
-
-format_reach_over_c_table <- function(reach_df) {
-  c_cols <- grep("^c_", names(reach_df), value = TRUE)
-
-  display <- reach_df[, c("node", c_cols, "flips"), drop = FALSE]
-  for (col in c_cols) {
-    display[[col]] <- ifelse(display[[col]], "Yes", "No")
-  }
-  display$flips <- ifelse(display$flips, "Borderline", "")
-  # DT's server-side processing errors on an empty-string column name
-  # (confirmed live - "argumento tem comprimento zero" - see mod_responses.R
-  # Fase 2 notes in CLAUDE.md), so this stays a real header, not "".
-  names(display) <- c("Impact", gsub("^c_", "c=", c_cols), "Verdict")
-  display
 }

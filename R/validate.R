@@ -18,7 +18,10 @@ get_known_dpsir_node_fields <- function() {
 }
 
 get_known_dpsir_edge_fields <- function() {
-  c("from", "to", "weight", "confidence", "interaction_type", "evidence_type", "reference")
+  c(
+    "from", "to", "weight", "weight_low", "weight_high", "strength_class", "weight_source",
+    "confidence", "interaction_type", "evidence_type", "reference"
+  )
 }
 
 # =====================================================
@@ -206,8 +209,11 @@ preflight_import_edges <- function(edges_raw) {
   # Revisao 2, item 0.7: interaction_type is no longer optional - the sign
   # of an edge has no safe default (a missing sign used to silently become
   # +1, i.e. "increases"), so a missing column blocks the import below.
+  # Revisao 2, Fase 1: weight is |beta|; blank = the class given in
+  # strength_class, or "moderate" (0.45). The band comes from
+  # weight_low/weight_high, or the (legacy) confidence, or the class.
   optional_defaults <- c(
-    weight = "1", confidence = "1",
+    weight = "its strength_class, or 'moderate' (0.45) when that is blank too",
     evidence_type = "blank", reference = "blank"
   )
   missing_optional <- setdiff(names(optional_defaults), present)
@@ -258,6 +264,52 @@ preflight_import_edges <- function(edges_raw) {
       if (length(bad_range) > 0) {
         blocking <- c(blocking, sprintf(
           "Edges file, row %d: weight %s must be greater than 0.", bad_range + 1, numeric_vals[bad_range]
+        ))
+      }
+      # Revisao 2, Fase 1: a standardized beta above 1 is possible (multiple
+      # regression with correlated sources) but unusual - warn, don't block.
+      above_one <- which(!blank & !is.na(numeric_vals) & numeric_vals > 1)
+      if (length(above_one) > 0) {
+        warn <- c(warn, sprintf(
+          "Edges file, row %d: weight %s is above 1 - unusual for a standardized strength (beta). If this is an older file with relative weights, tick 'Convert from older relative weights'.",
+          above_one + 1, numeric_vals[above_one]
+        ))
+      }
+    }
+
+    if ("strength_class" %in% present) {
+      raw <- edges_raw$strength_class
+      vals <- tolower(trimws(as.character(raw)))
+      bad <- which(!.pf_is_blank(raw) & !vals %in% strength_classes()$class)
+      if (length(bad) > 0) {
+        blocking <- c(blocking, sprintf(
+          "Edges file, row %d: strength_class '%s' must be weak, moderate or strong.", bad + 1, vals[bad]
+        ))
+      }
+    }
+
+    band <- list()
+    for (field in c("weight_low", "weight_high")) {
+      if (field %in% present) {
+        raw <- edges_raw[[field]]
+        vals <- suppressWarnings(as.numeric(raw))
+        bad <- which(!.pf_is_blank(raw) & (is.na(vals) | vals < 0))
+        if (length(bad) > 0) {
+          blocking <- c(blocking, sprintf(
+            "Edges file, row %d: %s '%s' must be a number of at least 0.", bad + 1, field, trimws(as.character(raw))[bad]
+          ))
+        }
+        band[[field]] <- vals
+      }
+    }
+    if (length(band) == 2) {
+      w <- if ("weight" %in% present) suppressWarnings(as.numeric(edges_raw$weight)) else rep(NA_real_, nrow(edges_raw))
+      bad <- which(!is.na(band$weight_low) & !is.na(band$weight_high) & band$weight_low > band$weight_high)
+      bad <- union(bad, which(!is.na(w) & !is.na(band$weight_low) & band$weight_low > w))
+      bad <- union(bad, which(!is.na(w) & !is.na(band$weight_high) & band$weight_high < w))
+      if (length(bad) > 0) {
+        blocking <- c(blocking, sprintf(
+          "Edges file, row %d: the uncertainty band (weight_low to weight_high) must contain the weight.", sort(bad) + 1
         ))
       }
     }
@@ -431,14 +483,11 @@ normalize_dpsir_edges <- function(edges) {
   edges$from <- trimws(as.character(edges$from))
   edges$to <- trimws(as.character(edges$to))
 
-  # Revisao 2, item 0.7: the documented defaults (weight 1, confidence 1)
-  # now apply to a blank CELL as well, not only to a column that is missing
-  # altogether - a single empty weight used to stay NA and break the math.
-  edges$weight <- if ("weight" %in% names(edges)) as.numeric(edges$weight) else 1
-  edges$weight[is.na(edges$weight)] <- 1
-
-  edges$confidence <- if ("confidence" %in% names(edges)) as.numeric(edges$confidence) else 1
-  edges$confidence[is.na(edges$confidence)] <- 1
+  # Revisao 2, item 0.7 + Fase 1: every edge ends up with |beta|, an
+  # uncertainty band, a class and where its value came from - a blank CELL
+  # gets the class/default value too, not only a missing column
+  # (R/structural.R, normalize_edge_strength()).
+  edges <- normalize_edge_strength(edges)
 
   # `threshold` foi movido de aresta pra no (ver normalize_dpsir_nodes()'s
   # `activation_threshold`) - removida aqui, nao so ignorada, pelo mesmo

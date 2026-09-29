@@ -59,7 +59,8 @@ test_that("build_savepoint / read_savepoint round-trip scenario_state, and old s
   expect_equal(unname(reloaded$scenario_state$response_strengths["R1"]), 80)
   expect_equal(reloaded$scenario_state$pressure_active, "D1")
   expect_equal(unname(reloaded$scenario_state$pressure_strengths["D1"]), 60)
-  expect_equal(reloaded$scenario_state$effect_horizon, 0.35)
+  # Revisao 2, Fase 1: the reach factor c is gone, so it is no longer saved.
+  expect_equal(reloaded$scenario_state$effect_horizon, 0.5)
 
   # A savepoint built without scenario_state (the pre-Revisao-1 shape) -
   # read back as NULL, not an error, same pattern already used for
@@ -171,4 +172,54 @@ test_that("read_savepoint blocks an edge with no sign, and reports optional-colu
 
   old <- read_savepoint("../../docs/example_fisheries.idpsir.json")
   expect_true(any(grepl("^Savepoint nodes: column 'temporal_scale'", old$warnings)))
+})
+
+# Revisao 2, item 1.5: an older savepoint (no metadata$weight_mode) is
+# converted on load to beta = lambda * w, with the lambda the older static
+# reading used - so its static numbers are exactly the same as before.
+test_that("read_savepoint converts an older savepoint and reproduces the older static reading exactly", {
+  path <- "../../docs/example_mangi.idpsir.json"
+  raw <- jsonlite::read_json(path, simplifyVector = TRUE)
+  converted <- read_savepoint(path)
+
+  expect_equal(converted$metadata$weight_mode, "structural")
+  expect_true(all(converted$edges$weight_source == "converted"))
+  expect_true(any(grepl("converted from the older relative scale", converted$warnings)))
+
+  # Older reading, computed here from the raw weights: (I - lambda W)^-1 p - p.
+  g_old <- build_igraph(normalize_dpsir_nodes(raw$nodes), normalize_dpsir_edges(raw$edges), converted$schema)
+  W <- effect_matrix(g_old)
+  lambda <- 0.5 / spectral_radius(W)
+  p <- setNames(rep(0, nrow(W)), rownames(W)); p[c("D1", "D3")] <- 1
+  old <- solve(diag(nrow(W)) - lambda * W, p) - p
+
+  g_new <- build_igraph(converted$nodes, converted$edges, converted$schema)
+  new <- propagate(effect_matrix(g_new), p)
+
+  expect_equal(unname(new[rownames(W)]), unname(old), tolerance = 1e-12)
+  expect_equal(converted$metadata$converted_from$lambda, lambda, tolerance = 1e-12)
+})
+
+test_that("a structural savepoint is not converted again, and legacy confidence becomes the band", {
+  converted <- read_savepoint("../../docs/example_mangi.idpsir.json")
+  sp <- build_savepoint(converted$schema, converted$nodes, converted$edges)
+  tmp <- tempfile(fileext = ".idpsir.json")
+  on.exit(unlink(tmp))
+  write_savepoint(sp, tmp)
+
+  again <- read_savepoint(tmp)
+  expect_equal(again$edges$weight, converted$edges$weight)
+  expect_null(again$conversion)
+
+  edges <- data.frame(from = c("A", "B"), to = c("B", "C"), weight = c(2, 1), confidence = c(0.6, 1),
+                      interaction_type = "positive", stringsAsFactors = FALSE)
+  nodes <- data.frame(id = c("A", "B", "C"), stringsAsFactors = FALSE)
+  conv <- convert_legacy_weights(nodes, edges, c = 0.5)
+  # Acyclic: lambda = c. Edge A->B: beta 1.0, band 1.0 * [0.8, 1.2]; above 1? no (exactly 1).
+  expect_equal(conv$lambda, 0.5)
+  expect_equal(conv$edges$weight, c(1, 0.5))
+  expect_equal(conv$edges$weight_low, c(0.8, 0.5))
+  expect_equal(conv$edges$weight_high, c(1.2, 0.5))
+  expect_length(conv$review, 0)
+  expect_equal(convert_legacy_weights(nodes, transform(edges, weight = c(3, 1)), c = 0.5)$review, "A -> B")
 })

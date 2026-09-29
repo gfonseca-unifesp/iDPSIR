@@ -243,10 +243,21 @@ build_node_tooltip <- function(nodes) {
 }
 
 build_edge_tooltip <- function(edges) {
+  # Revisao 2, Fase 1: shows beta, its band and where the value came from
+  # (class/default/converted), instead of the old weight/confidence pair.
+  src <- if ("weight_source" %in% names(edges)) as.character(edges$weight_source) else rep(NA_character_, nrow(edges))
+  cls <- if ("strength_class" %in% names(edges)) as.character(edges$strength_class) else rep(NA_character_, nrow(edges))
+  strength_note <- ifelse(
+    src %in% c("class", "default"), paste0(" (", tooltip_text(cls), " class", ifelse(src == "default", ", default", ""), ")"),
+    ifelse(src %in% "converted", " (converted from an older file)", "")
+  )
+  lo <- if ("weight_low" %in% names(edges)) as.numeric(edges$weight_low) else rep(NA_real_, nrow(edges))
+  hi <- if ("weight_high" %in% names(edges)) as.numeric(edges$weight_high) else rep(NA_real_, nrow(edges))
+  range_text <- ifelse(is.na(lo) | is.na(hi), "-", sprintf("%.2f to %.2f", lo, hi))
   glue::glue(
     "{tooltip_text(edges$from)} &rarr; {tooltip_text(edges$to)}<br>",
-    "Weight: {tooltip_text(edges$weight)}<br>",
-    "Confidence: {tooltip_text(edges$confidence)}<br>",
+    "Strength (beta): {tooltip_text(round(as.numeric(edges$weight), 3))}{strength_note}<br>",
+    "Uncertainty range: {range_text}<br>",
     "Interaction: {tooltip_text(edges$interaction_type)}<br>",
     "Evidence: {tooltip_text(edges$evidence_type)}<br>",
     "Reference: {tooltip_text(edges$reference)}"

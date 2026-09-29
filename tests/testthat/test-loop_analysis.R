@@ -54,7 +54,7 @@ stable_chain_graph <- function() {
 }
 
 fisheries_graph <- function() {
-  sp <- read_savepoint("../../docs/example_fisheries.idpsir.json")
+  sp <- read_savepoint("../../docs/example_fisheries.idpsir.json", convert_legacy = FALSE)
   build_igraph(sp$nodes, sp$edges, get_default_dpsir_schema())
 }
 
@@ -113,7 +113,7 @@ test_that("build_interaction_matrix treats a missing self_regulation attribute a
 })
 
 test_that("strong self-regulation on every node can make an otherwise-unstable network stable, with a fully defined equilibrium", {
-  sp <- read_savepoint("../../docs/example_fisheries.idpsir.json")
+  sp <- read_savepoint("../../docs/example_fisheries.idpsir.json", convert_legacy = FALSE)
   nodes_self_regulated <- sp$nodes
   # Numerico direto (Revisao 1, Fase 5) - 2 reproduz a mesma magnitude que
   # o antigo "high" categorico dava (self_regulation_magnitudes()["high"]
@@ -245,7 +245,7 @@ test_that("self_regulation_sensitivity is a no-op (trivially 100% agreement) whe
 })
 
 test_that("self_regulation_sensitivity on a strongly self-regulated fisheries network matches robustness_check's shape and doesn't error", {
-  sp <- read_savepoint("../../docs/example_fisheries.idpsir.json")
+  sp <- read_savepoint("../../docs/example_fisheries.idpsir.json", convert_legacy = FALSE)
   nodes_self_regulated <- sp$nodes
   nodes_self_regulated$self_regulation <- "high"
   nodes_self_regulated <- normalize_dpsir_nodes(nodes_self_regulated)
@@ -259,7 +259,7 @@ test_that("self_regulation_sensitivity on a strongly self-regulated fisheries ne
 })
 
 test_that("self_regulation_sensitivity with the default seed is reproducible across repeated calls", {
-  sp <- read_savepoint("../../docs/example_fisheries.idpsir.json")
+  sp <- read_savepoint("../../docs/example_fisheries.idpsir.json", convert_legacy = FALSE)
   nodes_self_regulated <- sp$nodes
   nodes_self_regulated$self_regulation <- "medium"
   nodes_self_regulated <- normalize_dpsir_nodes(nodes_self_regulated)

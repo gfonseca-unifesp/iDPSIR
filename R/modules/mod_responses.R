@@ -8,11 +8,11 @@
 #
 # Two readings, both driven by the same Pressure/Response scenario inputs:
 # - Sufficiency (R/sufficiency.R, Revisao 1 Fase 1-3): the primary reading.
-#   A static, discounted propagated effect - always well-defined, never
-#   requires the network to be "stable" - answering "does the response's
-#   mitigation cover the pressure's worsening on each Impact?" plus how
-#   confident that verdict is and whether it holds across how far the
-#   effect is traced.
+#   The path-analysis total effect of each push (products of the edges'
+#   standardized strengths beta along each path; Revisao 2, Fase 1) -
+#   answering "does the response's mitigation cover the pressure's
+#   worsening on each Impact?" plus how confident that verdict is when every
+#   beta is resampled within its uncertainty range.
 # - Temporal simulation (R/temporal.R, Revisao 1 Fase 4-7): an optional
 #   disclosure that runs the same two scenarios forward window by window
 #   (discrete time steps, no convergence/equilibrium assumption), showing a
@@ -63,7 +63,7 @@ plot_download_row <- function(ns, prefix) {
 # verified in tests/testthat/test-sufficiency.R (also computed at 100%).
 # Pure function (no Shiny reactives), so it's independently testable and
 # reusable from R/report.R later (Fase 3).
-build_confidence_matrix <- function(g, p_D, response_nodes_df, c, n_simulations = 300, spread = 0.5, seed = 42) {
+build_confidence_matrix <- function(g, p_D, response_nodes_df, n_simulations = 300, seed = 42) {
   if (nrow(response_nodes_df) == 0) {
     return(data.frame(Response = character(), stringsAsFactors = FALSE))
   }
@@ -71,7 +71,7 @@ build_confidence_matrix <- function(g, p_D, response_nodes_df, c, n_simulations 
   per_response <- lapply(seq_len(nrow(response_nodes_df)), function(i) {
     rid <- response_nodes_df$id[i]
     p_r <- build_press_vector(g, rid, setNames(1, rid))
-    sufficiency_confidence(g, p_D, p_r, c = c, n_simulations = n_simulations, spread = spread, seed = seed)
+    sufficiency_confidence(g, p_D, p_r, n_simulations = n_simulations, seed = seed)
   })
 
   if (nrow(per_response[[1]]) == 0) {
@@ -112,12 +112,6 @@ mod_responses_ui <- function(id) {
       p(class = "text-muted", "Turn on the responses you want to test, and how strongly each is implemented."),
       uiOutput(ns("response_controls")),
       tags$hr(),
-      uiOutput(ns("effect_horizon_ui")),
-      p(
-        class = "text-muted",
-        "Lower values focus almost entirely on short, direct causal chains; higher values let longer, indirect chains",
-        "contribute more. \"Sensitivity to this setting\" below shows whether your conclusions change across this range."
-      ),
       fluidRow(
         column(width = 6, textInput(ns("scenario_name"), "Scenario name", value = "Scenario 1")),
         column(width = 6, br(), actionButton(ns("apply_scenario"), "Apply scenario", icon = icon("play"), class = "btn-success", width = "100%"))
@@ -270,16 +264,6 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
       tagList(rows)
     })
 
-    output$effect_horizon_ui <- renderUI({
-      req(graph())
-      rs <- seed_state()
-      sliderInput(
-        ns("effect_horizon"), "How far to trace the effect",
-        min = 0.2, max = 0.8, step = 0.05,
-        value = if (is.null(rs) || is.null(rs$effect_horizon)) 0.5 else rs$effect_horizon
-      )
-    })
-
     # =================================================
     # APPLY SCENARIO
     # =================================================
@@ -316,7 +300,6 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
         pressure_strengths[[node_id]] <- input[[paste0("pressure_strength_", node_id)]]
       }
       p_D <- build_press_vector(graph(), pressure_active_ids, pressure_strengths / 100)
-      c_value <- input$effect_horizon
 
       # Segunda rodada da Revisao 1: withProgress em torno do calculo -
       # build_confidence_matrix() sozinho roda 300 simulacoes POR resposta
@@ -332,11 +315,10 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
           reach <- response_reach(graph(), active_ids)
 
           incProgress(0.2, detail = "Sufficiency")
-          suff_df <- sufficiency(graph(), p_D, press, c = c_value)
-          suff_reach_over_c <- sufficiency_reach_over_c(graph(), p_D, press)
+          suff_df <- sufficiency(graph(), p_D, press)
 
-          incProgress(0.3, detail = "Confidence (resampling edge weights)")
-          suff_confidence_matrix <- build_confidence_matrix(graph(), p_D, rn, c = c_value)
+          incProgress(0.3, detail = "Confidence (resampling edge strengths)")
+          suff_confidence_matrix <- build_confidence_matrix(graph(), p_D, rn)
           incProgress(0.4, detail = "Done")
         })
         TRUE
@@ -355,10 +337,8 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
         pressure_active = pressure_active_ids,
         pressure_strengths = pressure_strengths,
         p_D = p_D,
-        effect_horizon = c_value,
         sufficiency_df = suff_df,
-        sufficiency_confidence_matrix = suff_confidence_matrix,
-        sufficiency_reach_over_c = suff_reach_over_c
+        sufficiency_confidence_matrix = suff_confidence_matrix
       ))
     })
 
@@ -381,17 +361,10 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
         p(
           class = "text-muted",
           "Every response in the network, evaluated alone at the strength set above, against the same pressure",
-          "scenario: % of simulations - resampling every edge's weight within a range set by its confidence - in",
+          "scenario: % of simulations - resampling every edge's strength within its uncertainty range - in",
           "which that response alone neutralizes each Impact."
         ),
-        DTOutput(ns("confidence_matrix_table")),
-        h5("Does it hold up across how far the effect is traced?"),
-        p(
-          class = "text-muted",
-          "Recomputes the neutralization verdict at different settings of \"How far to trace the effect\" -",
-          "an Impact marked borderline has a verdict that changes somewhere in that range."
-        ),
-        DTOutput(ns("reach_over_c_table"))
+        DTOutput(ns("confidence_matrix_table"))
       )
     })
 
@@ -415,14 +388,6 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
         dt <- dt %>% formatRound(columns = numeric_cols, digits = 0)
       }
       dt
-    })
-
-    output$reach_over_c_table <- renderDT({
-      sc <- current_scenario()
-      req(sc)
-
-      display <- format_reach_over_c_table(sc$sufficiency_reach_over_c)
-      datatable(display, rownames = FALSE, options = list(dom = "t", pageLength = 10))
     })
 
     # Roadmap Fase 9 item 9.2: "reach" is pure graph traversal from what the
@@ -838,8 +803,7 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
         response_active = response_active,
         response_strengths = response_strengths,
         pressure_active = pressure_active,
-        pressure_strengths = pressure_strengths,
-        effect_horizon = input$effect_horizon %||% 0.5
+        pressure_strengths = pressure_strengths
       )
     }
 

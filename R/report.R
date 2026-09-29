@@ -70,7 +70,7 @@ build_full_report_html <- function(
     tags$p(class = "report-caption", tags$strong(paste0(prefix, " ", n, ". ")), text)
   }
 
-  # Recaps one scenario's pressure/response/c as text - used both by the
+  # Recaps one scenario's pressure/response as text - used both by the
   # provenance header's "Scenario definitions" table below and by
   # "Response sufficiency"'s own per-scenario line further down, so the two
   # can never describe the same scenario two different ways.
@@ -81,7 +81,7 @@ build_full_report_html <- function(
       paste(sprintf("%s at %d%%", sc$pressure_active, round(sc$pressure_strengths[sc$pressure_active])), collapse = ", ")
     }
     response_text <- paste(sprintf("%s at %d%%", sc$active, round(sc$strengths[sc$active])), collapse = ", ")
-    list(pressure = pressure_text, response = response_text, c = sc$effect_horizon %||% 0.5)
+    list(pressure = pressure_text, response = response_text)
   }
 
   sections <- list(
@@ -127,7 +127,7 @@ build_full_report_html <- function(
   scenario_def_rows <- if (length(selected_scenario_names) > 0 && length(saved_scenarios) > 0) {
     do.call(rbind, lapply(selected_scenario_names, function(scenario_name) {
       d <- scenario_definition_text(saved_scenarios[[scenario_name]])
-      data.frame(Scenario = scenario_name, Pressure = d$pressure, Response = d$response, c = d$c, stringsAsFactors = FALSE)
+      data.frame(Scenario = scenario_name, Pressure = d$pressure, Response = d$response, stringsAsFactors = FALSE)
     }))
   } else {
     NULL
@@ -139,7 +139,7 @@ build_full_report_html <- function(
       report_html_table(scenario_def_rows),
       caption_tag(
         "Table", next_table_n(),
-        "Definition of each selected scenario: which Drivers/Pressures are pushed (and how strongly), which Responses are applied (and how strongly), and how far the effect is traced (c)."
+        "Definition of each selected scenario: which Drivers/Pressures are pushed (and how strongly), and which Responses are applied (and how strongly). Edge strengths are standardized path coefficients (beta); the effect of a scenario is their product along each causal path, summed over paths."
       )
     ))
   }
@@ -182,9 +182,9 @@ build_full_report_html <- function(
 
   # Revisao 1, Fase 3: the sufficiency reading (R/sufficiency.R), one
   # subsection per selected scenario - the primary reading, matching the
-  # on-screen ordering in mod_responses.R. format_sufficiency_table()/
-  # format_reach_over_c_table() are the exact same functions the Scenarios
-  # tab uses for its own tables, so a number here can never drift from what
+  # on-screen ordering in mod_responses.R. format_sufficiency_table() is
+  # the exact same function the Scenarios
+  # tab uses for its own table, so a number here can never drift from what
   # the user saw live.
   if (length(selected_scenario_names) > 0 && length(saved_scenarios) > 0) {
     sufficiency_scenario_sections <- lapply(selected_scenario_names, function(scenario_name) {
@@ -200,14 +200,12 @@ build_full_report_html <- function(
       scenario_def <- scenario_definition_text(sc)
 
       suff_table <- format_sufficiency_table(sc$sufficiency_df, sc$active, sc$strengths)
-      reach_table <- format_reach_over_c_table(sc$sufficiency_reach_over_c)
 
       tagList(
         tags$h4(scenario_name),
         tags$p(
           tags$strong("Pressure: "), scenario_def$pressure, tags$br(),
-          tags$strong("Response: "), scenario_def$response, tags$br(),
-          tags$strong("How far the effect was traced (c): "), scenario_def$c
+          tags$strong("Response: "), scenario_def$response
         ),
         report_html_table(suff_table),
         caption_tag(
@@ -221,15 +219,7 @@ build_full_report_html <- function(
         caption_tag(
           "Table", next_table_n(),
           sprintf(
-            "For \"%s\"'s pressure scenario: every response in the network evaluated alone at full strength (\"neutralization confidence\") - percentage of simulations (resampling each edge's weight within a range set by its confidence) in which that response alone neutralizes each Impact.",
-            scenario_name
-          )
-        ),
-        report_html_table(reach_table),
-        caption_tag(
-          "Table", next_table_n(),
-          sprintf(
-            "For \"%s\": whether the neutralization verdict for each Impact holds up across different settings of how far the effect is traced (c) - a scenario marked Borderline has a verdict that flips somewhere in that range.",
+            "For \"%s\"'s pressure scenario: every response in the network evaluated alone at full strength (\"neutralization confidence\") - percentage of simulations (resampling each edge's strength within its uncertainty range) in which that response alone neutralizes each Impact.",
             scenario_name
           )
         )
@@ -530,9 +520,9 @@ build_full_report_html <- function(
       caption_tag("Table", next_table_n(), "R and package versions used to generate this report."),
       tags$h3("Analysis parameters"),
       tags$p(
-        "\"How confident is that, response by response?\" resamples every edge's weight ",
-        tags$code("n_simulations = 300"), " times within a range set by its confidence and ",
-        tags$code("spread = 0.5"), ", using a fixed random seed (", tags$code("seed = 42"), ") so that",
+        "\"How confident is that, response by response?\" resamples every edge's strength (beta) ",
+        tags$code("n_simulations = 300"), " times, uniformly within its uncertainty range, ",
+        "using a fixed random seed (", tags$code("seed = 42"), ") so that",
         " regenerating this report from the same savepoint reproduces the exact same numbers."
       )
     ))

@@ -8,18 +8,50 @@ CURRENT_SAVEPOINT_VERSION <- "1.0"
 # IMPORTAR MATRIZES (CSV)
 # =====================================================
 
-import_matrices <- function(nodes_path, edges_path = NULL) {
+# Revisao 2, item 1.5: a CSV's `weight` column is read as |beta| (the
+# structural mode, D17). `convert_legacy = TRUE` treats it instead as an
+# older relative weight and converts it with convert_legacy_weights() (the
+# user ticks this on the Import card); `conversion` then reports lambda and
+# the edges whose converted |beta| exceeds 1.
+import_matrices <- function(nodes_path, edges_path = NULL, convert_legacy = FALSE, legacy_c = 0.5) {
   nodes <- data.table::fread(nodes_path)
   nodes <- normalize_dpsir_nodes(nodes)
+  conversion <- NULL
 
   edges <- if (is.null(edges_path) || !nzchar(edges_path)) {
     create_empty_graph_edges()
   } else {
-    edges_raw <- data.table::fread(edges_path)
+    edges_raw <- as.data.frame(data.table::fread(edges_path), stringsAsFactors = FALSE)
+    if (isTRUE(convert_legacy) && nrow(edges_raw) > 0) {
+      edges_raw$from <- trimws(as.character(edges_raw$from))
+      edges_raw$to <- trimws(as.character(edges_raw$to))
+      conversion <- convert_legacy_weights(nodes, edges_raw, legacy_c)
+      edges_raw <- conversion$edges
+    }
     normalize_dpsir_edges(edges_raw)
   }
 
-  list(nodes = nodes, edges = edges)
+  list(nodes = nodes, edges = edges, conversion = conversion)
+}
+
+# Plain-language notes about a legacy conversion, shown on the Start step.
+legacy_conversion_notes <- function(conversion) {
+  if (is.null(conversion)) return(character())
+  notes <- sprintf(
+    paste(
+      "Edge weights were converted from the older relative scale to standardized strengths (beta = %.3f x weight,",
+      "the reach factor the older version used with c = %.2f), so the static results are the same as before.",
+      "Review each edge's strength."
+    ),
+    conversion$lambda, conversion$c
+  )
+  if (length(conversion$review) > 0) {
+    notes <- c(notes, sprintf(
+      "After conversion these edges have a strength above 1 and are marked for review: %s.",
+      paste(conversion$review, collapse = ", ")
+    ))
+  }
+  notes
 }
 
 # =====================================================
@@ -40,10 +72,13 @@ build_savepoint <- function(schema, nodes, edges, positions = NULL, metadata = l
 
   metadata <- utils::modifyList(default_metadata, metadata)
   metadata$updated_at <- now
+  # Revisao 2, Fase 1: marks the file as using standardized strengths
+  # (beta); a savepoint without it is converted on load (read_savepoint()).
+  metadata$weight_mode <- "structural"
 
   # Revisao 1, Fase 3: `scenario_state` arrives as
   # list(pressure_active=<chr>, pressure_strengths=<named num>,
-  # response_active=<chr>, response_strengths=<named num>, effect_horizon=)
+  # response_active=<chr>, response_strengths=<named num>)
   # (mod_responses.R's shape) but is stored here as id/strength ROWS - a
   # length-1 *named* numeric vector like c(D1 = 60) gets silently unboxed
   # by jsonlite's auto_unbox to a bare `60` (losing the "D1" key entirely,
@@ -62,8 +97,7 @@ build_savepoint <- function(schema, nodes, edges, positions = NULL, metadata = l
         id = scenario_state$response_active,
         strength = unname(scenario_state$response_strengths),
         stringsAsFactors = FALSE
-      ),
-      effect_horizon = if (is.null(scenario_state$effect_horizon)) 0.5 else scenario_state$effect_horizon
+      )
     )
   }
 
@@ -91,7 +125,11 @@ write_savepoint <- function(savepoint, path) {
     path,
     auto_unbox = TRUE,
     na = "null",
-    pretty = TRUE
+    pretty = TRUE,
+    # Revisao 2, Fase 1: jsonlite rounds to 4 decimals by default - harmless
+    # for the older integer weights, but a converted beta (e.g. 0.3657532)
+    # would lose precision on every save. digits = NA keeps full precision.
+    digits = NA
   )
   invisible(path)
 }
@@ -154,7 +192,9 @@ merge_savepoints <- function(savepoints, source_names) {
   )
 }
 
-read_savepoint <- function(path) {
+# `convert_legacy = FALSE` keeps an older file's relative weights as they
+# are - only for the legacy equilibrium engine's tests (R/loop_analysis.R).
+read_savepoint <- function(path, convert_legacy = TRUE) {
   if (!file.exists(path)) {
     stop("Savepoint file not found: ", path, call. = FALSE)
   }
@@ -199,10 +239,29 @@ read_savepoint <- function(path) {
 
   nodes <- normalize_dpsir_nodes(as.data.frame(raw$nodes, stringsAsFactors = FALSE))
 
-  edges <- if (is.null(raw$edges) || length(raw$edges) == 0) {
+  # Revisao 2, item 1.5: a savepoint written before the structural mode
+  # (no metadata$weight_mode) holds relative weights plus a global reach c.
+  # Convert them to beta = lambda * w with the c it was saved with, which
+  # keeps its static numbers exactly.
+  metadata <- raw$metadata
+  conversion <- NULL
+  is_legacy <- is.null(metadata$weight_mode) || !identical(metadata$weight_mode, "structural")
+  if (isTRUE(convert_legacy) && is_legacy && !is.null(raw_edges) && nrow(raw_edges) > 0) {
+    legacy_c <- suppressWarnings(as.numeric(raw$scenario_state$effect_horizon))
+    if (length(legacy_c) != 1 || is.na(legacy_c)) legacy_c <- 0.5
+    raw_edges$from <- trimws(as.character(raw_edges$from))
+    raw_edges$to <- trimws(as.character(raw_edges$to))
+    conversion <- convert_legacy_weights(nodes, raw_edges, legacy_c)
+    raw_edges <- conversion$edges
+    if (is.null(metadata)) metadata <- list()
+    metadata$weight_mode <- "structural"
+    metadata$converted_from <- list(lambda = conversion$lambda, c = conversion$c)
+  }
+
+  edges <- if (is.null(raw_edges) || nrow(raw_edges) == 0) {
     create_empty_graph_edges()
   } else {
-    normalize_dpsir_edges(as.data.frame(raw$edges, stringsAsFactors = FALSE))
+    normalize_dpsir_edges(raw_edges)
   }
 
   positions <- if (is.null(raw$positions) || length(raw$positions) == 0) {
@@ -238,12 +297,19 @@ read_savepoint <- function(path) {
 
   list(
     format_version = raw$format_version,
-    metadata = raw$metadata,
+    metadata = metadata,
     schema = schema,
     nodes = nodes,
     edges = edges,
     positions = positions,
     scenario_state = scenario_state,
-    warnings = sub("^Edges file", "Savepoint edges", sub("^Nodes file", "Savepoint nodes", preflight$warnings))
+    warnings = c(
+      sub("^Edges file", "Savepoint edges", sub("^Nodes file", "Savepoint nodes",
+        # An older file's weights above 1 are expected - they are converted.
+        if (is.null(conversion)) preflight$warnings else preflight$warnings[!grepl("is above 1 - unusual", preflight$warnings)]
+      )),
+      legacy_conversion_notes(conversion)
+    ),
+    conversion = conversion
   )
 }

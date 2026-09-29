@@ -27,6 +27,6 @@ test_that("build_edge_tooltip escapes HTML in reference and evidence, and shows 
 
   expect_false(grepl("<a href", tip, fixed = TRUE))
   expect_true(grepl("&lt;a href='javascript:x'&gt;paper&lt;/a&gt;", tip, fixed = TRUE))
-  expect_true(grepl("Confidence: -", tip, fixed = TRUE))
+  expect_true(grepl("Strength (beta): 0.5", tip, fixed = TRUE))
   expect_true(grepl("Evidence: -", tip, fixed = TRUE))
 })

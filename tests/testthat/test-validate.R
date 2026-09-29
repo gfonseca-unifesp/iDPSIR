@@ -349,10 +349,47 @@ test_that("validate_dpsir_edges rejects an edge without a sign instead of treati
   expect_error(validate_dpsir_edges(nodes, edges), "Every edge needs a sign.*D1 -> P1")
 })
 
-test_that("normalize_dpsir_edges fills a blank weight or confidence cell with the documented default 1", {
+# Revisao 2, Fase 1: a blank weight cell gets the default class value
+# (moderate, 0.45); the band comes from a legacy confidence when there is
+# one, else from the class the beta falls in.
+test_that("normalize_dpsir_edges fills a blank weight with the default class and builds every edge's band", {
   edges <- data.frame(from = c("D1", "D1"), to = c("P1", "P2"), weight = c(NA, 0.5), confidence = c(0.4, NA),
                       interaction_type = "positive", stringsAsFactors = FALSE)
   out <- normalize_dpsir_edges(edges)
-  expect_equal(out$weight, c(1, 0.5))
-  expect_equal(out$confidence, c(0.4, 1))
+  expect_equal(out$weight, c(0.45, 0.5))
+  expect_equal(out$weight_source, c("default", "given"))
+  expect_equal(out$strength_class, c("moderate", "moderate"))
+  # Legacy confidence 0.4 -> band 0.45 * [0.7, 1.3]; derived confidence gives 0.4 back.
+  expect_equal(out$weight_low, c(0.45 * 0.7, 0.3))
+  expect_equal(out$weight_high, c(0.45 * 1.3, 0.6))
+  expect_equal(out$confidence, c(0.4, 0.4))
+})
+
+test_that("normalize_dpsir_edges uses the class value and band when only strength_class is given", {
+  edges <- data.frame(from = c("D1", "D1"), to = c("P1", "P2"), weight = NA, strength_class = c("weak", "Strong"),
+                      interaction_type = "negative", stringsAsFactors = FALSE)
+  out <- normalize_dpsir_edges(edges)
+  expect_equal(out$weight, c(0.15, 0.80))
+  expect_equal(out$weight_low, c(0, 0.6))
+  expect_equal(out$weight_high, c(0.3, 1.0))
+  expect_equal(out$weight_source, c("class", "class"))
+})
+
+test_that("preflight warns on beta above 1, blocks a bad class and a band that does not contain the weight", {
+  nodes <- data.frame(id = c("D1", "P1"), label = c("a", "b"), dpsir_category = c("Driver", "Pressure"))
+  above <- data.frame(from = "D1", to = "P1", weight = 1.5, interaction_type = "positive")
+  bad_class <- data.frame(from = "D1", to = "P1", strength_class = "huge", interaction_type = "positive")
+  bad_band <- data.frame(from = "D1", to = "P1", weight = 0.5, weight_low = 0.6, weight_high = 0.9, interaction_type = "positive")
+
+  expect_true(any(grepl("weight 1.5 is above 1", preflight_import(nodes, above)$warnings)))
+  expect_length(preflight_import(nodes, above)$blocking, 0)
+  expect_true(any(grepl("strength_class 'huge'", preflight_import(nodes, bad_class)$blocking)))
+  expect_true(any(grepl("band .* must contain the weight", preflight_import(nodes, bad_band)$blocking)))
+})
+
+test_that("r squared shortcuts: |beta| = sqrt(r2), band from the standard error with n", {
+  expect_equal(beta_from_r2(0.49), 0.7)
+  band <- band_from_r2_n(0.49, 50)
+  se <- sqrt(0.51 / 48)
+  expect_equal(unname(band), c(0.7 - 1.96 * se, 0.7 + 1.96 * se))
 })
