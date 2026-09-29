@@ -306,7 +306,12 @@ read_savepoint <- function(path, convert_legacy = TRUE) {
     warnings = c(
       sub("^Edges file", "Savepoint edges", sub("^Nodes file", "Savepoint nodes",
         # An older file's weights above 1 are expected - they are converted.
-        if (is.null(conversion)) preflight$warnings else preflight$warnings[!grepl("is above 1 - unusual", preflight$warnings)]
+        # (The CSV-only "tick Convert..." hint does not apply to a savepoint.)
+        if (is.null(conversion)) {
+          sub(" If this is an older file with relative weights, tick 'Convert from older relative weights'.", "", preflight$warnings, fixed = TRUE)
+        } else {
+          preflight$warnings[!grepl("is above 1 - unusual", preflight$warnings)]
+        }
       )),
       legacy_conversion_notes(conversion)
     ),
