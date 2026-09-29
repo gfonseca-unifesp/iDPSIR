@@ -2,6 +2,10 @@
 # VALIDACAO - NOS E ARESTAS (SCHEMA-DRIVEN)
 # =====================================================
 
+# Revisao 2, item A8 (D20): share of a factor's deviation that fades by
+# itself each window, for nodes that do not say otherwise.
+DEFAULT_SELF_REGULATION <- 0.5
+
 get_required_dpsir_node_fields <- function() {
   c("id", "label", "dpsir_category")
 }
@@ -72,7 +76,7 @@ preflight_import_nodes <- function(nodes_raw, schema = get_default_dpsir_schema(
 
   optional_defaults <- c(
     uncertainty = "0.5", controllability = "0.5",
-    self_regulation = "0", growth_rate = "0", reference_value = "1",
+    self_regulation = "0.5 (half of a deviation fades each window)", growth_rate = "0", reference_value = "1",
     activation_threshold = "blank (no threshold)", descriptor = "blank"
   )
   missing_optional <- setdiff(names(optional_defaults), present)
@@ -135,11 +139,17 @@ preflight_import_nodes <- function(nodes_raw, schema = get_default_dpsir_schema(
           bad_type + 1, raw_chr[bad_type]
         ))
       }
-      bad_range <- which(!blank & !is_legacy & !is.na(numeric_vals) & (numeric_vals < 0 | numeric_vals >= 1))
+      # Revisao 2, item A8: 1 is allowed now (no memory, D20).
+      bad_range <- which(!blank & !is_legacy & !is.na(numeric_vals) & (numeric_vals < 0 | numeric_vals > 1))
       if (length(bad_range) > 0) {
         blocking <- c(blocking, sprintf(
-          "Nodes file, row %d: self_regulation %s is outside the valid range [0, 1).",
+          "Nodes file, row %d: self_regulation %s is outside the valid range [0, 1].",
           bad_range + 1, numeric_vals[bad_range]
+        ))
+      }
+      if (any(blank)) {
+        warn <- c(warn, sprintf(
+          "Nodes file, row %d: self_regulation is blank - defaults to 0.5.", which(blank) + 1
         ))
       }
     }
@@ -392,15 +402,19 @@ normalize_dpsir_nodes <- function(nodes) {
   # self_regulation_diagonal(). Um savepoint/CSV de antes desta mudanca
   # ainda pode trazer as strings antigas - mapeadas aqui pra um valor
   # numerico so pra nao quebrar ao carregar, nao e o caminho principal.
+  # Revisao 2, item A8 (D20): the default is 0.5 - half of a deviation
+  # fades each window. A file that already has the column keeps the values
+  # it stores; an older savepoint without the column keeps its old
+  # behaviour (0), set by read_savepoint() before normalizing.
   if (!"self_regulation" %in% names(nodes)) {
-    nodes$self_regulation <- 0
+    nodes$self_regulation <- DEFAULT_SELF_REGULATION
   } else {
     raw <- nodes$self_regulation
     legacy_levels <- c(none = 0, low = 0.2, medium = 0.4, high = 0.6)
     is_legacy_string <- as.character(raw) %in% names(legacy_levels)
     numeric_values <- suppressWarnings(as.numeric(raw))
     numeric_values[is_legacy_string] <- legacy_levels[as.character(raw)[is_legacy_string]]
-    numeric_values[is.na(numeric_values)] <- 0
+    numeric_values[is.na(numeric_values)] <- DEFAULT_SELF_REGULATION
     nodes$self_regulation <- numeric_values
   }
 

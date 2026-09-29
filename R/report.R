@@ -298,9 +298,13 @@ build_full_report_html <- function(
         sc <- saved_scenarios[[scenario_name]]
         tr <- simulate_temporal_pair(
           graph, sc$p_D, sc$press,
-          windows = sc$temporal_windows %||% 5,
+          windows = max(1, sc$temporal_windows %||% 5),
           mode_D = sc$temporal_mode_pressure %||% "permanent",
-          mode_R = sc$temporal_mode_response %||% "impulse"
+          mode_R = sc$temporal_mode_response %||% "permanent",
+          # Revisao 2, item A5.
+          stop_rule = sc$temporal_stop_rule %||% "until_neutralized",
+          max_windows = max(1, sc$temporal_max_windows %||% 50),
+          baseline_without_response = isTRUE(sc$baseline_without_response)
         )
 
         stability_note <- temporal_stability_note(tr$stability)

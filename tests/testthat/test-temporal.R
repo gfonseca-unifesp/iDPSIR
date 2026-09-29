@@ -17,6 +17,9 @@ build_test_network <- function(self_regulation = NULL) {
     label = c("D1", "P1", "S1", "I1", "R1"),
     dpsir_category = c("Driver", "Pressure", "State", "Impact", "Response"),
     subsystem = "", uncertainty = "medium", controllability = "medium",
+    # Explicit 0 (no recovery): the hand-computed values below predate the
+    # Revisao 2 default of 0.5 (item A8).
+    self_regulation = 0,
     stringsAsFactors = FALSE
   )
   edges <- data.frame(
@@ -115,34 +118,20 @@ test_that("impulse mode only pushes on window 1; permanent mode keeps pushing ev
   expect_equal(unname(permanent$scenario[, "R1"]), 0:5)
 })
 
-test_that("a self_regulation magnitude of 2 (outside the intended [0,1) range) no longer oscillates forever, now that stability_cap damps it automatically", {
-  # self_regulation is numeric directly since Fase 5 - a raw value of 2
-  # reproduces the exact magnitude the OLD categorical "high" used to map
-  # to (self_regulation_magnitudes()["high"] = -2, before that function was
-  # removed), reachable today only by bypassing the form's 0-1 validation
-  # (e.g. a hand-edited CSV) - still worth guaranteeing the engine doesn't
-  # silently misbehave if that happens.
-  #
-  # Historical note: before the stability_cap fix (confirmed against a real
-  # generated report, rede do Mangi - see the comment inside
-  # simulate_temporal_pair()), this exact fixture demonstrated the RAW,
-  # unscaled equation oscillating forever: self_regulation=2 -> diagonal=-2
-  # -> (1 + (-2)) = -1, so the state flipped sign every window at the SAME
-  # magnitude, never decaying. That was the original motivation for Fase 5
-  # constraining self_regulation to [0,1) in the form (mod_data.R). Now
-  # that stability_cap always caps rho(W) at 0.9 by default, this
-  # out-of-range value gets damped automatically too (rho(W)=2 here ->
-  # lambda=0.45 -> effective diagonal (1 + 0.45*(-2)) = 0.1, decaying
-  # geometrically) - confirmed against scratchpad, not assumed.
-  g <- build_test_network(self_regulation = c(D1 = 0, P1 = 0, S1 = 2, I1 = 0, R1 = 0))
-  p_test <- build_press_vector(g, active_ids = "S1", strengths = c(S1 = -1))
-  zero_p <- zero_press(g)
+# Revisao 2, item 2.5: the engine no longer rescales anything (the old
+# stability_cap), so self_regulation acts exactly as written - 1 means no
+# memory, 0.5 halves the deviation every window (D20).
+test_that("self_regulation 1 wipes an impulse after one window, 0.5 halves it every window", {
+  p_test <- function(g) build_press_vector(g, active_ids = "S1", strengths = c(S1 = -1))
+  g1 <- build_test_network(self_regulation = c(D1 = 0, P1 = 0, S1 = 1, I1 = 0, R1 = 0))
+  g05 <- build_test_network(self_regulation = c(D1 = 0, P1 = 0, S1 = 0.5, I1 = 0, R1 = 0))
 
-  result <- simulate_temporal_pair(g, p_test, zero_p, windows = 6, mode_D = "impulse", mode_R = "impulse")
+  r1 <- simulate_temporal_pair(g1, p_test(g1), zero_press(g1), windows = 4, mode_D = "impulse", mode_R = "impulse")
+  r05 <- simulate_temporal_pair(g05, p_test(g05), zero_press(g05), windows = 4, mode_D = "impulse", mode_R = "impulse")
 
-  expect_equal(unname(result$baseline[, "S1"]), c(0, -1, -0.1, -0.01, -0.001, -0.0001, -0.00001))
+  expect_equal(unname(r1$baseline[, "S1"]), c(0, -1, 0, 0, 0))
+  expect_equal(unname(r05$baseline[, "S1"]), c(0, -1, -0.5, -0.25, -0.125))
 })
-
 test_that("self_regulation = 0 leaves an impulse permanently unchanged (ratchet, no natural recovery)", {
   g <- build_test_network(self_regulation = c(D1 = 0, P1 = 0, S1 = 0, I1 = 0, R1 = 0))
   p_test <- build_press_vector(g, active_ids = "S1", strengths = c(S1 = -1))
@@ -153,7 +142,7 @@ test_that("self_regulation = 0 leaves an impulse permanently unchanged (ratchet,
   expect_equal(unname(result$baseline[, "S1"]), c(0, rep(-1, 5)))
 })
 
-test_that("stability_cap leaves an already well-behaved network's lambda untouched (rho(W)=0 for this fixture - no feedback cycle reaches R1)", {
+test_that("a network without a reinforcing loop is not flagged, and nothing is rescaled (lambda is always 1)", {
   g <- build_test_network()
   p_D <- build_press_vector(g, active_ids = "D1", strengths = c(D1 = 1))
   zero_p <- zero_press(g)
@@ -165,27 +154,7 @@ test_that("stability_cap leaves an already well-behaved network's lambda untouch
   expect_false(result$stability$unbounded)
   expect_null(temporal_stability_note(result$stability))
 })
-
-test_that("stability_cap scales down a network whose rho(W) exceeds it, but self_regulation alone (no genuine cycle) still counts as 'unbounded=FALSE' - it decays/holds, never grows", {
-  # This fixture (self_regulation=2 on S1, a DAG otherwise - R1 is a pure
-  # source, no cycle reaches it) has W-eigenvalues {0,0,0,-2,0}: the
-  # capped diagonal entry on S1 decays (confirmed by the baseline sequence
-  # test above), and the other 4 nodes merely hold steady (eigenvalue
-  # exactly 0, same "ratchet" as the plain fixture below) - none of them
-  # amplify, so this is correctly NOT flagged as a reinforcing loop.
-  g <- build_test_network(self_regulation = c(D1 = 0, P1 = 0, S1 = 2, I1 = 0, R1 = 0))
-  p_test <- build_press_vector(g, active_ids = "S1", strengths = c(S1 = -1))
-  zero_p <- zero_press(g)
-
-  result <- simulate_temporal_pair(g, p_test, zero_p, windows = 2, mode_D = "impulse", mode_R = "impulse")
-
-  expect_equal(result$stability$rho_W, 2)
-  expect_equal(result$stability$lambda, 0.45)
-  expect_false(result$stability$unbounded)
-  expect_null(temporal_stability_note(result$stability))
-})
-
-test_that("a genuine two-node reinforcing loop (A->B positive, B->A positive) is flagged as unbounded even after stability_cap", {
+test_that("a genuine two-node reinforcing loop (A->B positive, B->A positive) is flagged as unbounded", {
   # Real finding (confirmed against a generated report, rede do Mangi):
   # scaling W by lambda=min(1, stability_cap/rho(W)) reduces the
   # per-window gain but cannot fully eliminate it for a genuine reinforcing
@@ -212,7 +181,7 @@ test_that("a genuine two-node reinforcing loop (A->B positive, B->A positive) is
   result <- simulate_temporal_pair(g, press, zero_p, windows = 2, mode_D = "impulse", mode_R = "impulse")
 
   expect_equal(result$stability$rho_W, 1)
-  expect_equal(result$stability$lambda, 0.9)
+  expect_equal(result$stability$lambda, 1)
   expect_true(result$stability$unbounded)
 
   note <- temporal_stability_note(result$stability)
@@ -358,4 +327,106 @@ test_that("simulate_temporal_pair() aligns press vectors by name, not position",
   expect_equal(shuffled$scenario, base$scenario)
   expect_equal(partial$scenario, base$scenario)
   expect_error(simulate_temporal_pair(g, c(p_D, ghost = 1), p_R, windows = 2), "not in the network: ghost")
+})
+
+# =====================================================
+# Revisao 2, Fase A - reference values (A6): chain P -> E -> I with R -> P,
+# weights 1, confirmed with the real engine (prototipos_revisao2/confere_em_R.R).
+# =====================================================
+
+chain_network <- function(sr = NULL) {
+  nodes <- normalize_dpsir_nodes(data.frame(
+    id = c("P", "E", "I", "R"), label = c("P", "E", "I", "R"),
+    dpsir_category = c("Pressure", "State", "Impact", "Response"),
+    self_regulation = 0, stringsAsFactors = FALSE
+  ))
+  edges <- normalize_dpsir_edges(data.frame(
+    from = c("P", "E", "R"), to = c("E", "I", "P"), weight = 1,
+    interaction_type = "negative", stringsAsFactors = FALSE
+  ))
+  g <- build_igraph(nodes, edges, get_default_dpsir_schema())
+  if (!is.null(sr)) V(g)$self_regulation <- sr[V(g)$name]
+  g
+}
+chain_run <- function(g, mode_D, mode_R, ...) {
+  p_D <- build_press_vector(g, "P", c(P = 1))
+  p_R <- build_press_vector(g, "R", c(R = 1))
+  simulate_temporal_pair(g, p_D, p_R, mode_D = mode_D, mode_R = mode_R, ...)
+}
+sr03 <- c(P = 0.3, E = 0.3, I = 0.3, R = 0)
+
+test_that("A6 fixed windows: impulse / permanent response reproduce the reference values", {
+  imp <- chain_run(chain_network(), "permanent", "impulse", windows = 30)
+  expect_equal(unname(imp$baseline[c(6, 11, 31), "I"]), c(10, 120, 4060), tolerance = 1e-6)
+  expect_equal(unname(imp$scenario[c(6, 11, 31), "I"]), c(6, 36, 406), tolerance = 1e-6)
+
+  per <- chain_run(chain_network(), "permanent", "permanent", windows = 10)
+  expect_equal(unname(per$baseline[c(6, 9, 11), "I"]), c(10, 56, 120), tolerance = 1e-6)
+  expect_equal(unname(per$scenario[c(6, 9, 11), "I"]), c(5, -14, -90), tolerance = 1e-6)
+
+  damp <- chain_run(chain_network(sr03), "permanent", "impulse", windows = 30)
+  expect_equal(unname(damp$baseline[c(11, 31), "I"]), c(22.8599, 36.9588), tolerance = 1e-6)
+  expect_equal(unname(damp$scenario[c(11, 31), "I"]), c(2.9648, 0.0267), tolerance = 1e-3)
+})
+
+test_that("A6 until_neutralized: stop windows for the four mode combinations, with and without self-regulation", {
+  stop_at <- function(sr, mD, mR) {
+    r <- chain_run(chain_network(sr), mD, mR, stop_rule = "until_neutralized", max_windows = 50)
+    unname(c(r$neutralized_at, if (is.na(r$neutralized_at)) NA else r$scenario[r$neutralized_at + 1, "I"]))
+  }
+  expect_equal(stop_at(NULL, "permanent", "permanent"), c(7, 0))
+  expect_equal(stop_at(NULL, "permanent", "impulse")[1], NA_real_)
+  expect_equal(stop_at(NULL, "impulse", "impulse"), c(6, 0))
+  expect_equal(stop_at(NULL, "impulse", "permanent"), c(6, -5))
+  expect_equal(stop_at(sr03, "permanent", "permanent"), c(6, -0.67), tolerance = 1e-2)
+  expect_equal(stop_at(sr03, "permanent", "impulse")[1], NA_real_)
+  expect_equal(stop_at(sr03, "impulse", "impulse"), c(5, -0.16), tolerance = 1e-2)
+  expect_equal(stop_at(sr03, "impulse", "permanent"), c(5, -1.16), tolerance = 1e-2)
+})
+
+test_that("until_neutralized is the default stop rule, truncates the history at the stop window and reports it", {
+  g <- chain_network()
+  r <- simulate_temporal_pair(g, build_press_vector(g, "P", c(P = 1)), build_press_vector(g, "R", c(R = 1)))
+  expect_equal(r$stop_rule, "until_neutralized")
+  expect_equal(r$windows, 7)
+  expect_equal(nrow(r$scenario), 8)
+  expect_match(temporal_stop_note(r), "Neutralized at window 7")
+
+  never <- chain_run(g, "permanent", "impulse", stop_rule = "until_neutralized", max_windows = 12)
+  expect_equal(never$windows, 12)
+  expect_equal(temporal_stop_note(never), "Not neutralized within 12 windows.")
+})
+
+test_that("A3: 'Neutralized (relative)' only when |net| is within 5% of the baseline AND not growing", {
+  damp <- chain_run(chain_network(sr03), "permanent", "impulse", windows = 30)
+  tbl <- format_temporal_table(chain_network(sr03), damp)
+  expect_equal(tbl$verdict[tbl$window == 30], "Neutralized (relative)")
+
+  # Counter-example: baseline grows faster than the scenario - from window
+  # 61 on (exactly 5% at window 60) |net| is below 5% of the baseline, but
+  # the Impact is still getting worse.
+  grow <- chain_run(chain_network(), "permanent", "impulse", windows = 61)
+  tbl_g <- format_temporal_table(chain_network(), grow)
+  last <- tbl_g[tbl_g$window == 61, ]
+  expect_lt(abs(last$net_impact), 0.05 * last$baseline_impact)
+  expect_equal(last$verdict, "Partial")
+})
+
+test_that("A4: baseline_without_response ignores Impact -> Response links in the baseline round only", {
+  nodes <- normalize_dpsir_nodes(data.frame(
+    id = c("P", "E", "I", "R"), label = c("P", "E", "I", "R"),
+    dpsir_category = c("Pressure", "State", "Impact", "Response"), self_regulation = 0, stringsAsFactors = FALSE
+  ))
+  edges <- normalize_dpsir_edges(data.frame(
+    from = c("P", "E", "R", "I"), to = c("E", "I", "P", "R"), weight = c(0.5, 0.5, 0.5, 0.5),
+    interaction_type = c("negative", "negative", "negative", "positive"), stringsAsFactors = FALSE
+  ))
+  g <- build_igraph(nodes, edges, get_default_dpsir_schema())
+  p_D <- build_press_vector(g, "P", c(P = 1))
+  with_links <- simulate_temporal_pair(g, p_D, zero_press(g), windows = 6)
+  without <- simulate_temporal_pair(g, p_D, zero_press(g), windows = 6, baseline_without_response = TRUE)
+
+  expect_true(any(with_links$baseline[, "R"] != 0))
+  expect_true(all(without$baseline[, "R"] == 0))
+  expect_equal(without$scenario, with_links$scenario)
 })

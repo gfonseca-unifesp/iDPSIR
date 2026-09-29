@@ -97,9 +97,19 @@ build_savepoint <- function(schema, nodes, edges, positions = NULL, metadata = l
         id = scenario_state$response_active,
         strength = unname(scenario_state$response_strengths),
         stringsAsFactors = FALSE
-      )
+      ),
+      # Revisao 2, item A5: the temporal simulation settings (NULL ones are
+      # dropped below, so jsonlite never writes them as "{}").
+      temporal_mode_pressure = scenario_state$temporal_mode_pressure,
+      temporal_mode_response = scenario_state$temporal_mode_response,
+      temporal_stop_rule = scenario_state$temporal_stop_rule,
+      temporal_max_windows = scenario_state$temporal_max_windows,
+      temporal_windows = scenario_state$temporal_windows,
+      temporal_tol_rel = scenario_state$temporal_tol_rel,
+      baseline_without_response = scenario_state$baseline_without_response
     )
   }
+  if (!is.null(scenario_state_json)) scenario_state_json <- Filter(Negate(is.null), scenario_state_json)
 
   list(
     format_version = CURRENT_SAVEPOINT_VERSION,
@@ -237,7 +247,14 @@ read_savepoint <- function(path, convert_legacy = TRUE) {
     )
   }
 
-  nodes <- normalize_dpsir_nodes(as.data.frame(raw$nodes, stringsAsFactors = FALSE))
+  raw_nodes_df <- as.data.frame(raw$nodes, stringsAsFactors = FALSE)
+  # Revisao 2, item A8: an older savepoint without self_regulation keeps the
+  # behaviour it was saved with (0), not the new default 0.5.
+  is_legacy_file <- is.null(raw$metadata$weight_mode) || !identical(raw$metadata$weight_mode, "structural")
+  if (is_legacy_file && nrow(raw_nodes_df) > 0 && !"self_regulation" %in% names(raw_nodes_df)) {
+    raw_nodes_df$self_regulation <- 0
+  }
+  nodes <- normalize_dpsir_nodes(raw_nodes_df)
 
   # Revisao 2, item 1.5: a savepoint written before the structural mode
   # (no metadata$weight_mode) holds relative weights plus a global reach c.
@@ -282,6 +299,7 @@ read_savepoint <- function(path, convert_legacy = TRUE) {
     NULL
   } else {
     ss <- raw$scenario_state
+    ss_val <- function(x) if (is.null(x) || length(x) == 0) NULL else x
     empty_rows <- data.frame(id = character(), strength = numeric(), stringsAsFactors = FALSE)
     pressure_df <- if (is.null(ss$pressure) || length(ss$pressure) == 0) empty_rows else as.data.frame(ss$pressure, stringsAsFactors = FALSE)
     response_df <- if (is.null(ss$response) || length(ss$response) == 0) empty_rows else as.data.frame(ss$response, stringsAsFactors = FALSE)
@@ -291,7 +309,18 @@ read_savepoint <- function(path, convert_legacy = TRUE) {
       response_strengths = setNames(as.numeric(response_df$strength), response_df$id),
       pressure_active = as.character(pressure_df$id),
       pressure_strengths = setNames(as.numeric(pressure_df$strength), pressure_df$id),
-      effect_horizon = if (is.null(ss$effect_horizon)) 0.5 else as.numeric(ss$effect_horizon)
+      effect_horizon = if (is.null(ss$effect_horizon)) 0.5 else as.numeric(ss$effect_horizon),
+      # Revisao 2, item A5: temporal settings. An older savepoint without
+      # them gets the new defaults - except the stop rule, which stays
+      # "fixed" when the file already records a number of windows, so the
+      # saved result is reproduced.
+      temporal_mode_pressure = ss_val(ss$temporal_mode_pressure) %||% "permanent",
+      temporal_mode_response = ss_val(ss$temporal_mode_response) %||% "permanent",
+      temporal_stop_rule = ss_val(ss$temporal_stop_rule) %||% (if (!is.null(ss_val(ss$temporal_windows))) "fixed" else "until_neutralized"),
+      temporal_max_windows = ss_val(ss$temporal_max_windows) %||% 50,
+      temporal_windows = ss_val(ss$temporal_windows) %||% 5,
+      temporal_tol_rel = ss_val(ss$temporal_tol_rel) %||% 5,
+      baseline_without_response = isTRUE(ss$baseline_without_response)
     )
   }
 

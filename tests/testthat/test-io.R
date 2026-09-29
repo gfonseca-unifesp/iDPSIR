@@ -223,3 +223,31 @@ test_that("a structural savepoint is not converted again, and legacy confidence 
   expect_length(conv$review, 0)
   expect_equal(convert_legacy_weights(nodes, transform(edges, weight = c(3, 1)), c = 0.5)$review, "A -> B")
 })
+
+# Revisao 2, item A5: temporal settings round-trip; an older savepoint that
+# already records a number of windows keeps a fixed-length run.
+test_that("scenario_state round-trips the temporal settings, with defaults for older files", {
+  schema <- get_default_dpsir_schema()
+  nodes <- data.frame(id = c("D1", "R1"), label = c("D", "R"), dpsir_category = c("Driver", "Response"), stringsAsFactors = FALSE)
+  edges <- data.frame(from = "R1", to = "D1", weight = 0.5, interaction_type = "negative", stringsAsFactors = FALSE)
+  st <- list(
+    response_active = "R1", response_strengths = c(R1 = 100), pressure_active = "D1", pressure_strengths = c(D1 = 50),
+    temporal_mode_pressure = "impulse", temporal_mode_response = "permanent", temporal_stop_rule = "fixed",
+    temporal_max_windows = 30, temporal_windows = 12, temporal_tol_rel = 10, baseline_without_response = TRUE
+  )
+  tmp <- tempfile(fileext = ".idpsir.json"); on.exit(unlink(tmp))
+  write_savepoint(build_savepoint(schema, nodes, edges, scenario_state = st), tmp)
+  back <- read_savepoint(tmp)$scenario_state
+  for (k in names(st)[5:11]) expect_equal(back[[k]], st[[k]], info = k)
+
+  st_min <- st[1:4]
+  write_savepoint(build_savepoint(schema, nodes, edges, scenario_state = st_min), tmp)
+  back_min <- read_savepoint(tmp)$scenario_state
+  expect_equal(back_min$temporal_stop_rule, "until_neutralized")
+  expect_equal(back_min$temporal_mode_response, "permanent")
+  expect_false(back_min$baseline_without_response)
+
+  st_old <- c(st_min, temporal_windows = 8)
+  write_savepoint(build_savepoint(schema, nodes, edges, scenario_state = st_old), tmp)
+  expect_equal(read_savepoint(tmp)$scenario_state$temporal_stop_rule, "fixed")
+})

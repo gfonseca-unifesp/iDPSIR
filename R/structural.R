@@ -201,3 +201,22 @@ convert_legacy_weights <- function(nodes, edges, c = 0.5) {
   review <- sprintf("%s -> %s", edges$from, edges$to)[beta > 1]
   list(edges = edges, lambda = lambda, c = c, review = review)
 }
+
+# Revisao 2, item A8: self-regulation notes for the Review step.
+self_regulation_warnings <- function(nodes) {
+  if (nrow(nodes) == 0) return(character())
+  sr <- as.numeric(nodes$self_regulation)
+  out <- character()
+  if (all(!is.na(sr) & sr == 0)) {
+    out <- c(out, "Nothing in this network recovers on its own (self-regulation 0 everywhere): in the temporal simulation every effect accumulates window after window.")
+  }
+  th <- suppressWarnings(as.numeric(nodes$activation_threshold))
+  stuck <- !is.na(th) & !is.na(sr) & sr == 0 & nodes$dpsir_category == "State"
+  if (any(stuck)) {
+    out <- c(out, sprintf(
+      "'%s' has an activation threshold and self-regulation 0: its accumulated deviation never fades on its own, so once its trigger opens it only closes if a response pushes it back.",
+      nodes$label[stuck]
+    ))
+  }
+  out
+}

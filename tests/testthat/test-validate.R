@@ -119,7 +119,7 @@ test_that("normalize_dpsir_nodes defaults self_regulation/growth_rate/reference_
   nodes <- data.frame(id = "A", label = "A", dpsir_category = "Driver", stringsAsFactors = FALSE)
   normalized <- normalize_dpsir_nodes(nodes)
 
-  expect_equal(normalized$self_regulation, 0)
+  expect_equal(normalized$self_regulation, 0.5) # Revisao 2, item A8: default 0.5
   expect_equal(normalized$growth_rate, 0)
   expect_equal(normalized$reference_value, 1)
 })
@@ -206,7 +206,7 @@ test_that("normalize_dpsir_nodes drops a retired temporal_scale column from an o
   normalized <- normalize_dpsir_nodes(nodes)
 
   expect_false("temporal_scale" %in% names(normalized))
-  expect_equal(normalized$self_regulation, 0)
+  expect_equal(normalized$self_regulation, 0.5) # Revisao 2, item A8: default 0.5
 })
 
 # =====================================================

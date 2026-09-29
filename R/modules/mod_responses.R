@@ -408,8 +408,38 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
       )
     })
 
+    # Revisao 2, Fase A: the temporal settings as one list - live inputs when
+    # the controls exist, else the restored/last state (item 0.4), else the
+    # defaults (D2: permanent / permanent / until neutralized, 50 windows).
+    temporal_defaults <- list(
+      temporal_mode_pressure = "permanent", temporal_mode_response = "permanent",
+      temporal_stop_rule = "until_neutralized", temporal_max_windows = 50,
+      temporal_windows = 5, temporal_tol_rel = 5, baseline_without_response = FALSE
+    )
+    present <- function(v) !is.null(v) && length(v) == 1 && !is.na(v)
+    temporal_setting <- function(name, state = NULL) {
+      if (present(input[[name]])) return(input[[name]])
+      if (present(state[[name]])) return(state[[name]])
+      temporal_defaults[[name]]
+    }
+    temporal_settings <- function(state = NULL) {
+      setNames(lapply(names(temporal_defaults), temporal_setting, state = state), names(temporal_defaults))
+    }
+
+    mode_help <- c(
+      permanent = "The push is added again every window, so its effect keeps building up. Use for an ongoing pressure or a management effort that keeps being applied. A response can overshoot and push the Impact below zero.",
+      impulse = "The push is applied in window 1 only; the level it creates stays in the system (it fades only if that factor has self-regulation). Use for a one-off event or measure."
+    )
+    output$mode_help_pressure <- renderUI(helpText(mode_help[[input$temporal_mode_pressure %||% "permanent"]]))
+    output$mode_help_response <- renderUI(helpText(mode_help[[input$temporal_mode_response %||% "permanent"]]))
+
     output$temporal_and_save_section <- renderUI({
       req(current_scenario())
+      # isolate(): reading the temporal inputs here must not make this whole
+      # section re-render (and untick "Show temporal simulation") every time
+      # one of them changes - they are only used as starting values.
+      ts <- isolate(temporal_settings(seed_state()))
+      mode_choices <- c("Added every window (default)" = "permanent", "Applied once and held" = "impulse")
 
       tagList(
         checkboxInput(ns("show_temporal"), "Show temporal simulation across discrete time windows (optional)", value = FALSE),
@@ -421,19 +451,41 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
             "useful when a response might, windows later, become a new pressure itself (e.g. aid that grows the fleet,",
             "which later increases fishing effort)."
           ),
+          # Revisao 2, items A1-A4.
           fluidRow(
-            column(4, sliderInput(ns("temporal_windows"), "Number of windows", min = 2, max = 15, value = 5, step = 1)),
-            column(4, selectInput(
-              ns("temporal_mode_pressure"), "Pressure scenario",
-              choices = c("Ongoing (permanent)" = "permanent", "One-time (impulse)" = "impulse"),
-              selected = "permanent"
-            )),
-            column(4, selectInput(
-              ns("temporal_mode_response"), "Response scenario",
-              choices = c("One-time (impulse)" = "impulse", "Ongoing (permanent)" = "permanent"),
-              selected = "impulse"
-            ))
+            column(6,
+              selectInput(ns("temporal_mode_pressure"), "Pressure", choices = mode_choices, selected = ts$temporal_mode_pressure),
+              uiOutput(ns("mode_help_pressure"))
+            ),
+            column(6,
+              selectInput(ns("temporal_mode_response"), "Response", choices = mode_choices, selected = ts$temporal_mode_response),
+              uiOutput(ns("mode_help_response"))
+            )
           ),
+          fluidRow(
+            column(6,
+              selectInput(
+                ns("temporal_stop_rule"), "Simulation length",
+                choices = c("Until the response neutralizes the Impact (default)" = "until_neutralized",
+                            "Fixed number of windows" = "fixed"),
+                selected = ts$temporal_stop_rule
+              ),
+              conditionalPanel(
+                condition = sprintf("input['%s'] == 'until_neutralized'", ns("temporal_stop_rule")),
+                numericInput(ns("temporal_max_windows"), "Maximum windows", value = ts$temporal_max_windows, min = 1, max = 200, step = 1)
+              ),
+              conditionalPanel(
+                condition = sprintf("input['%s'] == 'fixed'", ns("temporal_stop_rule")),
+                numericInput(ns("temporal_windows"), "Windows", value = ts$temporal_windows, min = 1, max = 200, step = 1)
+              )
+            ),
+            column(6,
+              numericInput(ns("temporal_tol_rel"), "Neutralization tolerance (% of baseline)", value = ts$temporal_tol_rel, min = 0, max = 50, step = 1),
+              helpText("Only labels the table ('Neutralized (relative)'); the run stops only when the Impact reaches zero."),
+              checkboxInput(ns("baseline_without_response"), "Baseline without any response (ignore Impact -> Response links)", value = isTRUE(ts$baseline_without_response))
+            )
+          ),
+          uiOutput(ns("temporal_stop_note")),
           uiOutput(ns("temporal_stability_note")),
           h5("How each Impact changes, window by window"),
           DTOutput(ns("temporal_table")),
@@ -478,15 +530,19 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
       sc <- current_scenario()
       req(sc, isTRUE(input$show_temporal))
 
-      windows <- input$temporal_windows
+      ts <- temporal_settings()
 
       # Revisao 2, item 0.5: report the failure instead of leaving the
       # table/chart blank with Shiny's terse grey error text.
       tryCatch(
         withProgress(message = "Simulating temporal windows", value = 0, {
           simulate_temporal_pair(
-            graph(), sc$p_D, sc$press, windows = windows,
-            mode_D = input$temporal_mode_pressure, mode_R = input$temporal_mode_response,
+            graph(), sc$p_D, sc$press,
+            windows = max(1, ts$temporal_windows %||% 5),
+            mode_D = ts$temporal_mode_pressure, mode_R = ts$temporal_mode_response,
+            stop_rule = ts$temporal_stop_rule,
+            max_windows = max(1, ts$temporal_max_windows %||% 50),
+            baseline_without_response = isTRUE(ts$baseline_without_response),
             on_step = function(t, total) {
               incProgress(1 / total, detail = sprintf("Window %d of %d", t, total))
             }
@@ -498,6 +554,16 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
         }
       )
     })
+
+    output$temporal_stop_note <- renderUI({
+      tr <- temporal_result()
+      req(tr)
+      note <- temporal_stop_note(tr)
+      req(note)
+      div(class = if (is.na(tr$neutralized_at)) "alert alert-secondary" else "alert alert-success", role = "status", note)
+    })
+
+    temporal_tol <- function() max(0, (input$temporal_tol_rel %||% 5)) / 100
 
     output$temporal_stability_note <- renderUI({
       tr <- temporal_result()
@@ -511,7 +577,7 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
       tr <- temporal_result()
       req(tr)
 
-      df <- format_temporal_table(graph(), tr)
+      df <- format_temporal_table(graph(), tr, tol_rel = temporal_tol())
       if (nrow(df) == 0) {
         return(datatable(
           data.frame(Note = "No Impact factors in this network yet."),
@@ -534,8 +600,14 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
       # the rest - confirmed live: with 5 Impacts, pageLength = 15 hid every
       # window past window 2, even though the simulation itself (checked via
       # the storyboard's own panel count) had correctly computed all of them.
-      datatable(df, rownames = FALSE, options = list(dom = "tp", pageLength = 15)) %>%
+      dt <- datatable(df, rownames = FALSE, options = list(dom = "tp", pageLength = 15)) %>%
         formatRound(columns = c("Baseline", "Net"), digits = 3)
+      # Revisao 2, item A2: highlight the window in which the run stopped.
+      if (!is.na(tr$neutralized_at)) {
+        dt <- dt %>% formatStyle("Window", target = "row",
+                                 backgroundColor = styleEqual(tr$neutralized_at, "#e7f4ea"))
+      }
+      dt
     })
 
     # Revisao 1 (guia externo sobre o relatorio como material
@@ -551,13 +623,13 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
     temporal_chart_df <- reactive({
       tr <- temporal_result()
       req(tr)
-      format_temporal_table(graph(), tr)
+      format_temporal_table(graph(), tr, tol_rel = temporal_tol())
     })
 
     output$temporal_chart <- renderPlot({
       tr <- temporal_result()
       req(tr)
-      plot_temporal_storyboard(temporal_chart_df(), reinforcing_warning = isTRUE(tr$stability$unbounded))
+      plot_temporal_storyboard(temporal_chart_df(), reinforcing_warning = isTRUE(tr$stability$unbounded), neutralized_at = tr$neutralized_at)
     })
 
     output$download_temporal_chart_png <- downloadHandler(
@@ -566,7 +638,7 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
         tr <- temporal_result()
         req(tr)
         render_plot_png(
-          function() plot_temporal_storyboard(temporal_chart_df(), reinforcing_warning = isTRUE(tr$stability$unbounded)),
+          function() plot_temporal_storyboard(temporal_chart_df(), reinforcing_warning = isTRUE(tr$stability$unbounded), neutralized_at = tr$neutralized_at),
           file, width = 900, height = 700
         )
       }
@@ -578,7 +650,7 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
         tr <- temporal_result()
         req(tr)
         render_plot_svg(
-          function() plot_temporal_storyboard(temporal_chart_df(), reinforcing_warning = isTRUE(tr$stability$unbounded)),
+          function() plot_temporal_storyboard(temporal_chart_df(), reinforcing_warning = isTRUE(tr$stability$unbounded), neutralized_at = tr$neutralized_at),
           file, width = 9.4, height = 7.3
         )
       }
@@ -648,9 +720,9 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
       # from sc$p_D/sc$press rather than storing the whole windows x nodes
       # history, so it needs to know how many windows and which
       # impulse/permanent mode to use.
-      sc$temporal_windows <- input$temporal_windows %||% 5
-      sc$temporal_mode_pressure <- input$temporal_mode_pressure %||% "permanent"
-      sc$temporal_mode_response <- input$temporal_mode_response %||% "impulse"
+      # Revisao 2, item A5: every temporal setting, so the report re-runs
+      # the same simulation.
+      sc <- utils::modifyList(sc, isolate(temporal_settings(seed_state())))
 
       saved <- saved_scenarios$list
       saved[[sc$name]] <- sc
@@ -799,11 +871,15 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
         pressure_active
       )
 
-      list(
-        response_active = response_active,
-        response_strengths = response_strengths,
-        pressure_active = pressure_active,
-        pressure_strengths = pressure_strengths
+      c(
+        list(
+          response_active = response_active,
+          response_strengths = response_strengths,
+          pressure_active = pressure_active,
+          pressure_strengths = pressure_strengths
+        ),
+        # Revisao 2, item A5.
+        temporal_settings(isolate(restored()))
       )
     }
 

@@ -257,6 +257,7 @@ draw_storyboard_color_scale <- function(max_abs) {
 idpsir_verdict_palette <- c(
   "Improved beyond neutral" = "#1b8a3a", # verde - net <= 0, alem do neutro
   "Neutralized"             = "#1b8a3a", # verde - segurou no neutro
+  "Neutralized (relative)"  = "#8fd19e", # verde claro - dentro da tolerancia relativa (Revisao 2, A3)
   "Partial"                 = "#e0a100", # ambar - ajudou, ainda positivo
   "Failure/worsened"        = "#c0392b"  # vermelho - tao ruim ou pior que o baseline
 )
@@ -273,7 +274,9 @@ idpsir_verdict_palette <- c(
 #   reach, confianca) - combinar cenario x Impacto numa unica grade quebraria
 #   esse padrao ja estabelecido, entao este parametro fica sem efeito por
 #   enquanto (reservado, nao implementado).
-plot_temporal_storyboard <- function(temporal_df, reinforcing_warning = FALSE, by_scenario = FALSE) {
+# @param neutralized_at janela em que a simulacao "ate neutralizar" parou
+#   (Revisao 2, A2) - desenhada como linha vertical; NA = nenhuma.
+plot_temporal_storyboard <- function(temporal_df, reinforcing_warning = FALSE, by_scenario = FALSE, neutralized_at = NA) {
   stopifnot(all(c("node", "window", "baseline_impact", "net_impact", "verdict") %in% names(temporal_df)))
 
   if (nrow(temporal_df) == 0) {
@@ -331,6 +334,9 @@ plot_temporal_storyboard <- function(temporal_df, reinforcing_warning = FALSE, b
     graphics::rect(usr[1], usr[3], usr[2], min(0, usr[4]), col = "#e7f4ea", border = NA)
     graphics::box() # rect() acima desenha por cima da borda do plot; redesenha
     graphics::abline(h = 0, col = "#8a919b", lwd = 1)
+    if (length(neutralized_at) == 1 && !is.na(neutralized_at)) {
+      graphics::abline(v = neutralized_at, col = "#2e7d32", lty = 3, lwd = 1.5)
+    }
 
     # Baseline (so' pressao): tracejado cinza, pontos abertos.
     graphics::lines(sub$window, sub$baseline_impact, lty = 2, col = "#6b7280", lwd = 1.5)

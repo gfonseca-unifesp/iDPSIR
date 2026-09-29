@@ -522,7 +522,7 @@ mod_data_server <- function(id, seed = NULL) {
       d <- defaults %||% list(
         id = "", label = "", dpsir_category = schema_categories(rv$schema)[1],
         subsystem = "", uncertainty = 0.5, controllability = 0.5,
-        self_regulation = 0, growth_rate = 0, reference_value = 1,
+        self_regulation = DEFAULT_SELF_REGULATION, growth_rate = 0, reference_value = 1,
         activation_threshold = NA_real_, descriptor = ""
       )
 
@@ -542,15 +542,24 @@ mod_data_server <- function(id, seed = NULL) {
         ),
         numericInput(
           ns("nm_self_regulation"), "Self-regulation (0-1)",
-          value = d$self_regulation %||% 0, min = 0, max = 0.99, step = 0.05
+          value = d$self_regulation %||% DEFAULT_SELF_REGULATION, min = 0, max = 1, step = 0.05
         ),
         tags$p(
           class = "text-muted", style = "font-size: 12px;",
-          "Does this factor tend to return to its own baseline on its own once nothing is",
-          "pushing it? 0 = no, it only changes because of the network's links. Closer to 1 =",
-          "strongly, on its own (e.g. a habitat that recovers, or a factor controlled by",
-          "something outside the model) - the fraction of its current deviation that reverts",
-          "each simulated step."
+          "Share of this factor's deviation that fades by itself each window: 0 = accumulates like a stock",
+          "(nothing recovers), 1 = no memory (reflects only what arrives in the window). Default 0.5."
+        ),
+        # Revisao 2, item A8: guide (Anexo X4 of the roadmap).
+        tags$table(
+          class = "table table-sm", style = "font-size: 11.5px; margin-bottom: 8px;",
+          tags$thead(tags$tr(tags$th("Self-regulation"), tags$th("Half-life"), tags$th("Build-up at equilibrium"), tags$th("Typical of"))),
+          tags$tbody(
+            tags$tr(tags$td("0.05"), tags$td("13.5 windows"), tags$td("20x"), tags$td("contaminant in sediment")),
+            tags$tr(tags$td("0.10"), tags$td("6.6 windows"), tags$td("10x"), tags$td("reef recovery, long-lived species")),
+            tags$tr(tags$td("0.30"), tags$td("1.9 windows"), tags$td("3x"), tags$td("short-cycle fish stock")),
+            tags$tr(tags$td("0.50 (default)"), tags$td("1 window"), tags$td("2x"), tags$td("water quality that renews quickly")),
+            tags$tr(tags$td("1"), tags$td("-"), tags$td("1x"), tags$td("monthly income, catch in the window"))
+          )
         ),
         numericInput(
           ns("nm_growth_rate"), "Growth rate (optional)",
@@ -640,8 +649,8 @@ mod_data_server <- function(id, seed = NULL) {
       }
 
       self_regulation <- input$nm_self_regulation
-      if (is.na(self_regulation) || self_regulation < 0 || self_regulation >= 1) {
-        showNotification("Self-regulation must be between 0 and just under 1.", type = "error")
+      if (is.na(self_regulation) || self_regulation < 0 || self_regulation > 1) {
+        showNotification("Self-regulation must be between 0 and 1.", type = "error")
         return()
       }
 
@@ -987,6 +996,7 @@ mod_data_server <- function(id, seed = NULL) {
         }
         notes <- c(notes, explained_variance_warnings(normalize_dpsir_nodes(rv$nodes), e))
       }
+      if (length(messages) == 0) notes <- c(notes, self_regulation_warnings(normalize_dpsir_nodes(rv$nodes)))
 
       tagList(
         if (length(messages) == 0) {
