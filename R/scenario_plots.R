@@ -367,12 +367,14 @@ draw_temporal_legend <- function(reinforcing_warning = FALSE) {
     legend = c(
       "Baseline (pressure only)",
       "Net: neutralized / improved (≤ 0)",
+      "Net: within tolerance of baseline",
       "Net: partial (> 0, better than baseline)",
       "Net: failure/worsened (≥ baseline)"
     ),
     pch = 21,
-    pt.bg = c("white", idpsir_verdict_palette[["Neutralized"]], idpsir_verdict_palette[["Partial"]], idpsir_verdict_palette[["Failure/worsened"]]),
-    col = c("#6b7280", "#222222", "#222222", "#222222"),
+    pt.bg = c("white", idpsir_verdict_palette[["Neutralized"]], idpsir_verdict_palette[["Neutralized (relative)"]],
+              idpsir_verdict_palette[["Partial"]], idpsir_verdict_palette[["Failure/worsened"]]),
+    col = c("#6b7280", "#222222", "#222222", "#222222", "#222222"),
     pt.cex = 1.3
   )
 

@@ -45,10 +45,10 @@ shiny::runGitHub("iDPSIR", "gfonseca-unifesp", "main")
 The scientific core (`R/loop_analysis.R`, `R/sufficiency.R`, `R/temporal.R`,
 `R/reach.R`, `R/metrics.R`, `R/io.R`, `R/validate.R`) has an automated `testthat`
 suite, checked against hand-verified numeric examples (a classic stable
-trophic-chain matrix, the real Mangi et al. 2007 fisheries network, and a small
-five-node network kept in `docs/example_fisheries.idpsir.json` as a test fixture -
-not the tutorial's own worked example, see Data format below). Run it from the
-project root:
+trophic-chain matrix, the real Mangi et al. 2007 fisheries network, the reference
+values of a small Pressure -> State -> Impact chain for the temporal simulation, and
+older-format savepoints kept in `tests/testthat/fixtures/` to check that files from
+earlier versions still load with the same results). Run it from the project root:
 
 ```r
 testthat::test_dir("tests/testthat")
@@ -77,8 +77,9 @@ iDPSIR/
 │   ├── metrics.R              # centralities, general metrics, DPSIR descriptors
 │   ├── pathways.R             # schema-aware causal pathway analysis
 │   ├── loop_analysis.R        # loop analysis (Levins 1974): interaction matrix (incl. optional per-node self-regulation, reused by the temporal engine below) and the older equilibrium reading (press perturbation, stability check, trajectory, robustness, edge/self-regulation sensitivity) - kept defined and tested, but no longer called from the UI/report, superseded by sufficiency.R and temporal.R
-│   ├── sufficiency.R          # primary Scenarios reading: a discounted, short-path-dominated propagated effect (always well-defined, no stability requirement) - worsening (pressure) vs. mitigation (response) vs. net, per Impact, plus a confidence check (edge-weight resampling) and sensitivity to how far the effect is traced
-│   ├── temporal.R             # optional discrete-time-window simulation: runs the pressure/response scenario forward window by window (no equilibrium assumption), showing whether a response's benefit holds up or erodes over time
+│   ├── structural.R           # edge strengths as standardized path coefficients (beta): Weak/Moderate/Strong classes, uncertainty bands, r-squared shortcuts, the rho(B) < 1 check, conversion of older files
+│   ├── sufficiency.R          # primary Scenarios reading: the path-analysis total effect of each push (product of betas along each causal path) - worsening (pressure) vs. mitigation (response) vs. net, per Impact, plus a confidence check (every beta resampled within its uncertainty band)
+│   ├── temporal.R             # optional discrete-time-window simulation: runs the pressure/response scenario forward window by window, until the response neutralizes the Impact or for a fixed number of windows
 │   ├── responses.R            # get_feedback_categories/find_response_targets (still used); apply_response and the older scenario-comparison helpers are kept but no longer called, superseded by sufficiency.R/temporal.R
 │   ├── reach.R                # response_reach(): how far a response's influence travels through the network - pure graph traversal, independent of both readings above
 │   ├── scenario_plots.R       # shared trajectory/edge-sensitivity/per-Impact temporal line chart drawing, reused on screen, in PNG/SVG downloads, and in the report
@@ -100,7 +101,7 @@ iDPSIR/
 ├── docs/                      # getting-started tutorial (tutorial.html) and three example savepoints (example_fisheries/mangi/gnanapragasam.idpsir.json, see Example networks below)
 ├── tests/
 │   ├── testthat.R             # test runner: Rscript tests/testthat.R
-│   └── testthat/               # tests for the scientific core (loop_analysis, sufficiency, temporal, reach, metrics, io, validate)
+│   └── testthat/               # tests for the scientific core (loop_analysis, sufficiency, temporal, reach, metrics, io, validate, graph); fixtures/ holds older-format savepoints
 └── README.md
 ```
 
@@ -111,10 +112,10 @@ State, Impact, Response), `subsystem`, `uncertainty` (optional, a number in [0, 
 default 0.5 — how confident you are this node is described correctly; thickens the
 node's border on the graph, not read by any calculation), `controllability` (optional,
 a number in [0, 1], default 0.5 — how much a manager can influence this factor
-directly, not read by any calculation), `self_regulation` (optional, a number in [0, 1),
-default 0 — the fraction of a factor's simulated deviation that reverts each time
-window, e.g. a fish stock that partially replenishes; only used by the optional
-temporal simulation, see Scenarios below), `growth_rate` (optional, default 0 — a
+directly, not read by any calculation), `self_regulation` (optional, a number in [0, 1],
+default 0.5 — the share of a factor's deviation that fades by itself each time window;
+only used by the optional temporal simulation, see [Self-regulation](#self-regulation)
+below), `growth_rate` (optional, default 0 — a
 factor's own exogenous trend per time window, e.g. population growth, independent of
 any edge), `reference_value` (optional, default 1 — the scale a factor's simulated
 change is measured against when it has an `activation_threshold` set),
@@ -124,9 +125,38 @@ on together — only allowed when the factor is State), `descriptor` (optional
 free-text description of what the factor represents — documentation only, not read by
 any calculation).
 
-**Edges** (`data/sample_edges.csv`): `from`, `to`, `weight`, `confidence` (0-1),
-`interaction_type` (positive/negative), `evidence_type`, `reference` (optional
-DOI/URL/citation backing the link, listed in the report if included).
+**Edges** (`data/sample_edges.csv`): `from`, `to`, `interaction_type` (positive/negative
+— required: the sign has no default), `weight` (the edge's **strength** as a
+standardized path coefficient beta: how many standard deviations the target moves when
+the source moves by one), `weight_low`/`weight_high` (optional uncertainty band of the
+strength), `strength_class` (optional: `weak`, `moderate`, `strong`), `evidence_type`,
+`reference` (optional DOI/URL/citation backing the link, listed in the report if
+included).
+
+**What you need to enter.** Only the structure (nodes with their category, edges) and
+the sign of each edge are required — everything else has a default, and the network
+runs with them (results are then qualitative; the Review step and the report say how
+many edges rely on a default). Fields in the same group replace each other — fill in
+one:
+
+| Group | Fill in one of (priority order) | Default |
+|---|---|---|
+| Strength of an edge | beta directly > r-squared (the form converts it: \|beta\| = sqrt(r²)) > class | Moderate |
+| Uncertainty of an edge | `weight_low`/`weight_high` > r-squared plus sample size n (band from the standard error) > band of the class | band of the class |
+
+| Class | Strength used | Uncertainty band |
+|---|---|---|
+| Weak | 0.15 | 0 – 0.3 |
+| Moderate (default) | 0.45 | 0.3 – 0.6 |
+| Strong | 0.80 | 0.6 – 1.0 |
+
+The effect of a scenario is the product of the strengths along each causal path,
+summed over paths, so a response far from an Impact is naturally attenuated. The
+network is blocked at "Build" if its feedback loops would amplify without bound
+(spectral radius of the strength matrix at or above 1); the message names the edges on
+the loop. **Older files** (savepoints and CSVs from before standardized strengths) are
+converted on load (tick "Convert from older relative weights" for a CSV) so that their
+static results stay exactly the same; the Start step reports the conversion.
 
 **Default DPSIR connections:** Driver→Pressure, Pressure→State, State→Impact,
 Impact→Response, and Response→{Driver, Pressure, State, Impact}. The schema is
@@ -142,6 +172,40 @@ Gnanapragasam network). The app never checks this for you — see the tutorial's
 [Modeling convention](docs/tutorial.html#conventions) section for the full sign table,
 the golden rule that keeps a node's edges consistent, and how to read the temporal
 simulation's Verdict once your signs are in place.
+
+### Self-regulation
+
+`self_regulation` (0–1, default 0.5) is the share of a factor's deviation that fades by
+itself each window, independently of the network: 0 = nothing fades and everything
+that arrives accumulates (a stock with no replenishment, a persistent contaminant);
+0.3 = 30% of the deviation fades each window (a population rebuilding, a habitat
+regenerating); 1 = no memory, the factor only reflects what arrives in the current
+window.
+
+Each window: *new value = (1 − self_regulation) × previous value + what arrives through
+the edges + the push*.
+
+Example — fishing effort (P) → fish stock (S) → catch decline (I), with strengths 0.7
+and 0.6 (both negative) and a pressure of 1 standard deviation:
+
+| Case | Window 2 | 4 | 8 | 12 |
+|---|---|---|---|---|
+| Ongoing pressure, self-regulation 0 everywhere — fish stock | −0.70 | −4.20 | −19.6 | −46.2 |
+| Ongoing pressure, stock recovers 30% per window — fish stock | −0.70 | −1.53 | −2.14 | −2.29 (settles at −0.7 ÷ 0.3 = −2.33) |
+| Ongoing pressure, self-regulation 1 everywhere — fish stock | −0.70 | −0.70 | −0.70 | −0.70 (same as the static reading) |
+| One-off pressure, stock recovers 30% per window — fish stock | −0.70 | −0.34 | −0.08 | −0.02 (back to normal) |
+
+Under a constant load, a factor settles at *load ÷ self-regulation*: a contaminant with
+self-regulation 0.05 accumulates up to 20 times what arrives each window, which is how
+a small per-window pressure can still cross a threshold through accumulation.
+
+| Self-regulation | Half-life of recovery | Build-up at equilibrium (1 ÷ self-regulation) | Typical of |
+|---|---|---|---|
+| 0.05 | 13.5 windows | 20× | contaminant in sediment |
+| 0.10 | 6.6 windows | 10× | reef recovery, long-lived species |
+| 0.30 | 1.9 windows | 3× | short-cycle fish stock |
+| 0.50 (default) | 1 window | 2× | water quality that renews quickly |
+| 1 | — | 1× | monthly income, catch in the window |
 
 ## Example networks
 
@@ -198,28 +262,33 @@ has four tabs:
   always-well-defined **sufficiency** reading (`R/sufficiency.R`): for each Impact, how
   much the pressure scenario worsens it, how much the response scenario mitigates (or
   worsens) it, and whether that mitigation is enough to neutralize the worsening —
-  plus a confidence check (% of simulations, resampling edge weights within their
-  confidence range, that agree on the neutralization verdict) and a check for whether
-  the verdict holds up across how far the effect is traced. Unlike the network's own
-  math, this reading never requires a "stable" network and never inverts a
-  prediction's sign. The sufficiency reading above is deliberately static and ignores
+  plus a confidence check (% of simulations, resampling every edge's strength within
+  its uncertainty band, in which the verdict holds). The sufficiency reading above is deliberately static and ignores
   a node's `self_regulation` on purpose — that attribute (and `growth_rate`) only
   feeds the optional temporal simulation below, never the primary verdict. **Reach**
   always shows how many factors — and how many Impacts — a response's influence can
   touch through some causal path, independent of the reading above. An optional
   **temporal simulation** disclosure (`R/temporal.R`) runs the same two scenarios
   forward window by window instead of reading a single instant — useful when a
-  response might, windows later, become a new pressure itself — with a configurable
-  number of windows, an impulse/permanent mode for each scenario, a table of how each
-  Impact changes window by window, a progress indicator while it computes, and a
-  chart — one panel per Impact, dashed baseline vs. solid Net, points colored by that
-  window's Verdict, with the neutralized zone (Net ≤ 0) shaded (downloadable as
-  PNG/SVG, and included as a figure in the report if selected). It's an explicit short-horizon
-  integration, not a calibrated forecast: in networks without `self_regulation`/
-  `growth_rate` tuned to damp things down, values can grow quickly window over
-  window — read it for the *direction* of an indirect, delayed effect (does a
-  response's benefit hold up or erode; does it eventually feed a new pressure), not
-  for the absolute magnitude. Save a scenario and compare
+  response might, windows later, become a new pressure itself. Pressure and response
+  each run as **"Added every window"** (default: the push is applied again every
+  window) or **"Applied once and held"** (window 1 only; the level it creates fades
+  only through self-regulation). The simulation runs **until the response neutralizes
+  the Impact** (default, up to 50 windows, editable: it stops at the first window in
+  which every Impact the response reaches, and that the pressure has already worsened,
+  is at or below zero — or reports "Not neutralized within N windows"), or for a
+  **fixed number of windows**. A table shows how each Impact changes window by window
+  (the stop window highlighted), with a "Neutralized (relative)" label when the net
+  value is within a tolerance of the baseline (default 5%) and not growing — the
+  tolerance only labels the table, it never stops the run. An option runs the baseline
+  **without any response** (ignoring Impact → Response links). A chart shows one panel
+  per Impact, dashed baseline vs. solid Net, points colored by that window's Verdict,
+  the neutralized zone (Net ≤ 0) shaded and the stop window marked (downloadable as
+  PNG/SVG, and included in the report if selected). The key message: *what makes an
+  Impact converge is the chain's self-regulation; the response mode decides the
+  effort; the stop criterion says in which window the problem was solved.* It's an
+  explicit short-horizon integration, not a calibrated forecast — read it for the
+  *direction* of an indirect, delayed effect, not for the absolute magnitude. Save a scenario and compare
   multiple saved scenarios' reach side by side. The older equilibrium-based reading
   (loop analysis / Levins 1974 — stability check, immediate vs. equilibrium effect,
   step-by-step trajectory, robustness and self-regulation-sensitivity checks, edge
@@ -234,7 +303,7 @@ has four tabs:
   versions and the parameters used in the stochastic analyses) go into one
   self-contained downloadable HTML report. Every report opens the same way regardless
   of what's checked: a "Report summary" (network name/author/savepoint file, plus each
-  selected scenario's pressure/response/c definition) and a "How to read these
+  selected scenario's pressure/response definition) and a "How to read these
   results" legend (sign convention, what "neutralized" means, the Verdict color key) —
   then the decision-relevant sections (Response sufficiency, Reach, Temporal
   simulation, References) in that order, with the descriptive material (graph image,

@@ -560,10 +560,11 @@
           </ol>
         </li>
         <li><a href="#conventions">4 · Modeling convention: signs</a></li>
-        <li><a href="#examples">5 · Example networks</a></li>
-        <li><a href="#worked-example">6 · Worked example</a></li>
-        <li><a href="#savepoint">7 · Saving your work</a></li>
-        <li><a href="#glossary">8 · Glossary</a></li>
+        <li><a href="#self-regulation">5 · Self-regulation</a></li>
+        <li><a href="#examples">6 · Example networks</a></li>
+        <li><a href="#worked-example">7 · Worked example</a></li>
+        <li><a href="#savepoint">8 · Saving your work</a></li>
+        <li><a href="#glossary">9 · Glossary</a></li>
       </ol>
     </nav>
 
@@ -658,7 +659,7 @@ cd iDPSIR</pre>
                     <tr><td class="key">uncertainty</td><td>Optional number in [0, 1], default 0.5</td></tr>
                     <tr><td class="key">controllability</td><td>Optional number in [0, 1], default 0.5</td></tr>
                     <tr><td class="key">descriptor</td><td>Optional free-text description of what this factor represents</td></tr>
-                    <tr><td class="key">self_regulation</td><td>Optional number in [0, 1), default 0 — only used by the optional temporal simulation (see Scenarios below)</td></tr>
+                    <tr><td class="key">self_regulation</td><td>Optional number in [0, 1], default 0.5 — the share of this factor's deviation that fades by itself each window; only used by the optional temporal simulation (see <a href="#self-regulation">Self-regulation</a>)</td></tr>
                     <tr><td class="key">growth_rate</td><td>Optional number, default 0 — a factor's own exogenous trend per time window, independent of any edge</td></tr>
                     <tr><td class="key">reference_value</td><td>Optional number, default 1 — the scale a factor's change is measured against by its own activation_threshold, if set</td></tr>
                     <tr><td class="key">activation_threshold</td><td>Optional number in [0, 1], leave blank for most factors — only allowed for a State factor (see Scenarios below)</td></tr>
@@ -677,16 +678,18 @@ S1,Water quality,State,Water,0.5,0.2</pre>
                   <table class="fields">
                     <tr><th>Column</th><th>Value</th></tr>
                     <tr><td class="key">from / to</td><td>Node ids this link connects</td></tr>
-                    <tr><td class="key">weight</td><td>Strength (any positive number)</td></tr>
-                    <tr><td class="key">confidence</td><td>0–1</td></tr>
-                    <tr><td class="key">interaction_type</td><td>positive / negative</td></tr>
+                    <tr><td class="key">interaction_type</td><td>positive / negative — <strong>required</strong>, the sign has no default</td></tr>
+                    <tr><td class="key">weight</td><td>Optional strength (beta, see <a href="#what-to-enter">What you need to enter</a>); blank = the class below, or Moderate (0.45)</td></tr>
+                    <tr><td class="key">strength_class</td><td>Optional: weak / moderate / strong</td></tr>
+                    <tr><td class="key">weight_low / weight_high</td><td>Optional uncertainty band of the strength</td></tr>
                     <tr><td class="key">evidence_type</td><td>e.g. observational, monitoring</td></tr>
                     <tr><td class="key">reference</td><td>Optional citation (DOI, URL, or plain text) backing this link</td></tr>
                   </table>
                 </div>
-                <pre>from,to,weight,confidence,interaction_type,evidence_type
-D1,P1,3,0.8,positive,expert_assessment
-P1,S1,3,0.85,negative,monitoring</pre>
+                <pre>from,to,interaction_type,weight,strength_class,evidence_type
+D1,P1,positive,,strong,expert_assessment
+P1,S1,negative,0.55,,monitoring</pre>
+                <p class="muted" style="font-size:13px">An older file with relative weights (e.g. 1–3)? Tick <strong>Convert from older relative weights</strong> on the import card — the static results stay exactly as before.</p>
               </div>
             </div>
           </div>
@@ -737,7 +740,7 @@ P1,S1,3,0.85,negative,monitoring</pre>
                 <tr><td class="key">uncertainty</td><td>Optional number in [0, 1], default 0.5 — how confident you are this node is described correctly (0 = very confident, 1 = very uncertain). Thickens the node's border on the graph. Not read by any calculation, purely a visual/documentation aid.</td></tr>
                 <tr><td class="key">controllability</td><td>Optional number in [0, 1], default 0.5 — how much a manager can influence this factor directly (0 = not at all, 1 = fully). Not read by any calculation.</td></tr>
                 <tr><td class="key">descriptor</td><td>Optional — a short, plain-language description of what this factor represents. Purely documentation: not read by any calculation, just there so someone reading the network later (including a future you) doesn't have to guess what a node means.</td></tr>
-                <tr><td class="key">self_regulation</td><td>Optional number in [0, 1), default 0. The fraction of this factor's simulated deviation that reverts each time window (e.g. a recovering habitat) — only used by the Scenarios tab's optional temporal simulation, see the worked example.</td></tr>
+                <tr><td class="key">self_regulation</td><td>Optional number in [0, 1], default 0.5. The share of this factor's deviation that fades by itself each time window: 0 = accumulates like a stock, 1 = no memory. The form shows a guide (half-life, build-up); see <a href="#self-regulation">Self-regulation</a>. Only used by the Scenarios tab's optional temporal simulation.</td></tr>
                 <tr><td class="key">growth_rate</td><td>Optional number, default 0. This factor's own exogenous trend per time window (e.g. population growth), independent of any edge — also only used by the temporal simulation.</td></tr>
                 <tr><td class="key">reference_value</td><td>Optional number, default 1. The scale this factor's simulated change is measured against when it has an activation threshold set below.</td></tr>
                 <tr><td class="key">activation_threshold</td><td>Optional number in [0, 1], leave blank for most factors. Only allowed for a State factor: a fraction of its own reference value it has to move, in a given scenario, before ALL of its outgoing links switch on together — instead of always contributing proportionally from the start. Only affects the Scenarios tab's optional temporal simulation; the sufficiency reading and the graph itself ignore it.</td></tr>
@@ -757,13 +760,27 @@ P1,S1,3,0.85,negative,monitoring</pre>
             <div class="table-wrap">
               <table class="fields">
                 <tr><th>Field</th><th>What it means</th></tr>
-                <tr><td class="key">weight</td><td>Strength of the link (any positive number). Drawn as line thickness on the graph.</td></tr>
-                <tr><td class="key">confidence</td><td>0–1, how sure you are this link is real. Below the Graph tab's threshold, the line is drawn dashed.</td></tr>
+                <tr><td class="key">Strength</td><td>How many standard deviations the target changes when this factor changes by one (a standardized path coefficient, beta). No data? Pick a class — <strong>Weak</strong> (0.15), <strong>Moderate</strong> (0.45, the default) or <strong>Strong</strong> (0.80). With data, choose "I have a value" and enter beta — or r² instead (the form uses |beta| = √r²), optionally with the sample size n. Drawn as line thickness on the graph.</td></tr>
+                <tr><td class="key">Uncertainty range</td><td>Lowest and highest plausible strength. Optional: otherwise it comes from r² and n, or from the class (Weak 0–0.3, Moderate 0.3–0.6, Strong 0.6–1.0). Used only by the confidence readings, never to shrink the effect. A wide range is drawn dashed.</td></tr>
                 <tr><td class="key">interaction_type</td><td><code>positive</code> (the link increases its target) or <code>negative</code> (it decreases/mitigates it) — colors the edge red or green and appears in its tooltip.</td></tr>
                 <tr><td class="key">evidence_type</td><td>e.g. observational, expert_assessment, monitoring — where the link comes from, shown on hover.</td></tr>
                 <tr><td class="key">reference</td><td>Optional — a DOI, URL, or plain citation backing this specific link. Shown on hover and, if you check "Edge references" on the Report tab, listed in a References section so a reader can trace any prediction back to its evidence.</td></tr>
               </table>
             </div>
+            <div id="what-to-enter" class="callout" style="margin-top:12px">
+          <span class="dot"></span>
+          <div><strong>What you need to enter.</strong> Only the structure (nodes with
+          their category, edges) and the <em>sign</em> of each edge are required.
+          Everything else has a default, and the network runs with them — the results are
+          then qualitative, and the Review step and the report say how many edges rely on
+          a default. Fields that do the same job replace each other; fill in one:
+          <em>strength</em> = beta, or r², or a class (default Moderate);
+          <em>uncertainty</em> = a range, or r² with n, or the range of the class. The
+          effect of a scenario is the product of the strengths along each causal path,
+          summed over paths — a response far from an Impact is naturally attenuated. If
+          the network's feedback loops would amplify without bound, <strong>Build</strong>
+          is blocked and the message names the edges on the loop.</div>
+        </div>
           </div>
         </div>
 
@@ -831,7 +848,7 @@ P1,S1,3,0.85,negative,monitoring</pre>
             </div>
             <div class="control">
               <div class="label">Edge width / confidence<span class="widget">dropdown + slider</span></div>
-              <p>Line thickness by weight or confidence; a slider sets how low confidence has to be before a link is drawn dashed instead of solid.</p>
+              <p>Line thickness by strength or by how narrow its uncertainty range is ("confidence"); a slider sets how wide the range can get before a link is drawn dashed instead of solid.</p>
             </div>
             <div class="control">
               <div class="label">Spacing &amp; font size<span class="widget">sliders</span></div>
@@ -872,20 +889,12 @@ P1,S1,3,0.85,negative,monitoring</pre>
               <p>One row per Response node — turn on any combination you want to test, and how strongly each is implemented.</p>
             </div>
             <div class="control">
-              <div class="label">How far to trace the effect<span class="widget">slider</span></div>
-              <p>Lower values focus almost entirely on short, direct causal chains; higher values let longer, indirect chains contribute more. "Does it hold up across how far the effect is traced?" below shows whether your conclusions change across this range.</p>
-            </div>
-            <div class="control">
               <div class="label">Apply scenario<span class="widget">button</span></div>
-              <p>Runs both scenarios and shows <strong>"Is the response enough? (sufficiency)"</strong> — for each Impact, how much the pressure scenario worsens it, how much the response scenario mitigates (or, sometimes, worsens) it, whether that's enough to neutralize the worsening, and how strong the response would need to be if not. This reading is always well-defined — no stability requirement, no possibility of a silently inverted sign (see the worked example for why that mattered).</p>
+              <p>Runs both scenarios and shows <strong>"Is the response enough? (sufficiency)"</strong> — for each Impact, how much the pressure scenario worsens it, how much the response scenario mitigates (or, sometimes, worsens) it, whether that's enough to neutralize the worsening, and how strong the response would need to be if not. The effect is the product of the edges' strengths along each causal path, summed over paths.</p>
             </div>
             <div class="control">
               <div class="label">How confident is that, response by response?<span class="widget">table</span></div>
-              <p>Every response in the network, evaluated alone at full strength against the same pressure scenario: the percentage of simulations — resampling every edge's weight within a range set by its confidence — in which that response alone neutralizes each Impact.</p>
-            </div>
-            <div class="control">
-              <div class="label">Does it hold up across how far the effect is traced?<span class="widget">table</span></div>
-              <p>Recomputes the neutralization verdict at several settings of "How far to trace the effect" — an Impact marked Borderline has a verdict that changes somewhere in that range, worth a second look before trusting it at just one setting.</p>
+              <p>Every response in the network, evaluated alone at full strength against the same pressure scenario: the percentage of simulations — resampling every edge's strength within its uncertainty range — in which that response alone neutralizes each Impact.</p>
             </div>
             <div class="control">
               <div class="label">Reach<span class="widget">table</span></div>
@@ -893,11 +902,11 @@ P1,S1,3,0.85,negative,monitoring</pre>
             </div>
             <div class="control">
               <div class="label">Show temporal simulation across discrete time windows<span class="widget">optional</span></div>
-              <p>Runs the same two scenarios forward window by window instead of reading a single instant — useful when a response might, windows later, become a new pressure itself (see the worked example). Set the number of windows and whether each scenario is a one-time impulse or an ongoing/permanent push; a progress indicator shows "Window X of N" while it computes. Shows a table of how each Impact changes window by window, with a <strong>Verdict</strong> per row (see <a href="#conventions">Reading the Verdict</a>), and a chart — one panel per Impact, dashed baseline vs. solid Net, each Net point colored by that window's Verdict, with the neutralized zone (Net ≤ 0) shaded — downloadable as PNG or SVG and included as a figure if this scenario is added to the report.</p>
+              <p>Runs the same two scenarios forward window by window instead of reading a single instant — useful when a response might, windows later, become a new pressure itself (see the worked example). Pressure and response each run as <strong>Added every window</strong> (default) or <strong>Applied once and held</strong> (window 1 only; the level it creates fades only through self-regulation). <strong>Simulation length</strong>: <em>until the response neutralizes the Impact</em> (default, up to 50 windows — it stops at the first window in which every Impact the response reaches, and that the pressure has already worsened, is at or below zero; otherwise it says "Not neutralized within N windows") or a <em>fixed number of windows</em>. Optional: a neutralization tolerance (default 5% of the baseline, which only labels the table as "Neutralized (relative)"), and a baseline without any response (ignoring Impact → Response links). A progress indicator shows "Window X of N" while it computes. Shows a table of how each Impact changes window by window, with a <strong>Verdict</strong> per row (see <a href="#conventions">Reading the Verdict</a>), and a chart — one panel per Impact, dashed baseline vs. solid Net, each Net point colored by that window's Verdict, with the neutralized zone (Net ≤ 0) shaded — downloadable as PNG or SVG and included as a figure if this scenario is added to the report.</p>
             </div>
             <div class="control">
               <div class="label">Save this scenario<span class="widget">button</span></div>
-              <p>Keeps the result for the rest of the session (not written to disk) so you can build several scenarios and compare them.</p>
+              <p>Keeps the result, with its temporal settings, for the rest of the session (not written to disk) so you can build several scenarios and compare them. The scenario currently on screen, including its temporal settings, is saved in the savepoint.</p>
             </div>
             <div class="control">
               <div class="label">Compare selected scenarios<span class="widget">multi-select table</span></div>
@@ -1033,6 +1042,7 @@ P1,S1,3,0.85,negative,monitoring</pre>
             <tr><th>Verdict</th><th>Condition</th><th>Meaning</th></tr>
             <tr><td class="key">Neutralized</td><td>net ≈ 0</td><td>the response's benefit exactly offsets the pressure's worsening</td></tr>
             <tr><td class="key">Improved beyond neutral</td><td>net &lt; 0</td><td>the response did more than enough — the factor is better than if nothing had happened at all</td></tr>
+            <tr><td class="key">Neutralized (relative)</td><td>0 &lt; net ≤ tolerance × baseline, and not growing</td><td>practically neutralized: within the tolerance (default 5%) of the baseline and not getting worse from the previous window. Only a label — "until neutralized" still waits for net ≤ 0</td></tr>
             <tr><td class="key">Partial</td><td>0 &lt; net &lt; baseline</td><td>still a problem, but smaller than it would be without the response</td></tr>
             <tr><td class="key">Failure/worsened</td><td>net ≥ baseline</td><td>as bad as, or worse than, no response at all</td></tr>
           </table>
@@ -1043,6 +1053,48 @@ P1,S1,3,0.85,negative,monitoring</pre>
           <code>Failure/worsened</code>, no matter how big that negative number gets. This
           also keeps the label consistent with the temporal chart's color: green always means
           neutralized or better (net ≤ 0), so a row marked worse can never show up green.</p>
+      </section>
+
+      <!-- ============ SELF-REGULATION ============ -->
+      <section class="block" id="self-regulation">
+        <div class="kicker">Temporal simulation</div>
+        <h2>Self-regulation: how a factor recovers on its own</h2>
+        <p><code>self_regulation</code> (0–1, default 0.5) is the share of a factor's
+          deviation that fades by itself each window, independently of the network:
+          0 = nothing fades and everything that arrives accumulates (a stock with no
+          replenishment, a persistent contaminant); 0.3 = 30% of the deviation fades each
+          window (a population rebuilding, a habitat regenerating); 1 = no memory, the
+          factor only reflects what arrives in the current window.</p>
+        <p>Each window: <em>new value = (1 − self_regulation) × previous value + what
+          arrives through the edges + the push</em>.</p>
+        <p>Example — fishing effort (P) → fish stock (S) → catch decline (I), with
+          strengths 0.7 and 0.6 (both negative) and a pressure of 1 standard deviation:</p>
+        <div class="table-wrap">
+          <table class="fields">
+            <tr><th>Case</th><th>Window 2</th><th>4</th><th>8</th><th>12</th></tr>
+            <tr><td class="key">Ongoing pressure, self-regulation 0 everywhere — fish stock</td><td>−0.70</td><td>−4.20</td><td>−19.6</td><td>−46.2</td></tr>
+            <tr><td class="key">Ongoing pressure, stock recovers 30% per window — fish stock</td><td>−0.70</td><td>−1.53</td><td>−2.14</td><td>−2.29 (settles at −0.7 ÷ 0.3 = −2.33)</td></tr>
+            <tr><td class="key">Ongoing pressure, self-regulation 1 everywhere — fish stock</td><td>−0.70</td><td>−0.70</td><td>−0.70</td><td>−0.70 (same as the static reading)</td></tr>
+            <tr><td class="key">One-off pressure, stock recovers 30% per window — fish stock</td><td>−0.70</td><td>−0.34</td><td>−0.08</td><td>−0.02 (back to normal)</td></tr>
+          </table>
+        </div>
+        <p>Under a constant load, a factor settles at <em>load ÷ self-regulation</em>: a
+          contaminant with self-regulation 0.05 accumulates up to 20 times what arrives
+          each window, which is how a small per-window pressure can still cross a
+          threshold through accumulation.</p>
+        <div class="table-wrap">
+          <table class="fields">
+            <tr><th>Self-regulation</th><th>Half-life of recovery</th><th>Build-up at equilibrium</th><th>Typical of</th></tr>
+            <tr><td class="key">0.05</td><td>13.5 windows</td><td>20×</td><td>contaminant in sediment</td></tr>
+            <tr><td class="key">0.10</td><td>6.6 windows</td><td>10×</td><td>reef recovery, long-lived species</td></tr>
+            <tr><td class="key">0.30</td><td>1.9 windows</td><td>3×</td><td>short-cycle fish stock</td></tr>
+            <tr><td class="key">0.50 (default)</td><td>1 window</td><td>2×</td><td>water quality that renews quickly</td></tr>
+            <tr><td class="key">1</td><td>—</td><td>1×</td><td>monthly income, catch in the window</td></tr>
+          </table>
+        </div>
+        <p class="muted" style="font-size:14px">What makes an Impact converge is the
+          chain's self-regulation; the response mode decides the effort; the stop
+          criterion says in which window the problem was solved.</p>
       </section>
 
       <!-- ============ EXAMPLE NETWORKS ============ -->
@@ -1066,11 +1118,12 @@ P1,S1,3,0.85,negative,monitoring</pre>
           Turn on <strong>Coastal tourism growth</strong> as pressure and
           <strong>Fishing quota policy</strong> as response, both at 100%: because it's
           a genuine loop, the response's <strong>Reach</strong> covers all 4 other
-          factors — but at this network's edge weights, a single response this far
-          from the Impact isn't remotely enough on its own (Fisher income loss needs
-          <strong>649%</strong> strength to neutralize a 0.426 worsening with only
-          -0.066 of mitigation) — a quick, honest first look at what "Strength needed"
-          means when a response is badly outmatched.</p>
+          factors — but with this network's edge strengths (three Strong links along the
+          pressure chain, a Moderate Impact → Response link and a Weak Response → Driver
+          link), a single response this far from the Impact isn't remotely enough on its
+          own (Fisher income loss needs <strong>667%</strong> strength to neutralize a
+          0.495 worsening with only -0.074 of mitigation) — a quick, honest first look at
+          what "Strength needed" means when a response is badly outmatched.</p>
         <div class="code-cluster">
           <div class="code-card">
             <h4>Download the example</h4>
@@ -1180,7 +1233,7 @@ P1,S1,3,0.85,negative,monitoring</pre>
         <div class="callout warn">
           <span class="dot"></span>
           <div><strong>This example is illustrative, not the paper's own model.</strong>
-          The weights, thresholds, growth rate, and self-regulation values here are the
+          The strengths, thresholds, growth rate, and self-regulation values here are the
           author's reasoned interpretation of the qualitative story in Gnanapragasam et
           al. 2026 — including giving the fishers/boats trend a standing growth rate
           instead of a cause, which the paper itself leaves open — not numbers
@@ -1218,20 +1271,21 @@ P1,S1,3,0.85,negative,monitoring</pre>
         </figure>
         <div class="table-wrap">
           <table class="fields">
-            <tr><th>Link</th><th>Effect</th><th>Confidence</th></tr>
-            <tr><td class="key">Population growth → Fishing effort</td><td>positive</td><td>0.70</td></tr>
-            <tr><td class="key">Fish demand growth → Fishing effort</td><td>positive</td><td>0.70</td></tr>
-            <tr><td class="key">Fishers/boats → Fishing effort</td><td>positive</td><td>0.85</td></tr>
-            <tr><td class="key">Fishing effort → Fish stock</td><td>negative</td><td>0.80</td></tr>
-            <tr><td class="key">Fishing effort → Fleet motorization</td><td>positive</td><td>0.60</td></tr>
-            <tr><td class="key">Fish stock → Catch decline</td><td>negative</td><td>0.75</td></tr>
-            <tr><td class="key">Fish stock → Fisher income loss</td><td>negative</td><td>0.65</td></tr>
+            <tr><th>Link</th><th>Effect</th><th>Strength (beta)</th></tr>
+            <tr><td class="key">Population growth → Fishing effort</td><td>positive</td><td>0.75</td></tr>
+            <tr><td class="key">Fish demand growth → Fishing effort</td><td>positive</td><td>0.75</td></tr>
+            <tr><td class="key">Fishers/boats → Fishing effort</td><td>positive</td><td>1.25</td></tr>
+            <tr><td class="key">Fishing effort → Fish stock</td><td>negative</td><td>1.00</td></tr>
+            <tr><td class="key">Fishing effort → Fleet motorization</td><td>positive</td><td>0.75</td></tr>
+            <tr><td class="key">Fish stock → Catch decline</td><td>negative</td><td>1.00</td></tr>
+            <tr><td class="key">Fish stock → Fisher income loss</td><td>negative</td><td>0.75</td></tr>
             <tr><td class="key">Fish stock → Conflict with Indian fishermen</td><td>negative</td><td>0.50</td></tr>
-            <tr><td class="key">Fleet motorization → Catch decline</td><td>positive</td><td>0.50</td></tr>
+            <tr><td class="key">Fleet motorization → Catch decline</td><td>positive</td><td>0.75</td></tr>
             <tr><td class="key">Fleet motorization → Conflict with Indian fishermen</td><td>positive</td><td>0.50</td></tr>
-            <tr><td class="key">Fleet motorization → Traditional fishing decline</td><td>positive</td><td>0.60</td></tr>
-            <tr><td class="key">Fleet motorization → Loss of traditional culture</td><td>positive</td><td>0.50</td></tr>
-            <tr><td class="key">Aid (either program) → Fisher income loss</td><td>negative</td><td>0.60</td></tr>
+            <tr><td class="key">Fleet motorization → Traditional fishing decline</td><td>positive</td><td>1.00</td></tr>
+            <tr><td class="key">Fleet motorization → Loss of traditional culture</td><td>positive</td><td>0.75</td></tr>
+            <tr><td class="key">Post-tsunami aid → Fisher income loss</td><td>negative</td><td>1.00</td></tr>
+            <tr><td class="key">Post-war aid → Fisher income loss</td><td>negative</td><td>1.25</td></tr>
           </table>
         </div>
         <div class="callout">
@@ -1261,8 +1315,13 @@ P1,S1,3,0.85,negative,monitoring</pre>
           <strong>Fish demand and consumption growth</strong> at 100%, and a
           <strong>response scenario</strong> with both <strong>Post-tsunami aid</strong>
           and <strong>Post-war aid</strong> at 100%. In <strong>Scenarios</strong>,
-          leave "How far to trace the effect" at its default and click
-          <strong>Apply scenario</strong>.</p>
+          click <strong>Apply scenario</strong>.</p>
+        <p class="muted" style="font-size:14px">These strengths were converted from the
+          network's earlier relative weights so that this static reading stays exactly as
+          before. Several are at or above 1, and the Review step warns that the edges
+          arriving at three factors would "explain" more than 100% of their variation —
+          a sign that, read as standardized coefficients, some of them are on the high
+          side. Revisit them if you adapt this network.</p>
         <div class="table-wrap">
           <table class="fields">
             <tr><th>Impact</th><th>Worsening</th><th>Mitigation</th><th>Net</th><th>Neutralizes?</th></tr>
@@ -1302,31 +1361,26 @@ P1,S1,3,0.85,negative,monitoring</pre>
           aid program ever neutralizes <strong>Catch decline</strong>, <strong>Conflict
           with Indian fishermen</strong>, <strong>Traditional fishing decline</strong>
           or <strong>Loss of traditional culture</strong> in any of 300 simulations
-          that resample edge weights within their confidence range —
+          that resample edge strengths within their uncertainty ranges —
           <strong>0%</strong> for all four, consistent with the response having no path
           to any of them. <strong>Fisher income loss</strong> is the only Impact either
           program can touch at all, and they don't agree on how reliably:</p>
         <div class="table-wrap">
           <table class="fields">
             <tr><th>Response (alone, at 100%)</th><th>Neutralizes Fisher income loss</th></tr>
-            <tr><td class="key">Post-tsunami aid</td><td>20.7% of simulations</td></tr>
-            <tr><td class="key">Post-war aid</td><td>68.3% of simulations</td></tr>
+            <tr><td class="key">Post-tsunami aid</td><td>21.3% of simulations</td></tr>
+            <tr><td class="key">Post-war aid</td><td>68.7% of simulations</td></tr>
           </table>
         </div>
         <p>Post-war aid (the larger, more strongly-weighted program) is a substantially
           more reliable fix on its own than post-tsunami aid — worth knowing before
-          assuming either program alone is "the" solution. "Does it hold up across how
-          far the effect is traced?" agrees with the combined-scenario reading above:
-          Fisher income loss reads <strong>Yes</strong> from c=0.2 up to c=0.65, then
-          <strong>Borderline</strong> at c=0.8 — solid across most of the range, but not
-          unconditionally. Every other Impact reads <strong>No</strong> at every
-          setting, for the same structural reason as above.</p>
+          assuming either program alone is "the" solution.</p>
 
         <h3>Reach</h3>
         <p>This is where the redesigned network reads most starkly: <strong>1 factor
           reached, including 1 of 5 Impacts</strong>. Not "reached weakly" or "reached
-          indirectly" — reached, full stop, and only that one. No combination of
-          strength or "how far to trace the effect" can ever make either aid program
+          indirectly" — reached, full stop, and only that one. No strength can ever make
+          either aid program
           touch Catch decline, Conflict with Indian fishermen, Traditional fishing
           decline, or Loss of traditional culture, because there is no edge, direct or
           indirect, from either Response node into anything but Fisher income loss.
@@ -1339,29 +1393,35 @@ P1,S1,3,0.85,negative,monitoring</pre>
         <h3>Temporal simulation: does "Yes" last?</h3>
         <p>The sufficiency reading above is a single instant — everything happening at
           once, and by that reading, Fisher income loss is a clean success. Open
-          <strong>Show temporal simulation across discrete time windows</strong>. This
-          time, also check the pressure box for <strong>Number of fishers and boats</strong>
-          at around 30% — representing that independent growth trend actually happening,
-          in parallel, alongside population and demand — set <strong>Pressure
-          scenario</strong> to <em>Ongoing (permanent)</em> and <strong>Response
-          scenario</strong> to <em>One-time (impulse)</em> (the aid is a single delivery,
-          not a recurring program), and push the windows slider to its maximum, 15.</p>
+          <strong>Show temporal simulation across discrete time windows</strong>. With
+          the defaults (both pushes added every window, run until neutralized) the answer
+          is quick: <strong>neutralized at window 7</strong> — an aid program renewed
+          every window keeps up. But the aid was a single delivery, not a recurring
+          program. So also check the pressure box for <strong>Number of fishers and
+          boats</strong> at around 30% — representing that independent growth trend
+          actually happening, in parallel, alongside population and demand — and set
+          <strong>Response</strong> to <em>Applied once and held</em>. Run until
+          neutralized, the app now reports <strong>Not neutralized within 50
+          windows</strong>. To see why, switch <strong>Simulation length</strong> to a
+          fixed number of windows, 15.</p>
         <div class="table-wrap">
           <table class="fields">
             <tr><th>Impact</th><th>Window 5 (Baseline / Net)</th><th>Window 10 (Baseline / Net)</th><th>Window 15 (Baseline / Net)</th></tr>
-            <tr><td class="key">Fisher income loss</td><td>41.1 / 23.1</td><td>1,599.9 / 1,559.4</td><td>8,201.7 / 8,138.7</td></tr>
-            <tr><td class="key">Catch decline</td><td>96.8 / 96.8</td><td>3,865.3 / 3,865.3</td><td>22,010.0 / 22,010.0</td></tr>
-            <tr><td class="key">Conflict with Indian fishermen</td><td>55.4 / 55.4</td><td>2,221.3 / 2,221.3</td><td>12,850.7 / 12,850.7</td></tr>
-            <tr><td class="key">Traditional fishing decline</td><td>56.0 / 56.0</td><td>2,309.5 / 2,309.5</td><td>14,765.8 / 14,765.8</td></tr>
-            <tr><td class="key">Loss of traditional culture</td><td>42.0 / 42.0</td><td>1,732.1 / 1,732.1</td><td>11,074.4 / 11,074.4</td></tr>
+            <tr><td class="key">Fisher income loss</td><td>0.0 / −9.0</td><td>194.9 / 174.6</td><td>1,020.1 / 988.6</td></tr>
+            <tr><td class="key">Catch decline</td><td>5.3 / 5.3</td><td>476.3 / 476.3</td><td>2,744.4 / 2,744.4</td></tr>
+            <tr><td class="key">Conflict with Indian fishermen</td><td>3.5 / 3.5</td><td>274.2 / 274.2</td><td>1,602.9 / 1,602.9</td></tr>
+            <tr><td class="key">Traditional fishing decline</td><td>7.0 / 7.0</td><td>288.7 / 288.7</td><td>1,845.7 / 1,845.7</td></tr>
+            <tr><td class="key">Loss of traditional culture</td><td>5.3 / 5.3</td><td>216.5 / 216.5</td><td>1,384.3 / 1,384.3</td></tr>
           </table>
         </div>
         <p>One row tells a different story than the other four (values are abstract
           model units, not real catch/income figures — what matters is the shape and
           the comparison, not the raw size). <strong>Fisher income loss</strong> starts
-          strong — at window 5 the aid cuts it by over 40% (23.1 against a
-          baseline of 41.1) — but the gap steadily narrows: by window 15 the net
-          is within 1% of the baseline. The aid never reverses and never actually makes
+          strong — through window 5 the pressure hasn't reached it yet (baseline 0) and the
+          aid already pushes it below zero (−9.0); at window 6, when the pressure arrives,
+          it is within 5% of the baseline (0.53 against 11.78, "Neutralized (relative)") —
+          but from window 7 the gap steadily narrows: net is 90% of the baseline at window
+          10 and 97% at window 15. The aid never reverses and never actually makes
           income loss worse; it simply has a fixed, one-time effect against a driver
           (the growing fleet) that keeps compounding every window, so its relative
           contribution fades toward irrelevance without ever crossing back to "worse
@@ -1377,11 +1437,12 @@ P1,S1,3,0.85,negative,monitoring</pre>
           chart below plots exactly this: four panels turning red in lockstep — Net
           overlapping the baseline the whole way, never dipping into the shaded
           neutralized zone — while Fisher income loss starts green (Neutralized, then
-          Improved beyond neutral through window 4), turns amber (Partial) from window 5
-          onward, and stays amber through window 15 — the gap keeps narrowing, but
-          within this run it never actually closes back to "as bad as no response."</p>
+          Improved beyond neutral through window 5, light green at window 6), turns amber
+          (Partial) from window 7 onward, and stays amber through window 15 — the gap
+          keeps narrowing, but within this run it never actually closes back to "as bad
+          as no response."</p>
         <figure class="figure">
-          <img src="example_gnanapragasam_temporal_chart.png" alt="Five line-chart panels, one per Impact, each plotting baseline (dashed) and Net (solid, points colored by that window's Verdict) across 15 windows. Four panels show Net tracking the baseline exactly, growing steeply and staying red (Failure/worsened) throughout. The Fisher income loss panel starts green (Neutralized/Improved beyond neutral) through window 4, then turns amber (Partial) from window 5 through window 15.">
+          <img src="example_gnanapragasam_temporal_chart.png" alt="Five line-chart panels, one per Impact, each plotting baseline (dashed) and Net (solid, points colored by that window's Verdict) across 15 windows. Four panels show Net tracking the baseline exactly, growing steeply and staying red (Failure/worsened) once they start moving. The Fisher income loss panel starts green (Neutralized/Improved beyond neutral) through window 5, light green (Neutralized, relative) at window 6, then turns amber (Partial) from window 7 through window 15.">
           <figcaption><strong>Figure 2.</strong> The same simulation as the table above, window by window — one panel per Impact, dashed line is the baseline (pressure only), solid line is Net (pressure and response together), points colored by that window's Verdict, shaded band is the neutralized zone (Net ≤ 0). This is exactly what the app's own "How each Impact changes over time" chart (in the temporal disclosure) produces for this scenario — generated here as a static image so it's visible without loading the app.</figcaption>
         </figure>
 
@@ -1413,9 +1474,9 @@ P1,S1,3,0.85,negative,monitoring</pre>
           each have a <em>second</em>, ungated route in — from Fleet motorization, which
           has no threshold of its own — so both are already moving by window 4 from
           that route alone. <strong>Fisher income loss</strong> has no such alternative;
-          the Fish stock link is its only route in, so it stays at exactly zero through
-          window 4 and only starts moving at window 5, the moment Fish stock's own
-          threshold is finally crossed.</p>
+          the Fish stock link is its only route in, so its baseline stays at exactly zero
+          through window 5 and only starts moving at window 6, the moment Fish stock's
+          own threshold is finally crossed.</p>
       </section>
 
       <!-- ============ SAVEPOINT ============ -->
@@ -1424,9 +1485,12 @@ P1,S1,3,0.85,negative,monitoring</pre>
         <h2>Saving and resuming</h2>
         <p class="lead"><strong>Save savepoint (.idpsir.json)</strong> sits at the bottom
           of every step of the wizard — one file holding your schema, nodes, edges and
-          layout. Reload it later from the Start step's <strong>Load savepoint</strong>
-          option to pick up exactly where you left off. Scenarios you've saved during a
-          session are not included yet — they live only until you close the app.</p>
+          layout, plus the scenario currently set up on the Scenarios tab (with its
+          temporal settings). Reload it later from the Start step's <strong>Load
+          savepoint</strong> option to pick up exactly where you left off. Scenarios you've
+          saved during a session are not included yet — they live only until you close the
+          app. A savepoint from an older version of the app is converted to standardized
+          strengths on load, keeping its static results exactly the same.</p>
       </section>
 
       <!-- ============ GLOSSARY ============ -->
@@ -1446,7 +1510,8 @@ P1,S1,3,0.85,negative,monitoring</pre>
           <div class="gloss-item"><dt>Neutralized</dt><dd>An Impact's net effect (worsening + mitigation) is zero or negative — the response fully covers the pressure's worsening on that Impact. A positive net, even a small one, means "No."</dd></div>
           <div class="gloss-item"><dt>Temporal simulation</dt><dd>An optional reading that runs a scenario forward window by window (discrete time steps) instead of reading a single instant — useful for seeing whether a response's benefit holds up or erodes over time.</dd></div>
           <div class="gloss-item"><dt>Verdict</dt><dd>The temporal simulation's per-window label for an Impact — Neutralized, Improved beyond neutral, Partial, or Failure/worsened — judged by the sign of the net's value, not its size. Not the same thing as sufficiency's "Neutralized" above; see <a href="#conventions">Reading the Verdict</a>.</dd></div>
-          <div class="gloss-item"><dt>Self-regulation</dt><dd>A factor's tendency to return to its own baseline on its own, once nothing is pushing it — e.g. a habitat that recovers. Only affects the optional temporal simulation, not the main sufficiency reading.</dd></div>
+          <div class="gloss-item"><dt>Strength (beta)</dt><dd>How many standard deviations an edge's target changes when its source changes by one. Entered as a value, as r², or as a class (Weak 0.15 / Moderate 0.45 / Strong 0.80).</dd></div>
+          <div class="gloss-item"><dt>Self-regulation</dt><dd>The share of a factor's deviation that fades by itself each window (default 0.5) — e.g. a habitat that recovers. Only affects the optional temporal simulation, not the main sufficiency reading. See <a href="#self-regulation">Self-regulation</a>.</dd></div>
           <div class="gloss-item"><dt>Reach</dt><dd>How many factors — and how many Impacts — a response's influence can touch by following the network's links, independent of both the sufficiency and temporal readings.</dd></div>
         </dl>
       </section>

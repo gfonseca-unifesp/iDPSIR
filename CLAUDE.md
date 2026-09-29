@@ -2608,6 +2608,24 @@ vazios numa célula recebem 1), 0.8 (`tooltip_text()` escapa HTML nos tooltips;
 `htmltools` em `required_packages`). 21 asserções novas (novo `test-graph.R`); todos
 os itens verificados no app rodando (R 4.5.1). Observação de teste: seleção de linha
 de DT não reage a clique sintético — usar `Shiny.setInputValue(..._rows_selected)`.
+**Fase 1 concluída (branch `revisao2-fase1`), modo estrutural:** `R/structural.R` (classes
+weak/moderate/strong 0,15/0,45/0,80; `normalize_edge_strength()`, `effect_matrix()`,
+`check_effect_matrix()` bloqueia ρ(B) ≥ 1; atalhos r²/n; `convert_legacy_weights()` β = λ·w).
+`propagate(B, p)` sem c; slider "How far to trace" e tabela "reach over c" removidos.
+Savepoint grava `metadata$weight_mode = "structural"` e precisão total (`digits = NA` —
+jsonlite arredondava a 4 casas). Arquivo antigo é convertido ao carregar, preservando a
+leitura estática; `read_savepoint(convert_legacy = FALSE)` só para os testes do motor legado
+(`tests/testthat/fixtures/legacy_*.idpsir.json`). Exemplos: Mangi/Gnanapragasam/sample com
+`beta_converted`, Fisheries com classes. **Atenção:** a conversão preserva a leitura
+estática, não a temporal (o motor temporal antigo usava os pesos crus); por isso os números
+temporais do tutorial foram refeitos.
+**Fase A concluída (branch `revisao2-faseA`):** `simulate_temporal_pair()` com
+`stop_rule` ("until_neutralized" padrão, `max_windows` 50; passar `windows` sem `stop_rule`
+= "fixed"), `neutralized_at`, `baseline_without_response`; sem `stability_cap` (2.5);
+`format_temporal_table(tol_rel = 0.05)` com "Neutralized (relative)"; `self_regulation`
+padrão 0,5 em [0, 1] (`DEFAULT_SELF_REGULATION`); configurações temporais no
+`scenario_state`. Bug achado ao vivo: renderUI que lê inputs que ele mesmo cria precisa de
+`isolate()`, senão se redesenha a cada mudança (desmarcava "Show temporal simulation").
 
 Fase 5 está completa (Marcos A-D). Todos os 4 itens da lista pós-Fase 5 (1:
 exemplo didático, 2a: passos até neutralizar, 2b: threshold opcional por
