@@ -123,7 +123,12 @@ change is measured against when it has an `activation_threshold` set),
 factor's own `reference_value` it has to move before ALL of its outgoing edges switch
 on together — only allowed when the factor is State), `descriptor` (optional
 free-text description of what the factor represents — documentation only, not read by
-any calculation).
+any calculation), `endpoint_class` (Impact only, optional: `ecological` — the default —,
+`service` or `welfare`) and `value_v` (Impact only, optional, 0–1: the social value of a
+service/welfare Impact, set by hand or with "Elicit values (swing weights)" on the Nodes
+step; always 1 for an ecological Impact). `interaction_type` also accepts the vocabulary
+of the relevance specification (increases/triggers/improves/sustains → positive,
+reduces/mitigates/decreases → negative).
 
 **Edges** (`data/sample_edges.csv`): `from`, `to`, `interaction_type` (positive/negative
 — required: the sign has no default), `weight` (the edge's **strength** as a
@@ -263,7 +268,13 @@ has four tabs:
   much the pressure scenario worsens it, how much the response scenario mitigates (or
   worsens) it, and whether that mitigation is enough to neutralize the worsening —
   plus a confidence check (% of simulations, resampling every edge's strength within
-  its uncertainty band, in which the verdict holds). The sufficiency reading above is deliberately static and ignores
+  its uncertainty band, in which the verdict holds) and an **Impact prioritization**:
+  relevance = value v × importance D (the pressure's total effect on that Impact,
+  relative to the most affected one — with standardized strengths this is the Levins
+  equilibrium of the relevance specification) × reliability (share of simulations in
+  which that effect keeps its sign), and priority = relevance × gap (the share of the
+  worsening the response leaves uncovered), with a bar chart, a CSV download and a
+  report section. The sufficiency reading above is deliberately static and ignores
   a node's `self_regulation` on purpose — that attribute (and `growth_rate`) only
   feeds the optional temporal simulation below, never the primary verdict. **Reach**
   always shows how many factors — and how many Impacts — a response's influence can

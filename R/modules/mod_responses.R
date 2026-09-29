@@ -319,6 +319,10 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
 
           incProgress(0.3, detail = "Confidence (resampling edge strengths)")
           suff_confidence_matrix <- build_confidence_matrix(graph(), p_D, rn)
+
+          # Revisao 2, item B7: relevance and priority of each Impact.
+          incProgress(0.1, detail = "Impact prioritization")
+          prioritization <- impact_prioritization(graph(), p_D, suff_df)
           incProgress(0.4, detail = "Done")
         })
         TRUE
@@ -338,7 +342,8 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
         pressure_strengths = pressure_strengths,
         p_D = p_D,
         sufficiency_df = suff_df,
-        sufficiency_confidence_matrix = suff_confidence_matrix
+        sufficiency_confidence_matrix = suff_confidence_matrix,
+        prioritization = prioritization
       ))
     })
 
@@ -364,7 +369,20 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
           "scenario: % of simulations - resampling every edge's strength within its uncertainty range - in",
           "which that response alone neutralizes each Impact."
         ),
-        DTOutput(ns("confidence_matrix_table"))
+        DTOutput(ns("confidence_matrix_table")),
+        # Revisao 2, item B7.
+        h5("Impact prioritization"),
+        p(
+          class = "text-muted",
+          "Which Impact to act on first. Relevance = value v x importance D (how much the pressure moves it,",
+          "relative to the most affected Impact) x reliability (how often that prediction keeps its sign).",
+          "Priority = relevance x gap (the share of the worsening the response leaves uncovered)."
+        ),
+        DTOutput(ns("prioritization_table")),
+        plotOutput(ns("prioritization_plot"), height = "320px"),
+        downloadButton(ns("download_prioritization_csv"), "Download CSV", class = "btn-sm"),
+        tags$p(class = "text-muted", style = "font-size: 12px; margin-top: 6px;", PRIORITIZATION_METHOD_NOTE),
+        uiOutput(ns("prioritization_note"))
       )
     })
 
@@ -375,6 +393,35 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
       display <- format_sufficiency_table(sc$sufficiency_df, sc$active, sc$strengths)
       datatable(display, rownames = FALSE, options = list(dom = "t", pageLength = 10))
     })
+
+    output$prioritization_table <- renderDT({
+      sc <- current_scenario()
+      req(sc, sc$prioritization)
+      datatable(format_prioritization_table(sc$prioritization), rownames = FALSE, options = list(dom = "t", pageLength = 20))
+    })
+
+    output$prioritization_plot <- renderPlot({
+      sc <- current_scenario()
+      req(sc, sc$prioritization)
+      draw_prioritization_plot(sc$prioritization)
+    })
+
+    output$prioritization_note <- renderUI({
+      sc <- current_scenario()
+      req(sc, sc$prioritization)
+      if (isTRUE(attr(sc$prioritization, "all_zero"))) {
+        div(class = "alert alert-warning", "The pressure scenario does not move any Impact, so importance D is 0 everywhere.")
+      }
+    })
+
+    output$download_prioritization_csv <- downloadHandler(
+      filename = function() paste0("impact_prioritization_", Sys.Date(), ".csv"),
+      content = function(file) {
+        sc <- current_scenario()
+        req(sc, sc$prioritization)
+        utils::write.csv(format_prioritization_table(sc$prioritization), file, row.names = FALSE)
+      }
+    )
 
     output$confidence_matrix_table <- renderDT({
       sc <- current_scenario()

@@ -2626,6 +2626,13 @@ temporais do tutorial foram refeitos.
 padrão 0,5 em [0, 1] (`DEFAULT_SELF_REGULATION`); configurações temporais no
 `scenario_state`. Bug achado ao vivo: renderUI que lê inputs que ele mesmo cria precisa de
 `isolate()`, senão se redesenha a cada mudança (desmarcava "Show temporal simulation").
+**Fase B concluída (branch `revisao2-faseB`):** `R/relevance.R` (`dynamic_importance()`,
+`prediction_reliability()`, `impact_gap()` = max(0, net)/worsening, `impact_prioritization()`,
+`format_prioritization_table()`); nós Impact ganham `endpoint_class`/`value_v`
+(`normalize_dpsir_nodes`, preflight, formulário condicional, swing weights no passo Nodes);
+aliases de sinal (B6); seção "Impact prioritization" na aba Scenarios e no relatório
+(`draw_prioritization_plot()`). Teste de referência: exemplo da seção 4 do PDF com β
+padronizado dá D = 1,00 / 0,86 (= Levins).
 
 Fase 5 está completa (Marcos A-D). Todos os 4 itens da lista pós-Fase 5 (1:
 exemplo didático, 2a: passos até neutralizar, 2b: threshold opcional por

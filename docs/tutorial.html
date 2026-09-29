@@ -743,6 +743,7 @@ P1,S1,negative,0.55,,monitoring</pre>
                 <tr><td class="key">self_regulation</td><td>Optional number in [0, 1], default 0.5. The share of this factor's deviation that fades by itself each time window: 0 = accumulates like a stock, 1 = no memory. The form shows a guide (half-life, build-up); see <a href="#self-regulation">Self-regulation</a>. Only used by the Scenarios tab's optional temporal simulation.</td></tr>
                 <tr><td class="key">growth_rate</td><td>Optional number, default 0. This factor's own exogenous trend per time window (e.g. population growth), independent of any edge — also only used by the temporal simulation.</td></tr>
                 <tr><td class="key">reference_value</td><td>Optional number, default 1. The scale this factor's simulated change is measured against when it has an activation threshold set below.</td></tr>
+                <tr><td class="key">endpoint_class / value</td><td>Impact factors only. Endpoint class: <em>ecological</em> (default), <em>ecosystem service</em> or <em>human welfare</em>. A service or welfare Impact also gets a social value v (0–1); <strong>Elicit values (swing weights)</strong> on this step helps set it: rate how much it matters to take each one from its worst to its best level (100 for the most important). Used to prioritize Impacts on the Scenarios tab.</td></tr>
                 <tr><td class="key">activation_threshold</td><td>Optional number in [0, 1], leave blank for most factors. Only allowed for a State factor: a fraction of its own reference value it has to move, in a given scenario, before ALL of its outgoing links switch on together — instead of always contributing proportionally from the start. Only affects the Scenarios tab's optional temporal simulation; the sufficiency reading and the graph itself ignore it.</td></tr>
               </table>
             </div>
@@ -895,6 +896,10 @@ P1,S1,negative,0.55,,monitoring</pre>
             <div class="control">
               <div class="label">How confident is that, response by response?<span class="widget">table</span></div>
               <p>Every response in the network, evaluated alone at full strength against the same pressure scenario: the percentage of simulations — resampling every edge's strength within its uncertainty range — in which that response alone neutralizes each Impact.</p>
+            </div>
+            <div class="control">
+              <div class="label">Impact prioritization<span class="widget">table + chart</span></div>
+              <p>Which Impact to act on first. <strong>Relevance</strong> = value v × importance D (how much the pressure scenario moves that Impact, relative to the most affected one) × reliability (how often that prediction keeps its sign when every strength is resampled within its range). <strong>Priority</strong> = relevance × gap (the share of the worsening the response scenario leaves uncovered — 0 when neutralized). An Impact the pressure doesn't worsen reads "Not affected". Downloadable as CSV and included in the report.</p>
             </div>
             <div class="control">
               <div class="label">Reach<span class="widget">table</span></div>
@@ -1512,6 +1517,7 @@ P1,S1,negative,0.55,,monitoring</pre>
           <div class="gloss-item"><dt>Verdict</dt><dd>The temporal simulation's per-window label for an Impact — Neutralized, Improved beyond neutral, Partial, or Failure/worsened — judged by the sign of the net's value, not its size. Not the same thing as sufficiency's "Neutralized" above; see <a href="#conventions">Reading the Verdict</a>.</dd></div>
           <div class="gloss-item"><dt>Strength (beta)</dt><dd>How many standard deviations an edge's target changes when its source changes by one. Entered as a value, as r², or as a class (Weak 0.15 / Moderate 0.45 / Strong 0.80).</dd></div>
           <div class="gloss-item"><dt>Self-regulation</dt><dd>The share of a factor's deviation that fades by itself each window (default 0.5) — e.g. a habitat that recovers. Only affects the optional temporal simulation, not the main sufficiency reading. See <a href="#self-regulation">Self-regulation</a>.</dd></div>
+          <div class="gloss-item"><dt>Priority</dt><dd>Relevance of an Impact (its social value × how much the pressure moves it × how reliable that prediction is) times the share of its worsening the response leaves uncovered.</dd></div>
           <div class="gloss-item"><dt>Reach</dt><dd>How many factors — and how many Impacts — a response's influence can touch by following the network's links, independent of both the sufficiency and temporal readings.</dd></div>
         </dl>
       </section>

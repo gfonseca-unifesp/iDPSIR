@@ -307,12 +307,12 @@ test_that("preflight_import_nodes warns (not blocks) on an unknown column and a 
 test_that("preflight_import_edges blocks bad interaction_type, non-positive weight, and out-of-range confidence", {
   edges <- data.frame(
     from = c("D1", "D1"), to = c("S1", "S1"), weight = c(-1, 2), confidence = c(0.8, 1.5),
-    interaction_type = c("increases", "positive"), stringsAsFactors = FALSE
+    interaction_type = c("boosts", "positive"), stringsAsFactors = FALSE
   )
 
   result <- preflight_import_edges(edges)
 
-  expect_true(any(grepl("interaction_type 'increases'", result$blocking, fixed = TRUE)))
+  expect_true(any(grepl("interaction_type 'boosts'", result$blocking, fixed = TRUE)))
   expect_true(any(grepl("weight -1 must be greater than 0", result$blocking, fixed = TRUE)))
   expect_true(any(grepl("confidence 1.5 is outside", result$blocking, fixed = TRUE)))
 })

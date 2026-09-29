@@ -6,6 +6,17 @@
 # itself each window, for nodes that do not say otherwise.
 DEFAULT_SELF_REGULATION <- 0.5
 
+# Revisao 2, item B1: endpoint classes of an Impact (specification V1).
+get_endpoint_classes <- function() c("ecological", "service", "welfare")
+
+# Revisao 2, item B6: sign vocabulary of the relevance specification.
+interaction_type_aliases <- function() {
+  c(
+    increases = "positive", triggers = "positive", improves = "positive", sustains = "positive",
+    reduces = "negative", mitigates = "negative", decreases = "negative"
+  )
+}
+
 get_required_dpsir_node_fields <- function() {
   c("id", "label", "dpsir_category")
 }
@@ -17,7 +28,8 @@ get_required_dpsir_edge_fields <- function() {
 get_known_dpsir_node_fields <- function() {
   c(
     "id", "label", "dpsir_category", "subsystem", "uncertainty", "controllability",
-    "self_regulation", "growth_rate", "reference_value", "activation_threshold", "descriptor"
+    "self_regulation", "growth_rate", "reference_value", "activation_threshold", "descriptor",
+    "endpoint_class", "value_v"
   )
 }
 
@@ -79,6 +91,8 @@ preflight_import_nodes <- function(nodes_raw, schema = get_default_dpsir_schema(
     self_regulation = "0.5 (half of a deviation fades each window)", growth_rate = "0", reference_value = "1",
     activation_threshold = "blank (no threshold)", descriptor = "blank"
   )
+  # Revisao 2, item B1: Impact-only fields - a missing column is normal (not
+  # warned about), every Impact then defaults to ecological / value 1.
   missing_optional <- setdiff(names(optional_defaults), present)
   if (length(missing_optional) > 0) {
     warn <- c(warn, sprintf(
@@ -189,6 +203,46 @@ preflight_import_nodes <- function(nodes_raw, schema = get_default_dpsir_schema(
     }
   }
 
+  # Revisao 2, item B1: endpoint_class / value_v - Impact nodes only.
+  if (nrow(nodes_raw) > 0 && "dpsir_category" %in% present) {
+    is_impact <- trimws(as.character(nodes_raw$dpsir_category)) == "Impact"
+    if ("endpoint_class" %in% present) {
+      raw <- nodes_raw$endpoint_class
+      vals <- tolower(trimws(as.character(raw)))
+      filled <- !.pf_is_blank(raw)
+      bad <- which(filled & !vals %in% get_endpoint_classes())
+      if (length(bad) > 0) {
+        blocking <- c(blocking, sprintf(
+          "Nodes file, row %d: endpoint_class '%s' must be one of %s.",
+          bad + 1, vals[bad], paste(get_endpoint_classes(), collapse = ", ")
+        ))
+      }
+      not_impact <- which(filled & !is_impact)
+      if (length(not_impact) > 0) {
+        blocking <- c(blocking, sprintf(
+          "Nodes file, row %d: endpoint_class is only for Impact factors.", not_impact + 1
+        ))
+      }
+    }
+    if ("value_v" %in% present) {
+      raw <- nodes_raw$value_v
+      vals <- suppressWarnings(as.numeric(raw))
+      filled <- !.pf_is_blank(raw)
+      bad <- which(filled & (is.na(vals) | vals < 0 | vals > 1))
+      if (length(bad) > 0) {
+        blocking <- c(blocking, sprintf(
+          "Nodes file, row %d: value_v '%s' must be a number in [0, 1].", bad + 1, trimws(as.character(raw))[bad]
+        ))
+      }
+      not_impact <- which(filled & !is_impact)
+      if (length(not_impact) > 0) {
+        blocking <- c(blocking, sprintf(
+          "Nodes file, row %d: value_v is only for Impact factors.", not_impact + 1
+        ))
+      }
+    }
+  }
+
   list(blocking = blocking, warnings = warn)
 }
 
@@ -244,6 +298,16 @@ preflight_import_edges <- function(edges_raw) {
       raw <- edges_raw$interaction_type
       vals <- trimws(as.character(raw))
       blank <- .pf_is_blank(raw)
+      # Revisao 2, item B6: the vocabulary of the relevance specification
+      # (increases/reduces/...) is accepted and mapped to positive/negative.
+      aliased <- !blank & tolower(vals) %in% names(interaction_type_aliases())
+      if (any(aliased)) {
+        warn <- c(warn, sprintf(
+          "Edges file: %d interaction_type value(s) mapped to positive/negative (%s).",
+          sum(aliased), paste(unique(tolower(vals[aliased])), collapse = ", ")
+        ))
+        vals[aliased] <- interaction_type_aliases()[tolower(vals[aliased])]
+      }
       bad <- which(!blank & !vals %in% c("positive", "negative"))
       if (length(bad) > 0) {
         blocking <- c(blocking, sprintf(
@@ -484,6 +548,21 @@ normalize_dpsir_nodes <- function(nodes) {
   # dados de origem (savepoint/CSV) tinham `temporal_scale` ou nao.
   nodes$temporal_scale <- NULL
 
+  # Revisao 2, item B1 (specification V1): an Impact is an ecological,
+  # service or welfare endpoint, with a social value v in [0, 1] (forced to
+  # 1 for ecological endpoints). Blank for every other category.
+  is_impact <- nodes$dpsir_category == "Impact"
+  ec <- if ("endpoint_class" %in% names(nodes)) tolower(trimws(as.character(nodes$endpoint_class))) else rep(NA_character_, nrow(nodes))
+  ec[is.na(ec) | ec == ""] <- NA_character_
+  ec[is_impact & is.na(ec)] <- "ecological"
+  ec[!is_impact] <- NA_character_
+  nodes$endpoint_class <- ec
+
+  v <- if ("value_v" %in% names(nodes)) suppressWarnings(as.numeric(nodes$value_v)) else rep(NA_real_, nrow(nodes))
+  v[is_impact & (is.na(v) | ec == "ecological")] <- 1
+  v[!is_impact] <- NA_real_
+  nodes$value_v <- v
+
   nodes
 }
 
@@ -496,6 +575,14 @@ normalize_dpsir_edges <- function(edges) {
 
   edges$from <- trimws(as.character(edges$from))
   edges$to <- trimws(as.character(edges$to))
+
+  # Revisao 2, item B6: sign aliases -> positive/negative.
+  if ("interaction_type" %in% names(edges)) {
+    it <- trimws(as.character(edges$interaction_type))
+    aliased <- !is.na(it) & tolower(it) %in% names(interaction_type_aliases())
+    it[aliased] <- interaction_type_aliases()[tolower(it[aliased])]
+    edges$interaction_type <- it
+  }
 
   # Revisao 2, item 0.7 + Fase 1: every edge ends up with |beta|, an
   # uncertainty band, a class and where its value came from - a blank CELL

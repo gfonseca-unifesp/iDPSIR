@@ -412,3 +412,25 @@ plot_to_data_uri <- function(draw_fn, width = 800, height = 450) {
   render_plot_png(draw_fn, tmp, width = width, height = height)
   paste0("data:image/png;base64,", jsonlite::base64_enc(readBin(tmp, "raw", file.info(tmp)$size)))
 }
+
+# Revisao 2, item B7: horizontal bars of each Impact's relevance, with a
+# black marker at its priority (figure 7.4 of the relevance specification).
+# Impacts the pressure does not worsen ("Not affected") are left out.
+draw_prioritization_plot <- function(prio_df) {
+  df <- prio_df[prio_df$affected, , drop = FALSE]
+  if (nrow(df) == 0) {
+    plot.new()
+    text(0.5, 0.5, "No Impact is worsened by this pressure scenario.")
+    return(invisible())
+  }
+  df <- df[order(df$relevance), , drop = FALSE]
+  old_par <- graphics::par(mar = c(4, max(8, max(nchar(df$node)) * 0.55), 1.5, 1))
+  on.exit(graphics::par(old_par))
+  y <- graphics::barplot(
+    df$relevance, names.arg = df$node, horiz = TRUE, las = 1, xlim = c(0, 1),
+    col = "#c9d7e8", border = NA, xlab = "relevance (bar) and priority (marker)", cex.names = 0.85
+  )
+  graphics::points(df$priority, y, pch = 23, bg = "#1f2937", col = "#1f2937", cex = 1.3)
+  graphics::legend("bottomright", bty = "n", cex = 0.8, pch = c(15, 23), col = c("#c9d7e8", "#1f2937"),
+                   pt.bg = c("#c9d7e8", "#1f2937"), legend = c("relevance = v x D x reliability", "priority = relevance x gap"))
+}

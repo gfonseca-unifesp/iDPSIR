@@ -23,6 +23,8 @@ create_empty_nodes_table <- function() {
     reference_value = numeric(),
     activation_threshold = numeric(),
     descriptor = character(),
+    endpoint_class = character(),
+    value_v = numeric(),
     stringsAsFactors = FALSE
   )
 }
@@ -501,6 +503,8 @@ mod_data_server <- function(id, seed = NULL) {
         actionButton(ns("add_node"), "Add", icon = icon("plus")),
         actionButton(ns("edit_node"), "Edit selected", icon = icon("pen")),
         actionButton(ns("remove_node"), "Remove selected", icon = icon("trash")),
+        # Revisao 2, item B2: swing weights for the value of service/welfare Impacts.
+        actionButton(ns("elicit_values"), "Elicit values (swing weights)", icon = icon("scale-balanced")),
 
         tags$hr(),
         DTOutput(ns("nodes_table"))
@@ -523,8 +527,11 @@ mod_data_server <- function(id, seed = NULL) {
         id = "", label = "", dpsir_category = schema_categories(rv$schema)[1],
         subsystem = "", uncertainty = 0.5, controllability = 0.5,
         self_regulation = DEFAULT_SELF_REGULATION, growth_rate = 0, reference_value = 1,
-        activation_threshold = NA_real_, descriptor = ""
+        activation_threshold = NA_real_, descriptor = "",
+        endpoint_class = "ecological", value_v = 1
       )
+      impact_panel <- sprintf("input['%s'] == 'Impact'", ns("nm_category"))
+      value_panel <- sprintf("input['%s'] == 'Impact' && input['%s'] != 'ecological'", ns("nm_category"), ns("nm_endpoint_class"))
 
       modalDialog(
         title = if (is.null(defaults)) "Add node" else "Edit node",
@@ -591,6 +598,25 @@ mod_data_server <- function(id, seed = NULL) {
           "outgoing links switch on together, instead of always contributing proportionally",
           "from the start (e.g. a fish stock collapse point)."
         ),
+        # Revisao 2, item B1: only for Impact factors (specification V1).
+        conditionalPanel(
+          condition = impact_panel,
+          selectInput(
+            ns("nm_endpoint_class"), "Endpoint class (Impact)",
+            choices = c("Ecological" = "ecological", "Ecosystem service" = "service", "Human welfare" = "welfare"),
+            selected = if (is.null(d$endpoint_class) || is.na(d$endpoint_class)) "ecological" else d$endpoint_class
+          ),
+          conditionalPanel(
+            condition = value_panel,
+            numericInput(ns("nm_value_v"), "Social value v (0-1)",
+                         value = if (is.null(d$value_v) || is.na(d$value_v)) 1 else d$value_v, min = 0, max = 1, step = 0.05)
+          ),
+          tags$p(
+            class = "text-muted", style = "font-size: 12px;",
+            "Used to prioritize Impacts. An ecological endpoint always has value 1; for a service or welfare",
+            "endpoint, v says how much it matters (\"Elicit values\" on the Nodes step helps set it)."
+          )
+        ),
         textAreaInput(
           ns("nm_descriptor"), "Descriptor (optional)",
           value = d$descriptor %||% "", rows = 2,
@@ -602,6 +628,54 @@ mod_data_server <- function(id, seed = NULL) {
         )
       )
     }
+
+    # Revisao 2, item B2 (specification V1): swing weights. The user rates,
+    # for each service/welfare Impact, how much it matters to take it from
+    # its worst to its best level - 100 for the most important, 0-100 for the
+    # others; the app stores the rating / 100 as value_v.
+    swing_ids <- reactive({
+      n <- normalize_dpsir_nodes(rv$nodes)
+      n$id[n$dpsir_category == "Impact" & n$endpoint_class %in% c("service", "welfare")]
+    })
+
+    observeEvent(input$elicit_values, {
+      ids <- swing_ids()
+      if (length(ids) == 0) {
+        showNotification("No service or welfare Impacts yet - set an Impact's endpoint class first (Edit selected).", type = "warning")
+        return()
+      }
+      n <- normalize_dpsir_nodes(rv$nodes)
+      rows <- lapply(ids, function(id) {
+        i <- match(id, n$id)
+        numericInput(ns(paste0("swing_", i)), n$label[i], value = round(100 * (n$value_v[i] %||% 1)), min = 0, max = 100, step = 5)
+      })
+      showModal(modalDialog(
+        title = "Elicit values (swing weights)",
+        tags$p(
+          "Imagine each Impact below moving from its worst to its best plausible level. Give 100 to the move",
+          "that matters most, and 0-100 to each of the others in proportion. The value v stored is your rating / 100."
+        ),
+        rows,
+        footer = tagList(modalButton("Cancel"), actionButton(ns("confirm_swing"), "Save values", class = "btn-primary"))
+      ))
+    })
+
+    observeEvent(input$confirm_swing, {
+      ids <- swing_ids()
+      n <- rv$nodes
+      for (id in ids) {
+        i <- match(id, n$id)
+        val <- suppressWarnings(as.numeric(input[[paste0("swing_", match(id, normalize_dpsir_nodes(rv$nodes)$id))]]))
+        if (is.na(val) || val < 0 || val > 100) {
+          showNotification("Each rating must be between 0 and 100.", type = "error")
+          return()
+        }
+        n$value_v[i] <- val / 100
+      }
+      rv$nodes <- normalize_dpsir_nodes(n)
+      removeModal()
+      showNotification("Values saved.", type = "message")
+    })
 
     observeEvent(input$add_node, {
       editing_node_id(NULL)
@@ -654,6 +728,14 @@ mod_data_server <- function(id, seed = NULL) {
         return()
       }
 
+      value_v <- input$nm_value_v %||% 1
+      if (identical(input$nm_category, "Impact") && !identical(input$nm_endpoint_class, "ecological") &&
+          (is.na(value_v) || value_v < 0 || value_v > 1)) {
+        showNotification("The social value v must be between 0 and 1.", type = "error")
+        return()
+      }
+      if (identical(input$nm_endpoint_class, "ecological")) value_v <- 1
+
       reference_value <- input$nm_reference_value
       if (is.na(reference_value) || reference_value == 0) {
         showNotification("Reference value cannot be zero.", type = "error")
@@ -688,11 +770,13 @@ mod_data_server <- function(id, seed = NULL) {
         reference_value = reference_value,
         activation_threshold = if (is.null(activation_threshold)) NA_real_ else activation_threshold,
         descriptor = trimws(input$nm_descriptor %||% ""),
+        endpoint_class = if (identical(input$nm_category, "Impact")) input$nm_endpoint_class %||% "ecological" else NA_character_,
+        value_v = if (identical(input$nm_category, "Impact")) value_v else NA_real_,
         stringsAsFactors = FALSE
       )
 
       if (is.null(existing_id)) {
-        rv$nodes <- rbind(rv$nodes, new_row)
+        rv$nodes <- normalize_dpsir_nodes(dplyr::bind_rows(rv$nodes, new_row))
       } else {
         idx <- which(rv$nodes$id == existing_id)
         # Assign by name, not position: rv$nodes may have its columns in a

@@ -222,7 +222,20 @@ build_full_report_html <- function(
             "For \"%s\"'s pressure scenario: every response in the network evaluated alone at full strength (\"neutralization confidence\") - percentage of simulations (resampling each edge's strength within its uncertainty range) in which that response alone neutralizes each Impact.",
             scenario_name
           )
-        )
+        ),
+        # Revisao 2, item B7: Impact prioritization.
+        if (!is.null(sc$prioritization) && nrow(sc$prioritization) > 0) {
+          tagList(
+            tags$h5("Impact prioritization"),
+            report_html_table(format_prioritization_table(sc$prioritization)),
+            caption_tag(
+              "Table", next_table_n(),
+              sprintf("For \"%s\": relevance of each Impact (value v x importance D x reliability) and priority (relevance x the share of the worsening the response leaves uncovered). %s", scenario_name, PRIORITIZATION_METHOD_NOTE)
+            ),
+            tags$img(src = plot_to_data_uri(function() draw_prioritization_plot(sc$prioritization), width = 800, height = 380), style = "max-width: 100%;"),
+            caption_tag("Figure", next_figure_n(), sprintf("For \"%s\": relevance (bars) and priority (markers) of each worsened Impact.", scenario_name))
+          )
+        }
       )
     })
     sufficiency_scenario_sections <- Filter(Negate(is.null), sufficiency_scenario_sections)
