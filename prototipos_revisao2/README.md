@@ -8,14 +8,14 @@ As portas seguem o código de `main` no commit `201d131`:
 
 Rodar: `python3 <script>.py`
 
-**Conferência em R (29/09/2026):** `confere_em_R.R` roda os mesmos casos contra o motor R real (`Rscript prototipos_revisao2/confere_em_R.R`, a partir da raiz do repositório). Todos os valores da tabela abaixo bateram. O protótipo de `until_neutralized` foi recalculado com a regra "não desligar antes de o problema chegar" (ver a A6 do roadmap).
+**Conferência em R (29/09/2026):** `confere_em_R.R` roda os mesmos casos contra o motor R real (`Rscript prototipos_revisao2/confere_em_R.R`, a partir da raiz do repositório). Todos os valores da tabela abaixo bateram. Em 29/09 a D1 e a D2 foram revisadas: "até neutralizar" deixou de ser um modo da resposta e virou critério de parada da simulação. Os valores de referência desse critério estão na A6 do roadmap e em `confere_em_R.R`.
 
 | Script | Roadmap | O que mostra | Valores de referência |
 |---|---|---|---|
 | `teste_psir.py` | contexto (D3) | Cadeia P→E→I com resposta R→P na leitura estática atual. Com ciclo fraco (I→R peso 0,001), o veredito se inverte. | Cadeia simples, pesos 1, c = 0,5: piora +0,25; mitigação −0,125; força necessária 200% |
 | `variante.py` | contexto (D3, não adotado) | Variante λ = min(1, c/ρ) na leitura estática. **Decisão D3: não mudar λ.** | — |
 | `alvos.py` | contexto (D3) | Resposta ligada à Pressão, ao Estado ou ao Impacto, na leitura estática e na temporal. Mostra o atraso da resposta na Pressão. | Estática, c = 0,5: força 200% / 100% / 50% |
-| `persistencia.py` | Fase A (A2, A6), D16 | Impulso, permanente, retroalimentação I→R, autorregulação e protótipo de `until_neutralized` | Ver a tabela A6 do roadmap: impulso I = 6 / 36 / 406 nas janelas 5 / 10 / 30; permanente I = −14 na janela 8 |
+| `persistencia.py` | Fase A (A6) | Impulso, permanente, retroalimentação I→R, autorregulação e protótipo do antigo modo `until_neutralized` (substituído pelo critério de parada) | Ver a tabela A6 do roadmap: impulso I = 6 / 36 / 406 nas janelas 5 / 10 / 30; permanente I = −14 na janela 8 |
 | `amortecido.py` | Fase A (A3, A6) | Autorregulação 0,3 em P, E e I faz o impulso convergir para a neutralização | Janela 30: I = 0,0267 contra baseline 36,9588 |
 | `gatilho.py` | Fase C (C1, C2, C6), D7–D8 | Gatilho do Estado pela carga das Pressões (limiar 0,4) | P1 + P2 a 100%: carga 0,60, piora 0,120; com R→P1 peso 0,8: carga 0,36, líquido 0; P1 + P2 a 70%: 0,084 |
 | `q7.py` | Fase C (C3), D11 | Critério do gatilho na simulação temporal: carga × nível acumulado | P1 sozinha 0,3, impulso: por carga nunca abre; por nível abre na janela 4 |
@@ -25,5 +25,5 @@ Rodar: `python3 <script>.py`
 Observações:
 - `variante.py` e `amortecido.py` reaproveitam funções de `teste_psir.py` e `persistencia.py` (via `exec`). Mantenha os scripts juntos na mesma pasta.
 - Os números vieram da porta em Python e foram confirmados no R por `confere_em_R.R`. Se uma mudança no motor alterar algum deles, investigar antes de atualizar o valor esperado.
-- Os valores de `until_neutralized` em `persistencia.py` são **sem** a regra "não desligar antes de o problema chegar". Os valores válidos estão na A6 do roadmap e em `confere_em_R.R`.
+- O trecho "modo até neutralizar" de `persistencia.py` é histórico: o desenho foi substituído pelo critério de parada da simulação (A2 do roadmap). Não usar esses números como referência.
 - Pesos de 1 nos exemplos didáticos (`teste_psir.py`, `alvos.py`, `persistencia.py`) são anteriores à decisão D13 (escala 0–1). Servem para testar o motor, não como exemplos para o usuário.

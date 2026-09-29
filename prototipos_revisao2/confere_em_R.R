@@ -73,27 +73,16 @@ r <- simulate_temporal_pair(g, pv(g, D = 0.1), pv(g), windows = 3, mode_D = "per
 cat(sprintf("t%d: x_D=%.4f  w*x_D=%.4f\n", 1:3, r$baseline[2:4, "D"], 0.5 * r$baseline[2:4, "D"]))
 # Esperado: 0.05 / 0.105 / 0.1655 (D5)
 
-cat("\n== A2/A6: until_neutralized (prototipo da regra, fora do motor)\n")
+cat("\n== A2/A6: criterio de parada 'ate neutralizar' (D1/D2 revisadas, 29/09)\n")
+# Para na primeira janela em que o Impacto piora no baseline e o cenario chega a <= tol_abs.
 ids <- c("P","E","I","R"); cats <- c("Pressure","State","Impact","Response")
 chain <- list(list("P","E",1,"neg"), list("E","I",1,"neg"), list("R","P",1,"neg"))
-run <- function(sr = NULL, wait_rule = TRUE, after = c("keep","withdraw"), T = 20, tol = 0) {
-  after <- match.arg(after)
+for (sr in list(NULL, list(P=.3,E=.3,I=.3))) for (mD in c("permanent","impulse")) for (mR in c("permanent","impulse")) {
   g <- mk(ids, cats, chain, sr = sr)
-  W <- build_interaction_matrix(g); rho <- spectral_radius(W); W <- (if (rho > 0) min(1, .9/rho) else 1) * W
-  pD <- pv(g, P = 1); pR <- pv(g, R = 1); xb <- xs <- 0 * pD; on <- integer(T); Is <- numeric(T)
-  prev_on <- TRUE
-  for (t in 1:T) {
-    active <- t == 1 || xs["I"] > tol || (wait_rule && abs(xb["I"]) <= tol)
-    xs_pre <- xs
-    if (!active && prev_on && after == "withdraw") xs["R"] <- 0
-    xb <- as.numeric(xb + W %*% xb + pD); names(xb) <- names(pD)
-    xs <- as.numeric(xs + W %*% xs + pD + (if (active) pR else 0)); names(xs) <- names(pD)
-    on[t] <- active; Is[t] <- xs["I"]; prev_on <- active
-  }
-  list(on = on, I = Is)
-}
-for (w in c(FALSE, TRUE)) for (a in c("keep","withdraw")) for (sr in list(NULL, list(P=.3,E=.3,I=.3))) {
-  r <- run(sr, w, a)
-  cat(sprintf("wait_rule=%s after=%-8s SR=%s\n  on=%s\n  I t5=%.3f t10=%.3f t12=%.3f t20=%.3f\n", w, a, if (is.null(sr)) "0" else ".3",
-      paste(r$on[1:12], collapse=","), r$I[5], r$I[10], r$I[12], r$I[20]))
+  r <- simulate_temporal_pair(g, pv(g, P=1), pv(g, R=1), windows = 50, mode_D = mD, mode_R = mR)
+  b <- r$baseline[-1,"I"]; s <- r$scenario[-1,"I"]
+  t_stop <- which(b > 1e-9 & s <= 1e-9)[1]
+  rel5 <- which(abs(b) > 1e-9 & abs(s) <= 0.05*abs(b))[1]
+  cat(sprintf("SR=%-3s P=%-9s R=%-9s  para em t=%-3s I=%-7s | 5%% relativo em t=%s\n", if(is.null(sr))"0" else ".3", mD, mR,
+      t_stop, if (is.na(t_stop)) "-" else round(s[t_stop], 2), rel5))
 }

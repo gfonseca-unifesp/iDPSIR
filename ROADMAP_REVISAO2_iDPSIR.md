@@ -12,7 +12,7 @@ A ordem das fases importa: a Fase 0 corrige bugs nos mesmos módulos que as Fase
 
 **Protótipos numéricos:** a pasta `prototipos_revisao2/` (na raiz do repositório) tem os scripts em Python que geraram os valores de referência citados aqui. Veja o `README.md` dela.
 
-**Conferência em R (29/09/2026):** os valores de referência foram conferidos contra o motor R real de `main` (`201d131`) com `prototipos_revisao2/confere_em_R.R`. Todos bateram. Nesta conferência foram feitas quatro correções: a fórmula da tendência exógena (D2), a referência de código da 0.4, uma ressalva sobre o exemplo do PDF (B3) e o impacto da Fase C no exemplo Gnanapragasam (C6). Os valores de `until_neutralized` (A2, A6) foram recalculados com a regra "não desligar antes de o problema chegar".
+**Conferência em R (29/09/2026):** os valores de referência foram conferidos contra o motor R real de `main` (`201d131`) com `prototipos_revisao2/confere_em_R.R`. Todos bateram. Nesta conferência foram feitas quatro correções: a fórmula da tendência exógena (D2), a referência de código da 0.4, uma ressalva sobre o exemplo do PDF (B3) e o impacto da Fase C no exemplo Gnanapragasam (C6). Depois, a D1 e a D2 foram revisadas e a D16 foi cancelada: "até neutralizar" virou critério de parada da simulação (A2), com novos valores de referência na A6.
 
 ---
 
@@ -20,8 +20,8 @@ A ordem das fases importa: a Fase 0 corrige bugs nos mesmos módulos que as Fase
 
 | # | Decisão | Origem |
 |---|---|---|
-| D1 | A simulação temporal oferece **três modos de resposta**, escolhidos pelo usuário: `permanent`, `impulse` e `until_neutralized`. | Usuário, 25/09 |
-| D2 | O **padrão da resposta passa a ser `permanent`** (hoje é `impulse`). O padrão da pressão continua `permanent`. | Usuário, 25/09 |
+| D1 | A pressão e a resposta têm, cada uma, **dois modos** escolhidos pelo usuário: `permanent` ou `impulse`. "Até neutralizar" **não é um modo da resposta**: é um **critério de parada da simulação** (duração "N janelas fixas" ou "até a resposta neutralizar o Impacto", com máximo de janelas). | Usuário, 25/09; revisado 29/09 |
+| D2 | Padrões na tela: pressão `permanent`, **resposta `permanent`** (hoje é `impulse`) e duração **"até neutralizar"**, com **máximo de 50 janelas**, editável. | Usuário, 25/09; revisado 29/09 |
 | D3 | O fator λ da leitura estática (`propagate()`, `λ = c` sem ciclo, `c/ρ` com ciclo) **fica como está**. O desconto por elo representa corretamente o atraso de uma resposta mais distante do Impacto. | Usuário, 25/09 |
 | D4 | Na estrutura DPSIR do app, **ciclos só existem via Resposta** (arestas I→R). Uma cadeia causal sem Resposta tem no máximo D→P→S→I. | Usuário + `schema_allowed_connections()` |
 | D5 | **Pesos das arestas na escala (0, 1]**, como todos os outros parâmetros. | Usuário, 25/09 + especificação v1.0 |
@@ -35,11 +35,11 @@ A ordem das fases importa: a Fase 0 corrige bugs nos mesmos módulos que as Fase
 | D13 | **Escala 0–1 é a norma do app.** Os exemplos do repositório (CSVs em `data/` e savepoints em `docs/`) serão **re-parametrizados** na escala 0–1, com cada peso revisado, e não apenas divididos. O app e os exemplos publicados no GitHub e na demo shinylive são atualizados juntos. Um arquivo antigo com peso > 1 é bloqueado com mensagem clara, com a opção de reescalar automaticamente (÷ maior peso) e aviso. | Usuário (Q1), 25/09 |
 | D14 | Importância dinâmica D = **sempre pela propagação do app** (`propagate()`, a mesma da leitura de suficiência). **Levins não entra como alternativa**, para não aumentar a complexidade. Tela e relatório mostram um aviso de que D vem da propagação do app e não do equilíbrio de Levins da especificação v1.0. Validar com os exemplos antes de fechar (ver B3). | Usuário (Q2), 25/09 |
 | D15 | Eficácia da resposta = **cobertura** (a força do slider). A confiança da aresta entra **só na incerteza** (reamostragem de ρ e da suficiência), não multiplica a eficácia. Isto altera a V5 do PDF v1.0, que deve ser atualizado. | Usuário (Q3), 25/09 |
-| D16 | Modo `until_neutralized`: o usuário escolhe o que acontece quando a resposta para, entre **"manter a medida"** (padrão: o nível de R fica e decai só pela própria `self_regulation`) e **"retirar a medida"** (o nível de R zera). Nota na tela: sem autorregulação o Impacto pode ultrapassar o zero nos dois casos. | Usuário (Q4), 25/09 |
+| D16 | ~~Modo `until_neutralized` com "manter"/"retirar" a medida.~~ **Cancelada em 29/09**: com a D1 revisada, a resposta não liga e desliga; é a simulação que para quando o Impacto é neutralizado. | Usuário (Q4), 25/09; cancelada 29/09 |
 
 ## Decisões a confirmar
 
-Nenhuma. Todas as perguntas Q1–Q10 foram respondidas pelo usuário em 25/09/2026 e viraram as decisões D7–D16 acima.
+Nenhuma. Todas as perguntas Q1–Q10 foram respondidas pelo usuário em 25/09/2026 e viraram as decisões D7–D16 acima. D1 e D2 foram revisadas e D16 foi cancelada em 29/09/2026.
 
 ---
 
@@ -117,70 +117,85 @@ Bugs encontrados por leitura de código. Todos têm correção pequena.
 
 ---
 
-## Fase A — Três modos de resposta na simulação temporal
+## Fase A — Modos de pressão e resposta e critério "até neutralizar" (D1 e D2 revisadas em 29/09)
 
 **Contexto (verificado por simulação da cadeia P→E→I com R→P, pesos 1):**
 - O motor é `x(t+1) = x(t) + λW·x(t) + p`. Cada nó funciona como um estoque que acumula o que chega a cada janela.
-- `impulse` não age só uma janela: vira um **nível constante** de R, que continua drenando P a cada janela enquanto R não tiver `self_regulation`.
-- `permanent` soma +1 a cada janela, então o esforço cresce sem limite e sempre ultrapassa a meta.
-- Nenhum modo atual para quando o Impacto zera.
-- O Impacto só converge para zero quando P, E e I têm `self_regulation`.
+- `impulse` não age só uma janela: vira um **nível constante** do nó, que continua agindo a cada janela enquanto o nó não tiver `self_regulation`.
+- `permanent` soma +1 a cada janela, então o esforço cresce sem limite e pode ultrapassar a meta.
+- Nenhuma opção atual para a simulação quando o Impacto zera.
+- O Impacto só converge para zero, sem ultrapassar, quando P, E e I têm `self_regulation`.
 
-### A1 — Rótulos e ajuda que digam o que cada modo faz
-**O que fazer:** em `mod_responses.R:438–442`, trocar o seletor da resposta para três opções, com `permanent` selecionado:
+### A1 — Seletores de modo com ajuda
+**O que fazer:** em `mod_responses.R:438–442`, os dois seletores (pressão e resposta) oferecem as mesmas duas opções, com `permanent` selecionado nos dois:
 
 | Valor interno | Rótulo | Texto de ajuda |
 |---|---|---|
-| `permanent` | Reinforced every window (default) | "The response effort is added again every window, so it keeps growing. Use when management keeps scaling up. Can overshoot and push the Impact below zero." |
-| `impulse` | Applied once and held | "The response is applied in window 1 and its level stays in the system (it fades only if the Response node has self-regulation). Use for a one-off measure that stays in place." |
-| `until_neutralized` | Until neutralized | "The response effort is added every window while any Impact it reaches is still above the tolerance, and stops once all are neutralized. Without self-regulation on the chain, effects already built up can still overshoot." |
+| `permanent` | Added every window (default) | "The push is added again every window, so its effect keeps building up. Use for an ongoing pressure or a management effort that keeps being applied. A response can overshoot and push the Impact below zero." |
+| `impulse` | Applied once and held | "The push is applied in window 1 only; the level it creates stays in the system (it fades only if that factor has self-regulation). Use for a one-off event or measure." |
 
-Mostrar a ajuda do modo selecionado logo abaixo do seletor (`helpText` reativo). O seletor da pressão continua só com `permanent`/`impulse`, com `permanent` selecionado.
+Mostrar a ajuda do modo selecionado logo abaixo de cada seletor (`helpText` reativo).
 
-### A2 — Implementar `until_neutralized` no motor
+### A2 — Duração da simulação: "N janelas fixas" ou "até neutralizar"
 **O que fazer:** em `simulate_temporal_pair()` (`temporal.R:157`):
-- `mode_R = c("permanent", "impulse", "until_neutralized")`, com `permanent` como primeiro valor e, portanto, o padrão do `match.arg`.
-- Para `until_neutralized`:
-  - Na janela 1 o push `p_R` é sempre aplicado.
-  - Na janela t ≥ 2, o push é aplicado se algum Impacto alcançado pela resposta tiver `x_scenario[I](t−1) > tol_I`.
-  - **Não desligar antes de o problema chegar.** Por causa do atraso da cadeia, nas primeiras janelas o Impacto ainda é 0 no baseline e no cenário, e sem esta regra a resposta pararia antes de a pressão chegar. A condição de parada só vale depois que o baseline daquele Impacto passou da tolerância (`|x_baseline[I](t−1)| > tol_I`). Antes disso, a resposta continua ativa. Os Impactos alcançados vêm de `response_reach()` com os `active_ids` da resposta; `tol_I` vem de A3.
-  - Quando a resposta para, o usuário escolhe (decisão D16): **"Keep the measure in place"** (padrão: o nível de R fica e decai só pela própria `self_regulation`) ou **"Withdraw the measure"** (o nível de R zera naquela janela). Um seletor aparece só quando o modo é `until_neutralized` e é gravado no `scenario_state`.
-  - Nota na tela: "Sem autorregulação na cadeia, o Impacto pode ultrapassar o zero nos dois casos, porque o efeito já acumulado continua agindo depois que a resposta para."
-  - Referência simulada em R (P→E→I, R→P, pesos 1, pressão `permanent`, tol 0, **com** a regra acima; "retirar" = zerar o nível de R na janela em que a resposta desliga). Na janela 20: sem autorregulação, "manter" leva I a −2990 e "retirar" a −988; com autorregulação 0,3 em P, E e I, os valores são −165 e **+20**. No último caso o Impacto volta a ficar positivo e a resposta deve religar (ver D4). Sem a regra, os valores do protótipo eram −2083 / −1115 e −154 / −27.
-  - **Especificar "retirar":** a interpretação acima (zerar `x_R` na janela do desligamento) é a usada nos números de referência. Confirmar na implementação e documentar.
-- O resultado ganha `response_on`, um vetor lógico por janela, para o gráfico e a tabela.
+- `mode_R = c("permanent", "impulse")`, com `permanent` como primeiro valor e, portanto, o padrão do `match.arg`. `mode_D` fica como está.
+- Novos argumentos `stop_rule = c("until_neutralized", "fixed")` e `max_windows = 50`. Com `"fixed"`, `windows` é usado como hoje.
+- **Critério de parada** (`until_neutralized`):
+  - **Impactos considerados:** os alcançados pelas respostas ativas (`response_reach()` com os `active_ids`) **e** que pioram no baseline naquela janela (`x_baseline[I](t) > tol_abs`). Isso evita parar antes de o problema chegar: nas primeiras janelas o Impacto ainda é 0 por causa do atraso da cadeia.
+  - A simulação para na **primeira janela t** em que existe pelo menos um Impacto considerado e **todos** os considerados têm `x_scenario[I](t) <= tol_abs`, ou seja, chegaram a zero ou cruzaram para o lado bom.
+  - **Não usar a tolerância relativa da A3 para parar.** Contraexemplo verificado em R: pressão `permanent`, resposta `impulse`, sem autorregulação. O Impacto sobe sem parar (6, 10, 15, 21…), mas o baseline sobe mais rápido, e na janela 60 o Impacto fica abaixo de 5% do baseline. A tolerância relativa diria "neutralizado".
+  - Em janelas discretas o Impacto costuma pular o zero (ex.: 5 → 0 → −14). O critério "≤ tol_abs" cobre o pulo.
+  - Se não parar até `max_windows`, o resultado traz `neutralized_at = NA` e a tela mostra "Not neutralized within N windows".
+  - Se nenhum Impacto for alcançado pela resposta, avisar e rodar `max_windows`.
+- O resultado ganha `neutralized_at` (janela ou `NA`) e `stop_rule`. Com `"fixed"`, `neutralized_at` também é calculado (a primeira janela que cumpre o critério dentro das N), para informar na tela.
 - Atualizar os defaults em `report.R:313` e `mod_responses.R:652` (`%||% "permanent"`).
-**UI:** no gráfico temporal (`scenario_plots.R`), sombrear levemente as janelas em que a resposta estava ativa. Na tabela, coluna "Response active (Y/N)".
+
+**UI:**
+- Seletor "Simulation length", com as opções "Until the response neutralizes the Impact (default)" e "Fixed number of windows".
+- `numericInput` "Maximum windows" (padrão 50, faixa 1–200) ou "Windows", conforme a opção.
+- No gráfico temporal (`scenario_plots.R`), marcar a janela de neutralização com uma linha vertical. Na tabela, destacar a linha dessa janela.
 
 ### A3 — Tolerância no veredito temporal
 **Motivação:** hoje "Neutralized" exige |I| ≤ 10⁻⁹. Um Impacto que converge para 0,03 (contra baseline 37) aparece como "Partial" para sempre.
-**O que fazer:** `format_temporal_table(…, tol_rel = 0.05, tol_abs = 1e-9)`. Neutralizado quando `|net| <= max(tol_abs, tol_rel * |baseline|)`. A mesma regra vale para `until_neutralized` (A2). Adicionar um `numericInput` "Neutralization tolerance (% of baseline)" com padrão 5, e informar o valor no relatório. A leitura estática continua exata (é álgebra, não dinâmica).
+**O que fazer:** `format_temporal_table(…, tol_rel = 0.05, tol_abs = 1e-9)`. O Impacto está neutralizado quando `|net| <= max(tol_abs, tol_rel * |baseline|)`. Adicionar um `numericInput` "Neutralization tolerance (% of baseline)" com padrão 5, e informar o valor no relatório. A leitura estática continua exata (é álgebra, não dinâmica).
+**Cuidado:** esta tolerância só rotula a tabela; ela não decide a parada (ver A2). Quando o baseline cresce mais rápido que o cenário, a razão cai abaixo de 5% mesmo com o Impacto piorando. Por isso a tabela só mostra "Neutralized (relative)" se `|net|` não estiver crescendo em relação à janela anterior; caso contrário, mostra "Partial". Cobrir o contraexemplo da A2 com teste.
 
 ### A4 — Baseline sem nenhuma resposta (opcional)
 **Motivação:** arestas I→R também agem no baseline, então o baseline não é "sem resposta": o próprio Impacto aciona R nas duas rodadas.
 **O que fazer:** checkbox "Baseline without any response (ignore Impact→Response links)". Padrão desmarcado, para compatibilidade. Quando marcado, a rodada baseline usa W com as linhas dos nós Response zeradas.
 
-### A5 — Persistir modos e tolerância
-**O que fazer:** gravar `temporal_mode_pressure`, `temporal_mode_response`, `temporal_tol_rel`, `temporal_windows` e `baseline_without_response` no `scenario_state` do savepoint (`io.R` `build_savepoint`/`read_savepoint`) e nos cenários salvos. Um savepoint antigo sem os campos recebe os novos defaults. Um valor antigo `"impulse"` é preservado.
+### A5 — Persistir modos, duração e tolerância
+**O que fazer:** gravar `temporal_mode_pressure`, `temporal_mode_response`, `temporal_stop_rule`, `temporal_max_windows`, `temporal_windows`, `temporal_tol_rel` e `baseline_without_response` no `scenario_state` do savepoint (`io.R` `build_savepoint`/`read_savepoint`; o estado atual da tela vem de `current_scenario_state`, `mod_responses.R:750`) e nos cenários salvos.
+- Um savepoint antigo sem esses campos recebe os novos defaults, **exceto** `temporal_stop_rule`: quando o savepoint já traz `temporal_windows`, ele vira `"fixed"`, para reproduzir o resultado salvo.
+- Um valor antigo `"impulse"` é preservado.
 
-### A6 — Testes de referência (valores da cadeia P→E→I, R→P, pesos 1, pressão `permanent`)
-Valores calculados com uma porta em Python de `temporal.R` (`persistencia.py`, `amortecido.py`) e **confirmados no R** (`confere_em_R.R`). O teste em R deve reproduzi-los com tolerância 1e-6:
+### A6 — Testes de referência (cadeia P→E→I, R→P, pesos 1)
+Valores do motor R real (`confere_em_R.R`, 29/09/2026). O teste deve reproduzi-los com tolerância 1e-6.
+
+Janelas fixas, pressão `permanent`:
 
 | Caso | Janela | Baseline I | Cenário I |
 |---|---|---|---|
-| `impulse`, sem self_regulation | 5 / 10 / 30 | 10 / 120 / 4060 | 6 / 36 / 406 |
-| `permanent`, sem self_regulation | 5 / 8 / 10 | 10 / 56 / 120 | 5 / −14 / −90 |
-| `impulse`, self_regulation 0,3 em P, E, I | 10 / 30 | 22,8599 / 36,9588 | 2,9648 / 0,0267 |
-| `until_neutralized` ("manter"), sem self_regulation, tol 0 | 5 / 10 / 12 / 20 | — | 5 / −90 / −270 / −2990 |
-| `until_neutralized` ("retirar"), sem self_regulation, tol 0 | 20 | — | −988 |
+| resposta `impulse`, sem self_regulation | 5 / 10 / 30 | 10 / 120 / 4060 | 6 / 36 / 406 |
+| resposta `permanent`, sem self_regulation | 5 / 8 / 10 | 10 / 56 / 120 | 5 / −14 / −90 |
+| resposta `impulse`, self_regulation 0,3 em P, E, I | 10 / 30 | 22,8599 / 36,9588 | 2,9648 / 0,0267 |
 
-- No caso `until_neutralized` (com a regra "não desligar antes de o problema chegar", A2), `response_on` nas janelas 1–12 = `1,1,1,1,1,1,1,0,0,0,0,0`, nos dois comportamentos de parada. O critério usa o Impacto da janela anterior. Recalculado em R em 29/09/2026 (`confere_em_R.R`). Sem a regra, o protótipo dava `1,0,0,1,1,1,1,1,1,1,1,0` e I = 6 / 1 / −71 nas janelas 5 / 10 / 12; esses valores ficam só como registro.
-- Com tolerância de 5%, o caso `impulse` com self_regulation 0,3 é **"Neutralized"** na janela 30.
+"Até neutralizar" (`tol_abs = 1e-9`, `max_windows = 50`): janela em que a simulação para e valor de I nela.
+
+| Pressão | Resposta | Sem self_regulation | self_regulation 0,3 em P, E, I |
+|---|---|---|---|
+| `permanent` | `permanent` | janela 7 (I = 0) | janela 6 (I = −0,67) |
+| `permanent` | `impulse` | **não neutraliza** (`NA`) | **não neutraliza** (`NA`); I ≈ 0,03 na janela 30 |
+| `impulse` | `impulse` | janela 6 (I = 0) | janela 5 (I = −0,16) |
+| `impulse` | `permanent` | janela 6 (I = −5) | janela 5 (I = −1,16) |
+
+- Com tolerância de 5%, o caso resposta `impulse` com self_regulation 0,3 aparece como **"Neutralized (relative)"** na tabela na janela 30 (A3), mas a simulação "até neutralizar" não para, porque I continua positivo e não chega a zero. Documentar essa diferença na ajuda.
+- Contraexemplo da A3: pressão `permanent`, resposta `impulse`, sem self_regulation. Na janela 60, |net| < 5% do baseline, mas o Impacto está crescendo; a tabela **não** pode mostrar "Neutralized".
 
 ### A7 — Documentação
-**O que fazer:** atualizar a seção temporal do README e do tutorial com os três modos. Incluir a tabela acima como exemplo didático e a mensagem central: *"quem faz o Impacto convergir é a autorregulação da cadeia; o modo da resposta decide o esforço"*. **A mudança de padrão (D2) altera o gráfico temporal do exemplo Gnanapragasam**: regenerar a figura e os números.
+**O que fazer:** atualizar a seção temporal do README e do tutorial com os dois modos e o critério "até neutralizar", usando a tabela acima como exemplo didático. Mensagem central: *"quem faz o Impacto convergir é a autorregulação da cadeia; o modo da resposta decide o esforço; o critério de parada diz em que janela o problema foi resolvido"*. **A mudança de padrão (D2) altera o gráfico temporal do exemplo Gnanapragasam**: regenerar a figura e os números.
 
-**Pronto quando:** os três modos aparecem com ajuda, `permanent` é o padrão em UI, motor e relatório, os testes A6 passam, o savepoint preserva a escolha e o tutorial reflete o novo padrão.
+**Pronto quando:** os dois seletores e a duração aparecem com ajuda; `permanent`, `permanent` e "até neutralizar" (50 janelas) são os padrões em UI, motor e relatório; os testes A6 passam; o savepoint preserva as escolhas; e o tutorial reflete o novo padrão.
 
 ---
 
@@ -397,7 +412,7 @@ O exemplo portuário (tipo Santos) da seção 7 do PDF **não** será implementa
 ### D4 — Interações com outras fases
 **O que fazer:**
 - **Fase C (gatilho):** com crescimento, a carga num Estado sobe a cada janela, então o gatilho pode abrir numa janela posterior. Mostrar a janela em que cada gatilho abriu pela primeira vez.
-- **Fase A (`until_neutralized`):** uma tendência crescente pode reativar a resposta depois que ela parou. Isso é esperado e deve estar documentado.
+- **Fase A ("até neutralizar"):** com uma tendência crescente, a neutralização pode ser temporária: o Impacto volta a subir depois da janela em que a simulação parou. Na tela, oferecer "Continue N more windows" e documentar.
 - **Leitura estática:** continua sem crescimento (instante único). Opcionalmente, um parâmetro "Evaluate at window T" que multiplica o push de cada nó com `g ≠ 0` por (1+g)^T. É baixa prioridade.
 - **Validação:** hoje `growth_rate` não tem limite. Bloquear valores ≤ −1 (o nó inverteria de sinal) e avisar acima de 0,5 por janela.
 
@@ -472,6 +487,6 @@ O exemplo portuário (tipo Santos) da seção 7 do PDF **não** será implementa
 - [ ] App sobe localmente e na demo shinylive.
 - [ ] Os três exemplos, re-parametrizados em 0–1, carregam sem aviso no app local e na demo shinylive.
 - [ ] PDF de relevância atualizado (seção 4 e 7.4 com D pela propagação; V5 com eficácia = cobertura).
-- [ ] Tutorial e README batem número a número com o app (três modos, pesos 0–1, priorização, gatilho, crescimento).
+- [ ] Tutorial e README batem número a número com o app (modos de pressão e resposta, critério "até neutralizar", pesos 0–1, priorização, gatilho, crescimento).
 - [ ] Decisões D1–D16 registradas no `CLAUDE.md`.
 - [ ] Relatório informa o modo da resposta, a tolerância, o critério do gatilho, o método de D e as sementes usadas.
