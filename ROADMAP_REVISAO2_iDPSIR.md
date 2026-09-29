@@ -30,7 +30,7 @@ A ordem das fases importa: a Fase 0 corrige bugs nos mesmos módulos que as outr
 | D6 | Especificação de relevância v1.0 com V1–V5 fechadas: `endpoint_class`, valor `v` (swing weights), D max-normalizado, ρ multiplicativo, blend de centralidade só como fallback. A eficácia foi alterada pela D15. | PDF v1.0 |
 | D7 | O que dispara o gatilho do Estado = soma com sinal de β × nível das Pressões e Respostas que chegam ao Estado, em DP (nível de D/P recortado em ≥ 0). No modo estrutural, na leitura estática, isso é o próprio desvio do Estado. | Usuário (Q5), 25/09; ajustada 29/09 |
 | D8 | Gatilho **binário**: liga ou desliga todas as arestas de saída do Estado. | Usuário (Q6), 25/09 |
-| D9 | O crescimento (`growth_rate`) **fica no nó**, como hoje. A influência das arestas de saída cresce na proporção (1+g) por meio do valor do nó. O peso da aresta não é multiplicado (evita dupla contagem). | Usuário (Q9), 25/09 |
+| D9 | O crescimento (`growth_rate`) **fica no nó**. A influência das arestas de saída cresce na proporção (1+g) por meio do valor do nó (desvio + tendência, D24). O β da aresta não é multiplicado (evita dupla contagem). | Usuário (Q9), 25/09; ajustada 29/09 |
 | D10 | Um nó com `growth_rate > 0` cresce como tendência exógena mesmo fora do cenário de pressão, nas duas rodadas (baseline e cenário). | Usuário (Q10), 25/09 |
 | D11 | Gatilho na simulação temporal: os dois critérios ("carga na janela" e "desvio acumulado do Estado") ficam disponíveis na tela. O usuário escolhe qual usar e pode ver os dois resultados lado a lado. **Padrão: desvio acumulado** (revisado em 29/09, P1): o limiar representa uma perda ou acúmulo total, como no estoque de peixe ou no contaminante no sedimento. | Usuário (Q7), 25/09; padrão revisado 29/09 |
 | D12 | Reach: mostrar os dois, o topológico (como hoje) e o efetivo no cenário, que não atravessa Estados com gatilho fechado, lado a lado. | Usuário (Q8), 25/09 |
@@ -41,22 +41,23 @@ A ordem das fases importa: a Fase 0 corrige bugs nos mesmos módulos que as outr
 | D17 | **Aresta = coeficiente de caminho padronizado β:** quantos desvios-padrão o destino muda quando a origem muda 1 DP. O sinal vem de `interaction_type`, a magnitude fica em `weight`, e o segundo campo é a faixa de incerteza (`weight_low`/`weight_high`). O r² é só atalho (\|β\| = √r²) e diagnóstico. O slope bruto é só conversor, na camada dos nós. | Usuário, 29/09 |
 | D18 | Sem dados, o usuário escolhe uma classe: **fraca** < 0,3 (valor 0,15, faixa 0–0,3), **moderada** 0,3–0,6 (**0,45, padrão**), **forte** ≥ 0,6 (0,80, faixa 0,6–1,0). O sinal nunca tem padrão. Arestas com classe ou padrão ficam marcadas na tabela e no relatório. | Usuário, 29/09 |
 | D19 | **Só o modo estrutural.** Sai o desconto c (slider "How far to trace the effect") e a tabela "Does it hold up across how far the effect is traced". O motor é único sobre B, com efeito (I − B)⁻¹p − p, e exige ρ(B) < 1. Arquivos antigos são convertidos na importação. | Usuário, 29/09 |
-| D20 | Persistência temporal a = 1 − `self_regulation` + g, como hoje (sobre g, ver P3). `self_regulation` aceita [0, 1] e tem **padrão 0,5 para nós novos** (meia-vida de 1 janela, acúmulo de 2× no equilíbrio; revisado em 29/09). Arquivos antigos mantêm o valor gravado. sr = 0: o nó acumula como estoque; sr = 1: sem memória. A leitura estática, (I − B)⁻¹p − p, coincide com o equilíbrio temporal só nos nós com sr = 1. Com sr < 1, o equilíbrio temporal é (sr·I − B)⁻¹p (Levins com diagonal −sr); com sr = 0, não há equilíbrio (conferido em R). | Usuário, 29/09 |
+| D20 | Persistência temporal do desvio a = 1 − `self_regulation` (o crescimento saiu deste termo; D24). `self_regulation` aceita [0, 1] e tem **padrão 0,5 para nós novos** (meia-vida de 1 janela, acúmulo de 2× no equilíbrio; revisado em 29/09). Arquivos antigos mantêm o valor gravado. sr = 0: o nó acumula como estoque; sr = 1: sem memória. A leitura estática, (I − B)⁻¹p − p, coincide com o equilíbrio temporal só nos nós com sr = 1. Com sr < 1, o equilíbrio temporal é (sr·I − B)⁻¹p (Levins com diagonal −sr); com sr = 0, não há equilíbrio (conferido em R). | Usuário, 29/09 |
 | D21 | O `confidence` das arestas vira a faixa de β. Sem faixa informada, vale a faixa da classe. Confiança antiga κ é convertida pela regra atual de reamostragem: β·[1 − 0,5(1 − κ), 1 + 0,5(1 − κ)]. | Usuário, 29/09 |
 | D22 | Os exemplos (Fisheries, Mangi, Gnanapragasam e `sample`) ficam **só no modo estrutural**, com a classe de cada aresta revisada com o usuário. | Usuário, 29/09 |
 | D23 | **Camada de medida:** nós podem ter valor de referência (> 0) e variação típica (DP ou CV). O limiar do Estado é um nível na unidade do nó, **sem teto em 0–1**, convertido para z = (limiar − ref)/DP, com direção pelo sinal de z. Pressão e resposta podem passar de 100% ou ser informadas em unidade real. | Usuário, 29/09 |
+| D24 | **Crescimento e autorregulação são separados.** A autorregulação age só sobre o desvio causado pela rede: dev(t+1) = (1 − sr)·dev + B·x + p. O crescimento é só a tendência do nível de base, trend(t) = (ref/DP)·((1 + g)^t − 1), igual no baseline e no cenário. O valor do nó é x = dev + trend, e as arestas transmitem x. No motor atual os dois eram redundantes (só g − sr contava). | Usuário (P3), 29/09 |
 
 ## Decisões a confirmar
 
 As perguntas Q1–Q10 de 25/09 viraram as decisões D7–D16. Em 29/09, D1 e D2 foram revisadas, D16 foi cancelada, e as decisões do modo estrutural (D17–D23) revisaram D3, D5, D7, D13, D14 e D15.
 
-P1 e P2 foram respondidas pelo usuário em 29/09. A P3 está em aberto:
+Nenhuma pendente. As três perguntas que ficaram abertas foram respondidas pelo usuário em 29/09:
 
 | # | Pergunta | Decisão | Onde entra |
 |---|---|---|---|
 | P1 | Critério padrão do gatilho na temporal | **Desvio acumulado** (revisa o padrão da D11) | C3 |
 | P2 | Arquivo antigo que, convertido, fica com \|β\| > 1 | **Aviso e revisão**, sem bloqueio | 1.5 |
-| P3 | **Em aberto (29/09).** `growth_rate` é redundante com a autorregulação no motor atual. Separar os dois? g sai da diagonal e vira só tendência exógena do nível de referência (Anexo X5) | Proposta: separar | Fase D, A |
+| P3 | `growth_rate` é redundante com a autorregulação no motor atual. Separar os dois? | **Separar** (D24): g vira só tendência exógena do nível de base | Fase D, A |
 
 ---
 
@@ -198,7 +199,7 @@ Bugs encontrados por leitura de código. Todos têm correção pequena.
 ## Fase A — Modos de pressão e resposta e critério "até neutralizar" (D1 e D2 revisadas em 29/09)
 
 **Contexto (verificado por simulação da cadeia P→E→I com R→P, pesos 1):**
-- O motor é `x(t+1) = (1 − sr + g)·x(t) + B·x(t) + p` (D20), com B da Fase 1. Os valores da A6 usam β = 1, sem o estabilizador λ, e continuam válidos. Cada nó funciona como um estoque que acumula o que chega a cada janela.
+- O motor do desvio é `dev(t+1) = (1 − sr)·dev(t) + B·x(t) + p` (D20), com B da Fase 1; o crescimento entra como tendência separada na Fase D (D24). Os valores da A6 usam β = 1, sem o estabilizador λ, e continuam válidos. Cada nó funciona como um estoque que acumula o que chega a cada janela.
 - `impulse` não age só uma janela: vira um **nível constante** do nó, que continua agindo a cada janela enquanto o nó não tiver `self_regulation`.
 - `permanent` soma +1 a cada janela, então o esforço cresce sem limite e pode ultrapassar a meta.
 - Nenhuma opção atual para a simulação quando o Impacto zera.
@@ -468,65 +469,73 @@ Com a persistência da D20, o Estado acumula (sr < 1). Por isso "o que chega nes
 
 ---
 
-## Fase D — Crescimento (`growth_rate`) propagado pelas arestas de saída
-
-**Atenção (P3, em aberto):** no motor atual, `growth_rate` é redundante com a autorregulação: só a diferença g − sr entra no passo (conferido com o motor real). A proposta do Anexo X5 separa os dois: g sai da diagonal e vira só a tendência exógena do nível de referência. Se aceita, D1, D2 e D5 são ajustados como descrito no X5, antes de implementar esta fase.
+## Fase D — Crescimento (`growth_rate`) como tendência do nível de base (D9, D10, D24)
 
 **Pedido:** se um nó tem `growth_rate` positivo, as arestas que saem dele devem aumentar de intensidade na mesma proporção a cada janela.
 
-**Situação atual (verificada no código e simulada, `crescimento.py`):**
-- O motor temporal faz `x(t+1) = x + g·x + B·x + p` (`temporal.R:139`, com B da Fase 1). O crescimento fica no **valor do nó**, e a aresta transmite `w · x`.
-- Por isso a influência que sai do nó **já cresce na proporção (1+g)** a cada janela, quando o nó tem um desvio. Exemplo: D com g = 0,10 e aresta D→P de peso 0,5, impulso em D. A contribuição em P é 0,50 → 0,55 → 0,605 → …, razão 1,10 por janela.
-- **Multiplicar também o peso da aresta por (1+g)^t contaria o crescimento duas vezes:** a razão viraria 1,21 por janela (decisão D9: o crescimento fica no nó).
-- **Lacuna real 1:** o crescimento só age sobre um desvio que já existe. Um Driver com `growth_rate` que não está no cenário de pressão fica em zero para sempre. O tutorial do Gnanapragasam contorna isso ativando D3 a 30% à mão.
-- **Lacuna real 2:** a leitura estática ignora o `growth_rate` por completo. Isso está documentado e é coerente com uma leitura de um único instante.
-- **Lacuna real 3:** o usuário não vê em lugar nenhum a intensidade efetiva das arestas crescendo.
+**Situação atual (verificada no código e simulada, `crescimento.py` e `confere_em_R.R`, seção X5):**
+- O motor temporal faz `x(t+1) = x + g·x − sr·x + W·x + p` (`temporal.R:139`). **Crescimento e autorregulação entram no mesmo termo, e só a diferença g − sr conta.** Conferido com o motor real: g = 0,1 com sr = 0,3 dá o mesmo resultado, janela a janela, que g = 0 com sr = 0,2. O crescimento hoje é só uma autorregulação negativa sobre o desvio.
+- O crescimento só age sobre um desvio que já existe. Um Driver com `growth_rate` que não está no cenário fica em zero para sempre. O tutorial do Gnanapragasam contorna isso ativando D3 a 30% à mão.
+- A leitura estática ignora o `growth_rate` (coerente com uma leitura de um único instante).
+- O usuário não vê em lugar nenhum a intensidade efetiva das arestas crescendo.
 
-**Contribuição que chega em P por janela (D → P com w = 0,5; g = 0,10):**
+**Decisão D24 (29/09): separar os dois.** A autorregulação age só sobre o **desvio** causado pela rede. O crescimento é só a **tendência do nível de base** do fator, igual no baseline e no cenário.
 
-| Modelo | Janela 1 | 2 | 3 | 4 | 8 | Razão por janela |
-|---|---|---|---|---|---|---|
-| Atual (g no nó), impulso em D | 0,50 | 0,55 | 0,61 | 0,67 | 0,97 | 1,10 |
-| g só no peso da aresta, impulso em D | 0,50 | 0,55 | 0,61 | 0,67 | 0,97 | 1,10 |
-| g no nó **e** na aresta (dupla contagem) | 0,50 | 0,61 | 0,73 | 0,89 | 1,90 | 1,21 |
-| Tendência exógena, D fora do cenário (proposta D2) | 0,05 | 0,11 | 0,17 | 0,23 | 0,57 | → 1,10 |
-| Atual, D fora do cenário | 0 | 0 | 0 | 0 | 0 | — |
+**Referência (protótipo em R, `modo_estrutural.R`, seção P3/D24).** Aresta D→P com β = 0,5 e g = 0,10 em D (ref = DP = 1). Contribuição que chega em P = β·x_D(t):
 
-### D1 — Representação do crescimento (decisão D9: fica no nó)
+| Caso | Janela 1 | 2 | 3 | 4 |
+|---|---|---|---|---|
+| D fora do cenário, sr_D = 0,5 | 0,050 | 0,105 | 0,1655 | 0,2321 |
+| D fora do cenário, sr_D = 0 | 0,050 | 0,105 | 0,1655 | 0,2321 |
+| Impulso em D, sr_D = 0,5, g = 0 | 0,500 | 0,250 | 0,125 | 0,0625 |
+| Impulso em D, sr_D = 0,5, g = 0,10 (impulso + tendência) | 0,550 | 0,355 | 0,2905 | 0,2946 |
+
+- A tendência não depende da autorregulação (linhas 1 e 2 iguais).
+- A tendência cresce na proporção (1 + g): os incrementos 0,05 → 0,055 → 0,0605 têm razão 1,10, nunca 1,21. É o que a D9 pede, sem dupla contagem.
+- O desvio do impulso decai só pela autorregulação. O crescimento não o amplifica; só soma a tendência (última linha = terceira linha + primeira).
+
+### D1 — Separar crescimento e autorregulação no motor (D24)
+**O que fazer:** em `simulate_temporal_pair()`/`temporal_step()`:
+- `build_interaction_matrix()` deixa de receber g na diagonal. O passo do desvio fica `dev(t+1) = (1 − sr)·dev(t) + B·x(t) + p(t)`.
+- `trend_i(t) = (ref_i / DP_i)·((1 + g_i)^t − 1)`, em DP (C0). Sem DP, usar DP = ref, o que dá a tendência em "fração do nível de base".
+- Valor do nó: `x(t) = dev(t) + trend(t)`. As arestas transmitem `x`; é por aí que a influência de um fator em crescimento cresce na proporção (1 + g) (D9).
+- Resultado com `trend` e `dev` separados, para a tela e para a D3.
+- Documentar no código e no tutorial: autorregulação = "como o desvio se desfaz"; crescimento = "como o nível de base anda sozinho".
+
+### D2 — Tendência mesmo fora do cenário (D10)
 **O que fazer:**
-- Manter `g` no nó.
-- Documentar no código e no tutorial que a intensidade efetiva de cada aresta de saída é `w · x_origem(t)`, que cresce na proporção (1+g) por janela.
-- Acrescentar um teste que garanta que a razão é 1,10, e não 1,21.
-
-### D2 — Tendência exógena sem precisar de semente (decisão D10)
-**O que fazer:**
-- Em `simulate_temporal_pair()`, todo nó com `g > 0` recebe, nas **duas** rodadas, uma entrada exógena que faz o seu nível seguir `reference_value · ((1+g)^t − 1)`. Em DP (C0), a entrada é `ref·g/DP = g/CV` por janela; sem DP, usa DP = ref (entrada g, como no D5). Como o motor já aplica o termo `g·x` ao nó, isso equivale a uma entrada **constante** de `reference_value · g` por janela: `x(t+1) = (1+g)·x(t) + ref·g` dá exatamente `ref·((1+g)^t − 1)`. **Não** usar `ref · g · (1+g)^(t−1)`: somada ao termo `g·x`, ela contaria o crescimento duas vezes (na janela 2 daria `2g(1+g)` em vez de `g(2+g)`). Correção feita na conferência em R de 29/09/2026.
-- Se o nó também estiver no cenário de pressão, o push se soma a essa tendência.
-- Como a tendência entra nas duas rodadas, ela não enviesa a comparação cenário × baseline. Ela só faz o mundo de fundo se mover.
+- A tendência entra nas **duas** rodadas (baseline e cenário), com ou sem o nó no cenário de pressão. Se o nó também estiver no cenário, o push entra no desvio e se soma à tendência.
+- Como a tendência entra igual nas duas rodadas, **a diferença cenário − baseline não depende de g** (sem gatilho). Ela só faz o mundo de fundo se mover. Com gatilho (Fase C), a tendência pode abrir um gatilho numa janela posterior (D4).
 - Checkbox "Apply growth trends even to factors outside the pressure scenario", padrão ligado. Gravar no `scenario_state`.
 - Atualizar o exemplo Gnanapragasam: a ativação manual de D3 a 30% deixa de ser necessária. Refazer os números do tutorial.
+- A antiga correção da D2 (entrada constante `ref·g`, necessária porque g estava na diagonal) deixa de se aplicar.
 
 ### D3 — Mostrar a intensidade efetiva
 **O que fazer:**
-- Na simulação temporal, adicionar a tabela "Edge intensity by window", com a aresta (origem → destino) e `w · x_origem(t)` por janela.
+- Na simulação temporal, adicionar a tabela "Edge intensity by window", com a aresta (origem → destino) e `β · x_origem(t)` por janela.
 - Mostrar só as arestas que saem de nós com `g ≠ 0` ou que estão num gatilho da Fase C.
 - Ter a opção de download em CSV.
 - No gráfico temporal, uma legenda curta: "Factors with a growth trend: D3 (+3%/window)".
 
 ### D4 — Interações com outras fases
 **O que fazer:**
-- **Fase C (gatilho):** com crescimento, a carga num Estado sobe a cada janela, então o gatilho pode abrir numa janela posterior. Mostrar a janela em que cada gatilho abriu pela primeira vez.
+- **Fase C (gatilho):** com crescimento, o desvio de um Estado a jusante sobe a cada janela, e o gatilho pode abrir numa janela posterior. Mostrar a janela em que cada gatilho abriu pela primeira vez. O critério de desvio acumulado (P1) compara `x_S = dev + trend` com o limiar.
 - **Fase A ("até neutralizar"):** com uma tendência crescente, a neutralização pode ser temporária: o Impacto volta a subir depois da janela em que a simulação parou. Na tela, oferecer "Continue N more windows" e documentar.
-- **Leitura estática:** continua sem crescimento (instante único). Opcionalmente, um parâmetro "Evaluate at window T" que multiplica o push de cada nó com `g ≠ 0` por (1+g)^T. É baixa prioridade.
-- **Validação:** hoje `growth_rate` não tem limite. Bloquear valores ≤ −1 (o nó inverteria de sinal) e avisar acima de 0,5 por janela.
+- **Leitura estática:** continua sem crescimento (instante único). Opcionalmente, um parâmetro "Evaluate at window T" que soma ao push de cada nó com `g ≠ 0` a sua tendência na janela T. Baixa prioridade.
+- **Validação:** bloquear g ≤ −1 (o nível de base inverteria de sinal) e avisar acima de 0,5 por janela. Não é mais preciso comparar g com a autorregulação.
 
 ### D5 — Testes de referência
-- D→P com w = 0,5, g = 0,10, impulso em D: contribuição em P de 0,50 / 0,55 / 0,605 nas janelas 1–3, razão 1,10 exata e nunca 1,21.
-- D fora do cenário com tendência ligada: 0,05 / 0,105 / 0,1655 nas janelas 1–3. Com a tendência desligada: 0 em todas.
-- Baseline e cenário recebem a mesma tendência: com resposta nula, o líquido é igual ao baseline.
-- Regressão: com `growth_rate = 0` em todos os nós, o resultado é idêntico ao atual.
+- Os quatro casos da tabela acima, com tolerância 1e-6.
+- Incrementos da tendência com razão exata 1,10, e nunca 1,21.
+- Independência: com g = 0,10, sr_D = 0 e sr_D = 0,5 dão a mesma tendência.
+- Baseline e cenário recebem a mesma tendência: com resposta nula, o líquido é igual ao baseline. Sem gatilho, cenário − baseline é igual ao caso com g = 0.
+- Regressão: com `growth_rate = 0` em todos os nós, o resultado é idêntico ao da Fase A.
 
-**Pronto quando:** o crescimento de um nó aumenta a influência das suas arestas de saída na proporção (1+g) por janela, sem dupla contagem, mesmo quando o nó não está no cenário. A intensidade efetiva aparece na tela, os testes D5 passam e redes sem crescimento não mudam nada.
+**Pronto quando:**
+- crescimento e autorregulação são parâmetros independentes;
+- a influência das arestas de um fator em crescimento cresce na proporção (1 + g) por janela, sem dupla contagem, mesmo com o nó fora do cenário;
+- a intensidade efetiva aparece na tela;
+- os testes D5 passam e redes sem crescimento não mudam nada.
 
 ---
 
@@ -841,7 +850,7 @@ Rascunho em inglês, a língua do README. Entra no README (seção *Data format*
 > | 0.50 (default) | 1 window | 2× | water quality that renews quickly |
 > | 1 | — | 1× | monthly income, catch in the window |
 
-## X5 — `growth_rate` × autorregulação (análise para a P3)
+## X5 — `growth_rate` × autorregulação (análise da P3; adotada como D24 em 29/09)
 
 **No motor atual, os dois são redundantes.** O passo é x(t+1) = (1 + g − sr)·x + B·x + p: g e sr entram no mesmo lugar e só a diferença conta. Conferido com o motor real (`simulate_temporal_pair()`): g = 0,1 com sr = 0,3 dá exatamente o mesmo resultado, janela a janela, que g = 0 com sr = 0,2. Assim, um g positivo no desvio é só uma autorregulação negativa: um fator que amplifica o próprio desvio.
 

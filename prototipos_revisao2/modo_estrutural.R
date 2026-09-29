@@ -60,3 +60,22 @@ nm <- c("P","S","I"); B <- matrix(0,3,3,dimnames=list(nm,nm)); B["S","P"] <- -.7
 for (s in c(1, .5, .3, 0)) { x <- rep(0,3); for (t in 1:300) x <- (1-s)*x + as.numeric(B %*% x) + p
   eq <- if (s > 0) solve(s*diag(3) - B, p)[3] else NA
   cat(sprintf("sr=%.1f  I(300)=%.3f  equilibrio (sI-B)^-1 p = %s   estatico (I-B)^-1 p = %.3f\n", s, x[3], format(round(eq,3)), solve(diag(3)-B,p)[3])) }
+cat("\n== P3/D24: crescimento separado da autorregulacao (prototipo)\n")
+# D -> P (beta 0.5). Crescimento g no D: tendencia(t) = (ref/DP)*((1+g)^t - 1).
+# Valor do no = desvio + tendencia. A autorregulacao age so no desvio.
+sim_sep <- function(g, srD, pushD = "none", T = 4, ref_sd = 1) {
+  devD <- 0; devP <- 0; out <- NULL
+  for (t in 1:T) {
+    xD_prev <- devD + ref_sd * ((1 + g)^(t - 1) - 1)
+    pD <- if (pushD == "impulse" && t == 1) 1 else 0
+    devP <- devP + 0.5 * xD_prev
+    devD <- (1 - srD) * devD + pD
+    xD <- devD + ref_sd * ((1 + g)^t - 1)
+    out <- rbind(out, c(t = t, x_D = xD, contrib_em_P = 0.5 * xD))
+  }
+  round(out, 4)
+}
+cat("D fora do cenario, g=0.1, sr_D=0.5:\n"); print(sim_sep(.1, .5))
+cat("idem com sr_D=0 (a tendencia nao depende da autorregulacao):\n"); print(sim_sep(.1, 0))
+cat("impulso em D com sr_D=0.5: g=0 (col. 2-3) x g=0.1 (col. 4-5):\n")
+print(cbind(sim_sep(0, .5, "impulse"), sim_sep(.1, .5, "impulse")[, 2:3]))
