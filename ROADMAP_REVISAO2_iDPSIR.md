@@ -12,6 +12,8 @@ A ordem das fases importa: a Fase 0 corrige bugs nos mesmos módulos que as Fase
 
 **Protótipos numéricos:** a pasta `prototipos_revisao2/` (na raiz do repositório) tem os scripts em Python que geraram os valores de referência citados aqui. Veja o `README.md` dela.
 
+**Modo estrutural (29/09/2026):** o usuário decidiu propor nesta revisão o modo estrutural (aresta = coeficiente de caminho padronizado β). A proposta e o impacto em cada fase estão no **Anexo, seções X2 e X3**. As fases abaixo ainda não foram reescritas: isso depende das decisões do X3.4. As conferências em R estão em `prototipos_revisao2/modo_estrutural.R`.
+
 **Conferência em R (29/09/2026):** os valores de referência foram conferidos contra o motor R real de `main` (`201d131`) com `prototipos_revisao2/confere_em_R.R`. Todos bateram. Nesta conferência foram feitas quatro correções: a fórmula da tendência exógena (D2), a referência de código da 0.4, uma ressalva sobre o exemplo do PDF (B3) e o impacto da Fase C no exemplo Gnanapragasam (C6). Depois, a D1 e a D2 foram revisadas e a D16 foi cancelada: "até neutralizar" virou critério de parada da simulação (A2), com novos valores de referência na A6.
 
 ---
@@ -490,3 +492,219 @@ O exemplo portuário (tipo Santos) da seção 7 do PDF **não** será implementa
 - [ ] Tutorial e README batem número a número com o app (modos de pressão e resposta, critério "até neutralizar", pesos 0–1, priorização, gatilho, crescimento).
 - [ ] Decisões D1–D16 registradas no `CLAUDE.md`.
 - [ ] Relatório informa o modo da resposta, a tolerância, o critério do gatilho, o método de D e as sementes usadas.
+
+---
+
+# Anexo — Pontos em aberto e proposta do modo estrutural (29/09/2026)
+
+Este anexo registra a discussão que ficou em aberto depois das revisões de D1, D2 e D16. **Nada aqui altera as fases acima** até ser decidido. A Fase 0 não depende destes pontos. As Fases C e D dependem deles.
+
+## X1 — Limiar, valor de referência e leitura estática × temporal
+
+**Leitura proposta pelo usuário:**
+- `reference_value` é o valor inicial, positivo, de qualquer nó.
+- `activation_threshold` é uma fração desse valor: é o ponto de virada do Estado.
+- Exemplo: um estoque de peixe com ref = 10 e limiar 0,4 tem o gatilho aberto quando o estoque perde 4 unidades.
+- O limiar vale tanto na leitura estática quanto na temporal.
+
+**Conflito com D7/D11:**
+- A D7 compara com o limiar a *carga* de uma janela (peso × intensidade), sem usar o ref. Isso só é coerente quando ref = 1.
+- No exemplo Gnanapragasam (S1 com ref = 100 e limiar 0,15), cada critério dá uma resposta diferente:
+  - carga sem ref: abre já na janela 1;
+  - carga ÷ ref: nunca abre;
+  - nível acumulado ÷ ref: abre quando S1 acumula 15 unidades de perda.
+
+**Proposta em avaliação:** o limiar é sempre uma fração do ref.
+- Na temporal, o padrão passa a ser o nível acumulado (`|x_S| / ref`).
+- Na estática, compara-se a carga imediata ÷ ref.
+
+**Ajustes associados:**
+- ref > 0: hoje a validação só bloqueia ref = 0.
+- Distinguir "ref em branco" de "ref = 1".
+- Nova tabela "variação em relação aos valores iniciais": nível = ref + desvio, % de mudança sem e com resposta, e se o limiar foi cruzado.
+
+**Problema de fundo levantado pelo usuário:**
+- Na lógica original, o peso de uma aresta só servia para comparar arestas **do mesmo nível**.
+- Ao ligar o limiar ao valor de referência em unidades do nó, os pesos passam a precisar ser comensuráveis **entre níveis**. Isso é, na prática, um problema de modelagem estrutural (path analysis ou SEM).
+- O X2 propõe uma saída alinhada com essa lógica.
+
+## X2 — Modo estrutural opcional: aresta = coeficiente de caminho padronizado β (em discussão)
+
+**Ideia:** o usuário escolhe entre dois modos de peso.
+
+| Modo | O que o peso significa | Como o motor usa |
+|---|---|---|
+| Relativo (atual) | Força comparada entre arestas do mesmo nível, em (0, 1] | `propagate()` com desconto λ = c (D3) |
+| Estrutural (opcional) | β: quantos desvios-padrão (DP) o destino muda quando a origem muda 1 DP | Efeito total pela álgebra de path analysis, sem desconto |
+
+### X2.1 — Por que β, e não r²
+
+O r² mede quanto da variação do destino a origem explica, e não quanto o destino muda quando a origem muda, que é a pergunta de um cenário. Simulação em R de y = b·x + ruído:
+
+| Caso | Slope b | r² | β | Efeito de +1 unidade em x |
+|---|---|---|---|---|
+| A: efeito médio, pouco ruído | 0,50 | 0,96 | 0,98 | +0,50 |
+| B: mesmo efeito, muito ruído | 0,51 | 0,06 | 0,24 | +0,51 |
+| C: mesmo efeito, x variou pouco nos dados | 0,51 | 0,04 | 0,20 | +0,51 |
+| D: efeito minúsculo, sem ruído | 0,05 | 0,96 | 0,98 | +0,05 |
+
+Além disso, o r²:
+- não tem sinal;
+- não se compõe ao longo dos caminhos: a path analysis multiplica coeficientes, não r²;
+- só soma o R² do nó quando as origens são independentes.
+
+**Slope bruto (b) e β são o mesmo modelo em unidades diferentes.** β = b·DP_x/DP_y, e mudar de um para o outro é mudar a escala dos nós. Conferido em R numa rede com ciclo: o raio espectral é idêntico (0,501 nos dois), e o efeito total também é idêntico depois de converter as unidades. A escolha entre b e β afeta só a entrada dos dados e a apresentação, nunca o resultado.
+
+### X2.2 — O que o usuário informa por aresta: dois campos
+
+| Campo | Uso |
+|---|---|
+| **β**, com sinal dado por `interaction_type` | Propagação |
+| **Incerteza**: faixa de β | Reamostragem em ρ e na confiança da suficiência. Substitui `confidence` e é coerente com a D15 |
+
+**Atalhos do formulário.** O formulário converte estes valores; eles não são guardados na aresta:
+- r² → |β| = √r² (vale para origens independentes; mostrar o aviso);
+- r² e n → faixa de incerteza, com erro-padrão √((1 − r²)/(n − 2));
+- slope bruto → β, usando o ref e o DP dos dois nós, que pertencem à camada dos nós.
+
+**Sem dados: classe qualitativa (decidido em 29/09).**
+
+| Classe | Faixa de β | Valor usado | Faixa de incerteza | r² equivalente |
+|---|---|---|---|---|
+| Fraca | < 0,3 | 0,15 | 0–0,3 | < 0,09 |
+| **Moderada (padrão)** | 0,3–0,6 | **0,45** | 0,3–0,6 | 0,09–0,36 |
+| Forte | 0,6–1,0 | 0,80 | 0,6–1,0 | 0,36–1,0 |
+
+- O sinal **nunca** tem padrão: é sempre informado (ver 0.7).
+- Arestas com valor padrão ou classe são marcadas na tabela de arestas e no relatório, para deixar claro quanto do resultado depende de suposição.
+- **Nunca usar β = 1 como padrão.** Isso seria uma transmissão perfeita: numa cadeia de 4 arestas o efeito chegaria inteiro à Resposta (1⁴ = 1), e em rede com ciclo haveria risco de ρ(B) ≥ 1.
+- Numa cadeia de 4 arestas moderadas, o efeito total é 0,45⁴ ≈ 0,04.
+
+**Ponte com o modo atual (álgebra, rede sem ciclo):** o modo relativo equivale ao estrutural com β = c × peso. Com peso 1 e c = 0,5, cada aresta vale β = 0,5, que fica dentro da classe moderada. Em rede com ciclo, λ = c/ρ(W) desfaz essa equivalência exata.
+
+### X2.3 — Quantas "regressões" o usuário está fazendo
+
+- **Um β por aresta; uma regressão por nó que recebe arestas.** Numa cadeia simples D→P→S→I→R, com uma origem por nó, são 4 β, o equivalente a 4 regressões simples.
+- Num nó com várias origens (P1→S e P2→S), os β saem de **uma regressão múltipla** de S sobre P1 e P2. Duas regressões simples contariam duas vezes o efeito comum, se P1 e P2 forem correlacionadas.
+- Validação: a soma dos r² que chegam ≤ 1 por nó. O que falta para 1 é a variação vinda de fora da rede, mostrada como diagnóstico ("a rede explica 74% da variação do Estado").
+- Com o ciclo I→R→P, estimar cada equação por regressão comum fica enviesado; com dados reais, usar defasagem temporal ou SEM (ex.: `lavaan`). Para valores elicitados, isso não se aplica.
+
+### X2.4 — Efeito total, ciclos e coerência estática × temporal
+
+- **Efeito total** = (I − B)⁻¹p − p: o produto dos β ao longo de cada caminho, somado entre caminhos. É a mesma forma de `propagate()`, com λ = 1. A atenuação de uma resposta distante (D3) vem do produto de β < 1, sem o desconto c.
+- **Ciclos** exigem ρ(B) < 1, a verificar na validação.
+- **Temporal:** com `x(t+1) = a·x + B·x + p` e a = 1 − autorregulação, quando a = 0 a simulação converge exatamente para o efeito estático. Conferido em R: I = 0,42 a partir da janela 3. A leitura estática passa a ser o equilíbrio da temporal, e o conflito do X1 desaparece. O motor atual (a = 1, estoques que acumulam) continua no modo relativo.
+
+**Exemplo** (conferido em R). Rede P1→S (β −0,7), P2→S (−0,5), S→I (−0,6) e R→P1 (−0,8):
+
+| Leitura | Efeito de P1 em I | Efeito de R em I | Mitigação por R a 100% |
+|---|---|---|---|
+| Estrutural | +0,42 DP | −0,336 DP | 80% (força para neutralizar: 125%) |
+| App atual, peso = r², c = 0,5 | +0,044 | −0,014 | 32% (força: 312%) |
+
+### X2.5 — Camada dos nós, limiar e pressões acima de 100%
+
+- Valor de referência e limiar ficam **só** na camada dos nós, para converter resultados para a unidade real. Eles nunca parametrizam arestas.
+- Um nó com limiar ou com resultado em unidade real informa o valor inicial (ref) e a variação típica (DP, ou CV = DP/ref).
+- **Não há teto de 0–1 ou 100%:**
+  - a pressão é um deslocamento em DP, e o cenário aceita valores acima de 100% ou em unidade real;
+  - o limiar é um nível real, então **deixa de ser validado em [0, 1]** no modo estrutural.
+- **Exemplo de contaminação:** fundo de 10 mg/kg, DP 5, limite legal de 50 mg/kg (400% acima do fundo). O limiar fica em z = (50 − 10)/5 = 8 DP. Um lançamento de +200 mg/kg equivale a +40 DP.
+- **Estoque de peixe:** ref 10, CV 20%, perda crítica de 40%, então z = 0,4/0,2 = 2 DP.
+- Tabela de resultados: nível = ref + DP · z, com a variação em % do ref, sem e com resposta.
+- **Cuidado:** β é linear. Muito além da faixa observada nos dados, a relação real costuma ser não linear (saturação, dose-resposta). O gatilho do limiar captura o liga/desliga, mas não a curvatura. Avisar quando o cenário passar muito da faixa dos dados.
+
+### X2.6 — Decisões
+
+**Tomadas em 29/09:**
+- β como parâmetro;
+- incerteza como segundo campo;
+- r² apenas como atalho e diagnóstico;
+- classes fraca < 0,3, moderada 0,3–0,6 (padrão, 0,45), forte ≥ 0,6.
+
+**Em aberto:**
+- adotar o modo estrutural nesta revisão ou numa futura;
+- se o modo relativo continua disponível;
+- se a temporal do modo estrutural usa a persistência a = 1 − autorregulação;
+- como ficam a D3, a D7 e a D11 no modo estrutural;
+- as decisões pendentes do X1 no modo relativo.
+
+## X3 — Acomodação do modo estrutural no roadmap (proposta de 29/09, para revisão com o usuário)
+
+O usuário decidiu propor o modo estrutural (X2) já nesta revisão. Esta seção passa por cada fase e diz o que muda. **As fases acima só serão reescritas depois que as decisões do X3.4 forem tomadas.**
+
+### X3.1 — Três achados que simplificam a acomodação (conferidos em R)
+
+1. **Um motor só.** Tudo pode operar sobre uma única matriz de efeitos B, com efeito estático Φ = (I − B)⁻¹p − p.
+   - No modo relativo, B = λW (λ = c, ou c/ρ(W) com ciclo).
+   - No modo estrutural, B é a matriz dos β, com λ = 1 e validação de ρ(B) < 1.
+   - Suficiência, relevância, gatilho e caminhos passam a ser escritos uma vez, sobre B.
+2. **O modo estrutural é Levins padronizado.** Com β_ij = a_ij / |a_ii|, o efeito estrutural é idêntico ao equilíbrio −A⁻¹ da especificação v1.0. No exemplo do PDF, os números são os mesmos: D(I1) = 1,00 e D(I2) = 0,86.
+   - A inversão registrada na B3 vinha de usar a_ij cru, sem dividir pela autorregulação.
+   - **No modo estrutural, o conflito da D14 (Levins × propagação) desaparece.**
+3. **O motor temporal já tem a forma certa.** Hoje o passo é x(t+1) = (1 + g − sr)·x + W·x + p. A persistência a = 1 − sr + g já existe. O modo estrutural só precisa de um padrão diferente de autorregulação:
+   - com a = 0, sem memória, a simulação converge para a leitura estática;
+   - além disso, "carga que chega ao Estado" e "nível do Estado" viram a mesma coisa, porque x_S(t+1) = Σβ·x_j(t) + p_S;
+   - **os dois critérios de gatilho da D11 coincidem quando a = 0**, e o conflito do X1 se resolve no modo estrutural.
+
+### X3.2 — Revisão fase a fase
+
+| Fase / item | Efeito do modo estrutural | Ação proposta |
+|---|---|---|
+| **0** (0.1–0.8, bugs) | Independente | Mantém; fazer primeiro. As validações da 0.6/0.7 incluem os campos novos (β, faixa) |
+| **1.1** peso em (0, 1] | Compatível: \|β\| ≤ 1 com uma origem por nó | Mantém. O sinal continua em `interaction_type` |
+| **1.2** arquivos antigos | Compatível | Mantém. Arquivo antigo abre no modo relativo; converter para o estrutural é opcional |
+| **1.3** re-parametrizar exemplos | **Muda:** em vez de revisar peso por peso, cada aresta recebe uma classe (fraca/moderada/forte) | Fundir com a E7 (exemplos no modo estrutural) |
+| **A1–A2** modos e "até neutralizar" | Compatível. No modo estrutural com a < 1, o Impacto converge para o efeito estático do cenário, sem crescer sem limite. Pode ficar abaixo de zero se a resposta for mais que suficiente, mas de forma limitada | Mantém. Somar testes do modo estrutural à A6 |
+| **A3** tolerância | Compatível | Mantém |
+| **A6** referências | Os valores atuais valem para o modo relativo | Mantém e adiciona: modo estrutural com a = 0 converge para o efeito estático |
+| **2.5** estabilizador λ | Só existe no modo relativo | Restringir ao modo relativo. No estrutural, bloquear se ρ(B) ≥ 1 |
+| **B1–B2** endpoint_class, v | Independentes | Mantém |
+| **B3** D pela propagação (D14) | No estrutural, D = Levins padronizado (X3.1, achado 2) | Reescrever a D14 e o aviso: o aviso fica só no modo relativo. Refazer o teste de referência da B3 nos dois modos |
+| **B4** ρ (sinal estável) | Reamostragem passa a usar a faixa de β | Adaptar: faixa de β no estrutural, `confidence` no relativo |
+| **B5** eficácia e gap (D15) | Compatível | Mantém |
+| **B7** prioridade | Compatível | Mantém |
+| **C1–C3** gatilho (D7, D8, D11) | No estrutural: um critério só (\|x_S\| em DP comparado ao limiar z); estática e temporal coincidem com a = 0 | Escrever o gatilho sobre B. D7/D11 continuam valendo para o relativo, com o X1 pendente só lá |
+| **C5** validação do limiar | No estrutural o limiar é um nível real, sem teto em 1 | Adaptar a validação por modo |
+| **D1–D2** crescimento | Compatível; a tendência em DP é ref·g/DP = g/CV | Mantém, com a fórmula corrigida (entrada constante) |
+| **2.3 / 2.7** caminhos | No estrutural, o produto dos β é o efeito exato do caminho | 2.7: score do caminho = produto dos β. Mostrar o efeito por caminho |
+| **2.1, 2.2, 2.4, 2.6** | Independentes | Mantêm |
+| **3.10** validação dos modais | Campos novos | Incluir β, faixa, classe, atalhos r²/n e ρ(B) |
+| **3.x** demais | Independentes | Mantêm |
+| **4** publicação | O tutorial ganha uma seção sobre o modo estrutural | Adicionar à A7 e à 1.3 |
+
+### X3.3 — Fase E (nova): modo estrutural
+
+- **E1 — Dados e savepoint.**
+  - `metadata$weight_mode` com os valores `relative` ou `structural`.
+  - Arestas: `weight` passa a ser β no modo estrutural; novos `weight_low`/`weight_high` (faixa) e `strength_class` (fraca/moderada/forte, opcional).
+  - Nós: `sd` ou `cv` opcional (camada de medida).
+  - Savepoint antigo abre como `relative`.
+- **E2 — Formulário de aresta.** Entrada por classe (padrão moderada, 0,45, faixa 0,3–0,6) ou por β direto. Atalhos: r² → |β| e r² + n → faixa. Arestas com valor padrão ficam marcadas.
+- **E3 — Motor único sobre B.**
+  - `effect_matrix(g, mode, c)` devolve B.
+  - `propagate()` passa a receber B.
+  - Validação: ρ(B) < 1 no estrutural, e soma de β² por nó ≤ 1, com aviso.
+  - Regressão: o modo relativo continua byte a byte igual.
+- **E4 — Temporal no modo estrutural.** Persistência a = 1 − sr + g, com padrão a definir (X3.4, Q2). Sem o estabilizador λ.
+- **E5 — Camada de medida e resultados em unidade real.**
+  - O limiar vira nível real (z = (limiar − ref)/DP), sem teto.
+  - Pressão aceita valores acima de 100% ou em unidade real.
+  - Nova tabela "variação em relação aos valores iniciais": nível = ref + DP·z.
+  - Aviso de extrapolação linear.
+- **E6 — Diagnósticos.** R² explicado por nó ("a rede explica X% da variação do Estado") e efeito de cada caminho.
+- **E7 — Exemplos.** Os três exemplos recebem classes no modo estrutural (substitui a 1.3). Tutorial com o exemplo de contaminação.
+
+**Ordem proposta:** 0 → 1.1/1.2 → **E1–E3** (motor único) → A → B → C → D → E4–E7 → 2, 3, 4. Com isso, cada fase de A a D é escrita uma vez, sobre B, e já serve aos dois modos.
+
+### X3.4 — Decisões necessárias antes de reescrever as fases
+
+- **Q1 — O modo relativo continua?**
+  - (a) Os dois modos, com o estrutural como padrão para projetos novos;
+  - (b) só o estrutural, com o relativo apenas para abrir arquivos antigos. As classes qualitativas já cobrem o uso em oficinas sem dados, e o alcance c e a tabela "reach over c" saem;
+  - (c) os dois, com o relativo como padrão.
+- **Q2 — Persistência padrão no modo estrutural.**
+  - a = 0: sem memória; a temporal converge para a estática; nós respondem ao que chega a cada janela;
+  - ou a = 1 − sr, com sr informado por nó: estoques que acumulam, como hoje.
+- **Q3 — O que fazer com o `confidence` atual.** Mapear para a faixa de β (ex.: confiança 1 = faixa estreita) ou manter os dois campos separados.
+- **Q4 — Exemplos.** Os três exemplos passam para o modo estrutural (classes) ou ficam nos dois modos para comparação.
