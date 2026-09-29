@@ -141,7 +141,8 @@ Bugs encontrados por leitura de código. Todos têm correção pequena.
   - r² → |β| = √r² (aviso: vale para origens independentes);
   - r² e n → faixa pelo erro-padrão √((1 − r²)/(n − 2));
 - a faixa aparece preenchida pela classe e pode ser editada;
-- na tabela de arestas e no relatório, marcar as arestas cujo valor veio de classe ou padrão.
+- na tabela de arestas e no relatório, marcar as arestas cujo valor veio de classe ou padrão;
+- **grupos de substitutos** (Anexo X6): valor do efeito (E: β > slope bruto > r² > classe) e incerteza (I: faixa direta > r² + n > faixa da classe). O usuário preenche um de cada grupo; se preencher mais de um, o formulário avisa qual valeu.
 - Validar também em `mod_data.R:781`.
 
 ### 1.3 — Motor único sobre B (D19)
@@ -282,7 +283,7 @@ Janelas fixas, pressão `permanent`:
 - **Testes:** padrão 0,5 em nó novo; arquivo antigo preserva 0; os dois avisos.
 
 ### A7 — Documentação
-**O que fazer:** atualizar a seção temporal do README e do tutorial com os dois modos e o critério "até neutralizar", usando a tabela acima como exemplo didático. **Incluir no README e no tutorial o texto sobre autorregulação do Anexo X4** (pedido do usuário, 29/09). Mensagem central: *"quem faz o Impacto convergir é a autorregulação da cadeia; o modo da resposta decide o esforço; o critério de parada diz em que janela o problema foi resolvido"*. **A mudança de padrão (D2) altera o gráfico temporal do exemplo Gnanapragasam**: regenerar a figura e os números.
+**O que fazer:** atualizar a seção temporal do README e do tutorial com os dois modos e o critério "até neutralizar", usando a tabela acima como exemplo didático. **Incluir no README e no tutorial o texto sobre autorregulação do Anexo X4 e a tabela de parâmetros do Anexo X6**, com os grupos de substitutos (pedido do usuário, 29/09). No tutorial, numa seção "What you need to enter". Mensagem central: *"quem faz o Impacto convergir é a autorregulação da cadeia; o modo da resposta decide o esforço; o critério de parada diz em que janela o problema foi resolvido"*. **A mudança de padrão (D2) altera o gráfico temporal do exemplo Gnanapragasam**: regenerar a figura e os números.
 
 **Pronto quando:** os dois seletores e a duração aparecem com ajuda; a autorregulação tem padrão 0,5, guia e avisos (A8); `permanent`, `permanent` e "até neutralizar" (50 janelas) são os padrões em UI, motor e relatório; os testes A6 passam; o savepoint preserva as escolhas; e o tutorial reflete o novo padrão.
 
@@ -867,3 +868,82 @@ Rascunho em inglês, a língua do README. Entra no README (seção *Data format*
   - o teste D1 ("razão 1,10 com impulso em D") passa a valer para a tendência, e não mais para o desvio de um impulso;
   - o teste D5 com D fora do cenário (0,05 / 0,105 / 0,1655) continua válido.
 - **Validação:** g > 0 deixa de exigir sr ≥ g, porque o crescimento não entra mais na estabilidade do desvio.
+
+## X6 — Parâmetros que o usuário informa (referência para a A7, o README e o tutorial)
+
+Vale para depois da Revisão 2; **(novo)** marca o que ainda não existe no app. **Com só a estrutura (nós, categorias e arestas) e o sinal de cada aresta, a rede roda:**
+- todo o resto recebe um padrão;
+- os resultados ficam qualitativos;
+- o relatório marca as arestas com valor padrão.
+
+**Grupos de substitutos:** parâmetros com a mesma letra se substituem; o usuário preenche **um** deles. Se preencher mais de um, vale a ordem de prioridade indicada.
+- **E, valor do efeito da aresta:** β direto > slope bruto > r² > classe.
+- **I, incerteza da aresta:** faixa direta > r² + n > faixa da classe.
+- **M, variação típica do nó:** DP ou CV (um calcula o outro com o `reference_value`).
+- **F, força no cenário:** % ou unidade real.
+
+O r² aparece em dois grupos: sozinho, dá só o valor (E); com o n, dá o valor e a faixa (E e I).
+
+### X6.1 — Tabela de referência
+
+**Nós**
+
+| Parâmetro | Obrigatório? | Grupo | Padrão se vazio | Para que serve |
+|---|---|---|---|---|
+| `id` | **Sim** | — | — | Identificador |
+| `label` | **Sim** | — | — | Nome exibido |
+| `dpsir_category` | **Sim** | — | — | Driver, Pressure, State, Impact ou Response |
+| `subsystem` | Não | — | vazio | Filtro no grafo |
+| `descriptor` | Não | — | vazio | Descrição em uma frase |
+| `uncertainty` | Não | — | 0,5 | Só visual (borda) e médias em Descriptors |
+| `controllability` | Não | — | 0,5 | Só médias em Descriptors |
+| `self_regulation` | Não | — | **0,5** (D20) | Quanto do desvio se desfaz por janela |
+| `growth_rate` | Não | — | 0 | Tendência do nível de base (D24) |
+| `reference_value` | Não | — | vazio (motor usa 1) | Valor inicial; exigido por limiar, unidade real e tendência em unidade real |
+| `sd` **(novo)** | Não | **M** | vazio | Variação típica, na unidade do nó |
+| CV **(novo)** | Não | **M** | vazio | Variação típica em % do `reference_value` (convertida para `sd`) |
+| `activation_threshold` | Não; só State | — | sem limiar | Ponto de virada em unidade real; exige `reference_value` e M |
+| `endpoint_class` **(novo)** | Não; só Impact | — | ecological | Classe do Impacto (relevância) |
+| `value_v` **(novo)** | Não; só Impact service/welfare | — | 1 | Valor social do Impacto |
+
+**Arestas**
+
+| Parâmetro | Obrigatório? | Grupo | Padrão se vazio | Para que serve |
+|---|---|---|---|---|
+| `from`, `to` | **Sim** | — | — | Origem e destino |
+| `interaction_type` (sinal) | **Sim** | — | **nenhum** (erro) | Se a origem aumenta ou reduz o destino |
+| Classe de força **(novo)** | Não | **E** (e **I** pela faixa da classe) | moderada | Qualitativo: fraca 0,15 (0–0,3), moderada 0,45 (0,3–0,6), forte 0,80 (0,6–1,0) |
+| β (`weight`) **(novo significado)** | Não | **E** | 0,45 | Efeito em DP por DP da origem |
+| r² | Não; atalho, não guardado | **E** (e **I** com n) | — | \|β\| = √r² |
+| n (tamanho da amostra) | Não; atalho, não guardado | **I** (com r²) | — | Faixa pelo erro-padrão √((1 − r²)/(n − 2)) |
+| Slope bruto | Não; conversor, não guardado | **E** | — | β = slope · DP_origem / DP_destino; exige M nos dois nós |
+| Faixa (`weight_low`/`weight_high`) **(novo)** | Não | **I** | faixa da classe | Reamostragem da confiança e de ρ (substitui `confidence`) |
+| `evidence_type` | Não | — | vazio | Tipo de evidência |
+| `reference` | Não | — | vazio | Citação, DOI ou URL |
+
+**Cenário (aba Scenarios)**
+
+| Parâmetro | Obrigatório? | Grupo | Padrão | Observação |
+|---|---|---|---|---|
+| Pressões ativas | **Sim, ao menos uma** | — | nenhuma | Sem pressão, não há o que avaliar |
+| Força em % | Não | **F** | 50% | Pode passar de 100% |
+| Força em unidade real **(novo)** | Não | **F** | — | Exige `reference_value` e M no nó |
+| Respostas ativas e força | Não | F (mesma regra) | nenhuma | Sem resposta, o app mostra só a piora |
+| Modo da pressão e da resposta | Não | — | permanente / permanente | Ou impulso |
+| Duração da simulação | Não | — | até neutralizar, máximo 50 janelas | Ou N janelas fixas |
+| Tolerância de neutralização | Não | — | 5% do baseline | Só rotula a tabela |
+| Critério do gatilho | Não | — | desvio acumulado | Ou carga na janela, ou os dois lado a lado |
+| Baseline sem resposta | Não | — | desligado | Ignora I→R no baseline |
+| Tendências fora do cenário | Não | — | ligado | Crescimento vale mesmo fora do cenário |
+| Número de simulações | Não | — | 300 (semente 42) | 100, 300 ou 1000 |
+
+O slider "How far to trace the effect" (c) sai (D19).
+
+**Cuidados a registrar na tela e no tutorial:**
+- Sem parâmetros, os resultados são qualitativos. O relatório diz quantas arestas usaram classe ou padrão.
+- Numa rede com muitos ciclos, mesmo β = 0,45 em tudo pode dar ρ(B) ≥ 1. A mensagem de bloqueio (1.3) sugere baixar para "fraca" as arestas do ciclo.
+- Com mais de um parâmetro do mesmo grupo preenchido, o formulário avisa qual valeu (ordem de prioridade acima).
+
+### X6.2 — Versão para o tutorial
+
+A mesma tabela, em inglês, entra no tutorial numa seção "What you need to enter", com a frase de abertura: *"Only the structure and the sign of each edge are required. Everything else has a default; fields with the same letter replace each other — fill in one."* Ela entra no `docs/tutorial.html` na A7, junto com a implementação, para o tutorial servido pelo app (link "Help") não descrever campos que ainda não existem.
