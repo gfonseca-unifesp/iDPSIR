@@ -17,18 +17,14 @@
 # revision is that sufficiency()'s mitigation for that same scenario comes
 # out negative (correctly "helps").
 
-# Revisao 2, Fase 1: the Mangi CSVs still hold the older relative weights
-# (item 1.6 re-parametrizes them), so the fixture converts them exactly as
-# an older file is converted on load (beta = lambda * w). That keeps
-# every number below - verified against the Revisao 1 static reading -
-# unchanged, which is itself the regression test for the conversion.
+# Revisao 2, item 1.6: data/mangi2007_edges.csv now holds standardized
+# strengths (beta) - the older weights converted with beta = lambda * w
+# (c = 0.5), rounded to 3 decimals. The numbers below, from the Revisao 1
+# static reading, therefore still hold within the 1e-3 tolerance.
 mangi_graph <- function() {
   nodes <- data.table::fread("../../data/mangi2007_nodes.csv", data.table = FALSE)
   edges <- data.table::fread("../../data/mangi2007_edges.csv", data.table = FALSE)
-  nodes <- normalize_dpsir_nodes(nodes)
-  edges$from <- trimws(edges$from); edges$to <- trimws(edges$to)
-  edges <- normalize_dpsir_edges(convert_legacy_weights(nodes, edges)$edges)
-  build_igraph(nodes, edges, get_default_dpsir_schema())
+  build_igraph(normalize_dpsir_nodes(nodes), normalize_dpsir_edges(edges), get_default_dpsir_schema())
 }
 
 zero_press <- function(g) {
@@ -92,7 +88,7 @@ test_that("propagate never fails - not even on the network already known to be s
   nodes <- data.table::fread("../../data/sample_nodes.csv", data.table = FALSE)
   edges <- data.table::fread("../../data/sample_edges.csv", data.table = FALSE)
   nodes <- normalize_dpsir_nodes(nodes)
-  edges <- normalize_dpsir_edges(convert_legacy_weights(nodes, edges)$edges)
+  edges <- normalize_dpsir_edges(edges)
   g <- build_igraph(nodes, edges, get_default_dpsir_schema())
 
   W <- build_signed_matrix(g)

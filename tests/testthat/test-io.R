@@ -170,7 +170,7 @@ test_that("read_savepoint blocks an edge with no sign, and reports optional-colu
   on.exit(unlink(tmp))
   expect_error(read_savepoint(tmp), "interaction_type is empty")
 
-  old <- read_savepoint("../../docs/example_fisheries.idpsir.json")
+  old <- read_savepoint("fixtures/legacy_fisheries.idpsir.json")
   expect_true(any(grepl("^Savepoint nodes: column 'temporal_scale'", old$warnings)))
 })
 
@@ -178,7 +178,7 @@ test_that("read_savepoint blocks an edge with no sign, and reports optional-colu
 # converted on load to beta = lambda * w, with the lambda the older static
 # reading used - so its static numbers are exactly the same as before.
 test_that("read_savepoint converts an older savepoint and reproduces the older static reading exactly", {
-  path <- "../../docs/example_mangi.idpsir.json"
+  path <- "fixtures/legacy_mangi.idpsir.json"
   raw <- jsonlite::read_json(path, simplifyVector = TRUE)
   converted <- read_savepoint(path)
 
@@ -201,7 +201,7 @@ test_that("read_savepoint converts an older savepoint and reproduces the older s
 })
 
 test_that("a structural savepoint is not converted again, and legacy confidence becomes the band", {
-  converted <- read_savepoint("../../docs/example_mangi.idpsir.json")
+  converted <- read_savepoint("fixtures/legacy_mangi.idpsir.json")
   sp <- build_savepoint(converted$schema, converted$nodes, converted$edges)
   tmp <- tempfile(fileext = ".idpsir.json")
   on.exit(unlink(tmp))

@@ -32,3 +32,4 @@ desktop.ini
 *.idpsir.json
 # ...exceto os exemplos didaticos versionados para o tutorial (docs/)
 !docs/*.idpsir.json
+!tests/testthat/fixtures/*.idpsir.json

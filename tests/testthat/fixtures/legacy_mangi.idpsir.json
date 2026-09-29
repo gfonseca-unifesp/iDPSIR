@@ -5,8 +5,7 @@
     "author": "fonse",
     "created_at": "2026-08-01 16:40:22.883745",
     "notes": "",
-    "updated_at": "2026-08-01 16:40:22.883745",
-    "weight_mode": "structural"
+    "updated_at": "2026-08-01 16:40:22.883745"
   },
   "schema": [
     {
@@ -285,405 +284,281 @@
     {
       "from": "D1",
       "to": "P1",
-      "weight": 0.366,
-      "weight_low": 0.329,
-      "weight_high": 0.403,
-      "strength_class": "moderate",
-      "weight_source": "given",
+      "weight": 3,
+      "confidence": 0.8,
       "interaction_type": "positive",
       "evidence_type": "expert_assessment",
-      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)",
-      "confidence": 0.7978
+      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
     },
     {
       "from": "D2",
       "to": "P1",
-      "weight": 0.244,
-      "weight_low": 0.201,
-      "weight_high": 0.287,
-      "strength_class": "weak",
-      "weight_source": "given",
+      "weight": 2,
+      "confidence": 0.65,
       "interaction_type": "positive",
       "evidence_type": "expert_assessment",
-      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)",
-      "confidence": 0.6475
+      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
     },
     {
       "from": "D2",
       "to": "P2",
-      "weight": 0.244,
-      "weight_low": 0.207,
-      "weight_high": 0.281,
-      "strength_class": "weak",
-      "weight_source": "given",
+      "weight": 2,
+      "confidence": 0.7,
       "interaction_type": "positive",
       "evidence_type": "expert_assessment",
-      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)",
-      "confidence": 0.6967
+      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
     },
     {
       "from": "D3",
       "to": "P1",
-      "weight": 0.244,
-      "weight_low": 0.207,
-      "weight_high": 0.281,
-      "strength_class": "weak",
-      "weight_source": "given",
+      "weight": 2,
+      "confidence": 0.7,
       "interaction_type": "positive",
       "evidence_type": "expert_assessment",
-      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)",
-      "confidence": 0.6967
+      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
     },
     {
       "from": "D4",
       "to": "P1",
-      "weight": 0.244,
-      "weight_low": 0.201,
-      "weight_high": 0.287,
-      "strength_class": "weak",
-      "weight_source": "given",
+      "weight": 2,
+      "confidence": 0.65,
       "interaction_type": "positive",
       "evidence_type": "expert_assessment",
-      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)",
-      "confidence": 0.6475
+      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
     },
     {
       "from": "D4",
       "to": "P2",
-      "weight": 0.122,
-      "weight_low": 0.095,
-      "weight_high": 0.149,
-      "strength_class": "weak",
-      "weight_source": "given",
+      "weight": 1,
+      "confidence": 0.55,
       "interaction_type": "positive",
       "evidence_type": "expert_assessment",
-      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)",
-      "confidence": 0.5574
+      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
     },
     {
       "from": "P1",
       "to": "S2",
-      "weight": 0.366,
-      "weight_low": 0.339,
-      "weight_high": 0.393,
-      "strength_class": "moderate",
-      "weight_source": "given",
+      "weight": 3,
+      "confidence": 0.85,
       "interaction_type": "negative",
       "evidence_type": "monitoring",
-      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)",
-      "confidence": 0.8525
+      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
     },
     {
       "from": "P1",
       "to": "S3",
-      "weight": 0.244,
-      "weight_low": 0.22,
-      "weight_high": 0.268,
-      "strength_class": "weak",
-      "weight_source": "given",
+      "weight": 2,
+      "confidence": 0.8,
       "interaction_type": "negative",
       "evidence_type": "monitoring",
-      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)",
-      "confidence": 0.8033
+      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
     },
     {
       "from": "P1",
       "to": "S4",
-      "weight": 0.244,
-      "weight_low": 0.201,
-      "weight_high": 0.287,
-      "strength_class": "weak",
-      "weight_source": "given",
+      "weight": 2,
+      "confidence": 0.65,
       "interaction_type": "negative",
       "evidence_type": "observational",
-      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)",
-      "confidence": 0.6475
+      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
     },
     {
       "from": "P2",
       "to": "S1",
-      "weight": 0.366,
-      "weight_low": 0.339,
-      "weight_high": 0.393,
-      "strength_class": "moderate",
-      "weight_source": "given",
+      "weight": 3,
+      "confidence": 0.85,
       "interaction_type": "negative",
       "evidence_type": "monitoring",
-      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)",
-      "confidence": 0.8525
+      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
     },
     {
       "from": "P2",
       "to": "S4",
-      "weight": 0.244,
-      "weight_low": 0.207,
-      "weight_high": 0.281,
-      "strength_class": "weak",
-      "weight_source": "given",
+      "weight": 2,
+      "confidence": 0.7,
       "interaction_type": "negative",
       "evidence_type": "observational",
-      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)",
-      "confidence": 0.6967
+      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
     },
     {
       "from": "S2",
       "to": "I1",
-      "weight": 0.366,
-      "weight_low": 0.329,
-      "weight_high": 0.403,
-      "strength_class": "moderate",
-      "weight_source": "given",
+      "weight": 3,
+      "confidence": 0.8,
       "interaction_type": "negative",
       "evidence_type": "observational",
-      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)",
-      "confidence": 0.7978
+      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
     },
     {
       "from": "S3",
       "to": "I1",
-      "weight": 0.244,
-      "weight_low": 0.207,
-      "weight_high": 0.281,
-      "strength_class": "weak",
-      "weight_source": "given",
+      "weight": 2,
+      "confidence": 0.7,
       "interaction_type": "negative",
       "evidence_type": "observational",
-      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)",
-      "confidence": 0.6967
+      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
     },
     {
       "from": "S2",
       "to": "I3",
-      "weight": 0.244,
-      "weight_low": 0.207,
-      "weight_high": 0.281,
-      "strength_class": "weak",
-      "weight_source": "given",
+      "weight": 2,
+      "confidence": 0.7,
       "interaction_type": "negative",
       "evidence_type": "expert_assessment",
-      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)",
-      "confidence": 0.6967
+      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
     },
     {
       "from": "S1",
       "to": "I2",
-      "weight": 0.366,
-      "weight_low": 0.329,
-      "weight_high": 0.403,
-      "strength_class": "moderate",
-      "weight_source": "given",
+      "weight": 3,
+      "confidence": 0.8,
       "interaction_type": "negative",
       "evidence_type": "observational",
-      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)",
-      "confidence": 0.7978
+      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
     },
     {
       "from": "S4",
       "to": "I2",
-      "weight": 0.244,
-      "weight_low": 0.214,
-      "weight_high": 0.274,
-      "strength_class": "weak",
-      "weight_source": "given",
+      "weight": 2,
+      "confidence": 0.75,
       "interaction_type": "negative",
       "evidence_type": "observational",
-      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)",
-      "confidence": 0.7541
+      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
     },
     {
       "from": "I1",
       "to": "R1",
-      "weight": 0.244,
-      "weight_low": 0.183,
-      "weight_high": 0.305,
-      "strength_class": "weak",
-      "weight_source": "given",
+      "weight": 2,
+      "confidence": 0.5,
       "interaction_type": "positive",
       "evidence_type": "policy_document",
-      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)",
-      "confidence": 0.5
+      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
     },
     {
       "from": "I1",
       "to": "R3",
-      "weight": 0.244,
-      "weight_low": 0.183,
-      "weight_high": 0.305,
-      "strength_class": "weak",
-      "weight_source": "given",
+      "weight": 2,
+      "confidence": 0.5,
       "interaction_type": "positive",
       "evidence_type": "policy_document",
-      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)",
-      "confidence": 0.5
+      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
     },
     {
       "from": "I2",
       "to": "R1",
-      "weight": 0.244,
-      "weight_low": 0.189,
-      "weight_high": 0.299,
-      "strength_class": "weak",
-      "weight_source": "given",
+      "weight": 2,
+      "confidence": 0.55,
       "interaction_type": "positive",
       "evidence_type": "policy_document",
-      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)",
-      "confidence": 0.5492
+      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
     },
     {
       "from": "I3",
       "to": "R4",
-      "weight": 0.244,
-      "weight_low": 0.183,
-      "weight_high": 0.305,
-      "strength_class": "weak",
-      "weight_source": "given",
+      "weight": 2,
+      "confidence": 0.5,
       "interaction_type": "positive",
       "evidence_type": "policy_document",
-      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)",
-      "confidence": 0.5
+      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
     },
     {
       "from": "R1",
       "to": "P1",
-      "weight": 0.244,
-      "weight_low": 0.207,
-      "weight_high": 0.281,
-      "strength_class": "weak",
-      "weight_source": "given",
+      "weight": 2,
+      "confidence": 0.7,
       "interaction_type": "negative",
       "evidence_type": "management_plan",
-      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)",
-      "confidence": 0.6967
+      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
     },
     {
       "from": "R1",
       "to": "S2",
-      "weight": 0.366,
-      "weight_low": 0.329,
-      "weight_high": 0.403,
-      "strength_class": "moderate",
-      "weight_source": "given",
+      "weight": 3,
+      "confidence": 0.8,
       "interaction_type": "positive",
       "evidence_type": "monitoring",
-      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)",
-      "confidence": 0.7978
+      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
     },
     {
       "from": "R1",
       "to": "S1",
-      "weight": 0.244,
-      "weight_low": 0.201,
-      "weight_high": 0.287,
-      "strength_class": "weak",
-      "weight_source": "given",
+      "weight": 2,
+      "confidence": 0.65,
       "interaction_type": "positive",
       "evidence_type": "monitoring",
-      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)",
-      "confidence": 0.6475
+      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
     },
     {
       "from": "R2",
       "to": "P2",
-      "weight": 0.366,
-      "weight_low": 0.32,
-      "weight_high": 0.412,
-      "strength_class": "moderate",
-      "weight_source": "given",
+      "weight": 3,
+      "confidence": 0.75,
       "interaction_type": "negative",
       "evidence_type": "management_plan",
-      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)",
-      "confidence": 0.7486
+      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
     },
     {
       "from": "R3",
       "to": "P1",
-      "weight": 0.244,
-      "weight_low": 0.201,
-      "weight_high": 0.287,
-      "strength_class": "weak",
-      "weight_source": "given",
+      "weight": 2,
+      "confidence": 0.65,
       "interaction_type": "negative",
       "evidence_type": "management_plan",
-      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)",
-      "confidence": 0.6475
+      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
     },
     {
       "from": "R3",
       "to": "P2",
-      "weight": 0.366,
-      "weight_low": 0.32,
-      "weight_high": 0.412,
-      "strength_class": "moderate",
-      "weight_source": "given",
+      "weight": 3,
+      "confidence": 0.75,
       "interaction_type": "negative",
       "evidence_type": "management_plan",
-      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)",
-      "confidence": 0.7486
+      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
     },
     {
       "from": "R4",
       "to": "D4",
-      "weight": 0.244,
-      "weight_low": 0.195,
-      "weight_high": 0.293,
-      "strength_class": "weak",
-      "weight_source": "given",
+      "weight": 2,
+      "confidence": 0.6,
       "interaction_type": "negative",
       "evidence_type": "management_plan",
-      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)",
-      "confidence": 0.5984
+      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
     },
     {
       "from": "R4",
       "to": "D2",
-      "weight": 0.122,
-      "weight_low": 0.095,
-      "weight_high": 0.149,
-      "strength_class": "weak",
-      "weight_source": "given",
+      "weight": 1,
+      "confidence": 0.55,
       "interaction_type": "negative",
       "evidence_type": "expert_assessment",
-      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)",
-      "confidence": 0.5574
+      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
     },
     {
       "from": "R4",
       "to": "P1",
-      "weight": 0.244,
-      "weight_low": 0.195,
-      "weight_high": 0.293,
-      "strength_class": "weak",
-      "weight_source": "given",
+      "weight": 2,
+      "confidence": 0.6,
       "interaction_type": "negative",
       "evidence_type": "expert_assessment",
-      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)",
-      "confidence": 0.5984
+      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
     },
     {
       "from": "R5",
       "to": "P1",
-      "weight": 0.244,
-      "weight_low": 0.195,
-      "weight_high": 0.293,
-      "strength_class": "weak",
-      "weight_source": "given",
+      "weight": 2,
+      "confidence": 0.6,
       "interaction_type": "negative",
       "evidence_type": "management_plan",
-      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)",
-      "confidence": 0.5984
+      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
     },
     {
       "from": "R5",
       "to": "P2",
-      "weight": 0.244,
-      "weight_low": 0.201,
-      "weight_high": 0.287,
-      "strength_class": "weak",
-      "weight_source": "given",
+      "weight": 2,
+      "confidence": 0.65,
       "interaction_type": "negative",
       "evidence_type": "management_plan",
-      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)",
-      "confidence": 0.6475
+      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
     }
   ],
   "positions": {},
@@ -703,6 +578,7 @@
         "id": "R2",
         "strength": 100
       }
-    ]
+    ],
+    "effect_horizon": 0.5
   }
 }
