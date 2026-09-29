@@ -203,8 +203,11 @@ preflight_import_edges <- function(edges_raw) {
     ))
   }
 
+  # Revisao 2, item 0.7: interaction_type is no longer optional - the sign
+  # of an edge has no safe default (a missing sign used to silently become
+  # +1, i.e. "increases"), so a missing column blocks the import below.
   optional_defaults <- c(
-    weight = "1", confidence = "1", interaction_type = "an uncolored/undashed edge",
+    weight = "1", confidence = "1",
     evidence_type = "blank", reference = "blank"
   )
   missing_optional <- setdiff(names(optional_defaults), present)
@@ -216,14 +219,26 @@ preflight_import_edges <- function(edges_raw) {
   }
 
   if (length(missing_required) == 0) {
-    if ("interaction_type" %in% present) {
+    if (!"interaction_type" %in% present) {
+      blocking <- c(blocking, paste(
+        "Edges file: missing column 'interaction_type'. Every edge needs a sign",
+        "(positive = increases the target, negative = reduces it); there is no safe default."
+      ))
+    } else {
       raw <- edges_raw$interaction_type
       vals <- trimws(as.character(raw))
-      bad <- which(!.pf_is_blank(raw) & !vals %in% c("positive", "negative"))
+      blank <- .pf_is_blank(raw)
+      bad <- which(!blank & !vals %in% c("positive", "negative"))
       if (length(bad) > 0) {
         blocking <- c(blocking, sprintf(
           "Edges file, row %d: interaction_type '%s' must be positive or negative.",
           bad + 1, vals[bad]
+        ))
+      }
+      if (any(blank)) {
+        blocking <- c(blocking, sprintf(
+          "Edges file, row %d: interaction_type is empty - every edge needs a sign (positive or negative).",
+          which(blank) + 1
         ))
       }
     }
@@ -416,13 +431,14 @@ normalize_dpsir_edges <- function(edges) {
   edges$from <- trimws(as.character(edges$from))
   edges$to <- trimws(as.character(edges$to))
 
-  if ("weight" %in% names(edges)) {
-    edges$weight <- as.numeric(edges$weight)
-  }
+  # Revisao 2, item 0.7: the documented defaults (weight 1, confidence 1)
+  # now apply to a blank CELL as well, not only to a column that is missing
+  # altogether - a single empty weight used to stay NA and break the math.
+  edges$weight <- if ("weight" %in% names(edges)) as.numeric(edges$weight) else 1
+  edges$weight[is.na(edges$weight)] <- 1
 
-  if ("confidence" %in% names(edges)) {
-    edges$confidence <- as.numeric(edges$confidence)
-  }
+  edges$confidence <- if ("confidence" %in% names(edges)) as.numeric(edges$confidence) else 1
+  edges$confidence[is.na(edges$confidence)] <- 1
 
   # `threshold` foi movido de aresta pra no (ver normalize_dpsir_nodes()'s
   # `activation_threshold`) - removida aqui, nao so ignorada, pelo mesmo
@@ -596,6 +612,22 @@ validate_dpsir_edges <- function(nodes, edges, schema = get_default_dpsir_schema
 
   validate_edge_node_existence(nodes, edges)
   validate_dpsir_edge_logic(nodes, edges, schema)
+
+  # Revisao 2, item 0.7: a blank sign used to be read as +1 by
+  # build_interaction_matrix(). It is an error now, wherever the edge came
+  # from (form, CSV, savepoint).
+  sign <- if ("interaction_type" %in% names(edges)) trimws(as.character(edges$interaction_type)) else rep(NA_character_, nrow(edges))
+  bad_sign <- which(is.na(sign) | !sign %in% c("positive", "negative"))
+  if (length(bad_sign) > 0) {
+    stop(
+      paste0(
+        "Every edge needs a sign (positive or negative). Missing or invalid on: ",
+        paste(sprintf("%s -> %s", edges$from[bad_sign], edges$to[bad_sign]), collapse = ", "),
+        "."
+      ),
+      call. = FALSE
+    )
+  }
 
   invisible(TRUE)
 }

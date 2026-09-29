@@ -150,7 +150,8 @@ mod_responses_ui <- function(id) {
   )
 }
 
-mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state = NULL) {
+mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state = NULL,
+                                 epoch = NULL, graph_version = NULL) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
@@ -162,6 +163,12 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
     # never written back into it, so a user's later manual changes are never
     # silently reverted by this module.
     restored <- function() if (is.null(restore_state)) NULL else restore_state()
+    # Revisao 2, item 0.4: what the scenario controls are (re)drawn with -
+    # the last state the user had on screen when there is one (so a rebuild
+    # after editing the network does not reset their scenario), else the
+    # restored savepoint state. isolate() so moving a slider never
+    # re-renders the whole panel.
+    seed_state <- function() isolate(last_live_state()) %||% restored()
     # `strengths` is a named atomic numeric vector (from read_savepoint()),
     # not a list - `[[` on an atomic vector throws "subscript out of
     # bounds" for a name that isn't present (unlike a list, where it
@@ -185,9 +192,20 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
       n[n$dpsir_category %in% feedback_categories, , drop = FALSE]
     })
 
+    # Revisao 2, item 0.4: the scenario controls only exist once the
+    # Scenarios tab has actually been drawn for the CURRENT graph (Explore is
+    # built lazily, and hidden outputs are suspended). Until then, input$active_*
+    # is either missing or left over from a previous project with the same
+    # ids - so current_scenario_state() falls back to the restored savepoint
+    # state instead of saving an empty (or stale) scenario. Reset at a higher
+    # priority than the outputs, so a re-render in the same flush wins.
+    controls_live <- reactiveVal(FALSE)
+    observeEvent(graph(), controls_live(FALSE), ignoreNULL = FALSE, priority = 100)
+
     output$response_controls <- renderUI({
       req(graph())
       rn <- response_nodes()
+      controls_live(TRUE)
 
       if (nrow(rn) == 0) {
         return(tags$div(
@@ -196,7 +214,7 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
         ))
       }
 
-      rs <- restored()
+      rs <- seed_state()
 
       rows <- lapply(seq_len(nrow(rn)), function(i) {
         node_id <- rn$id[i]
@@ -235,7 +253,7 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
         ))
       }
 
-      rs <- restored()
+      rs <- seed_state()
 
       rows <- lapply(seq_len(nrow(pn)), function(i) {
         node_id <- pn$id[i]
@@ -254,7 +272,7 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
 
     output$effect_horizon_ui <- renderUI({
       req(graph())
-      rs <- restored()
+      rs <- seed_state()
       sliderInput(
         ns("effect_horizon"), "How far to trace the effect",
         min = 0.2, max = 0.8, step = 0.05,
@@ -305,18 +323,28 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
       # existente na rede (nao so as ativas), perceptivel numa rede maior;
       # sem isso o clique em "Apply scenario" nao dava nenhum feedback
       # visual ate a tela inteira atualizar de uma vez, parecendo travado.
-      withProgress(message = "Computing scenario results", value = 0, {
-        incProgress(0.1, detail = "Reach")
-        reach <- response_reach(graph(), active_ids)
+      # Revisao 2, item 0.5: an error in an observer ends the whole Shiny
+      # session (the app greys out and every tab stops responding). Catch
+      # it here, keep the previous results on screen and tell the user.
+      ok <- tryCatch({
+        withProgress(message = "Computing scenario results", value = 0, {
+          incProgress(0.1, detail = "Reach")
+          reach <- response_reach(graph(), active_ids)
 
-        incProgress(0.2, detail = "Sufficiency")
-        suff_df <- sufficiency(graph(), p_D, press, c = c_value)
-        suff_reach_over_c <- sufficiency_reach_over_c(graph(), p_D, press)
+          incProgress(0.2, detail = "Sufficiency")
+          suff_df <- sufficiency(graph(), p_D, press, c = c_value)
+          suff_reach_over_c <- sufficiency_reach_over_c(graph(), p_D, press)
 
-        incProgress(0.3, detail = "Confidence (resampling edge weights)")
-        suff_confidence_matrix <- build_confidence_matrix(graph(), p_D, rn, c = c_value)
-        incProgress(0.4, detail = "Done")
+          incProgress(0.3, detail = "Confidence (resampling edge weights)")
+          suff_confidence_matrix <- build_confidence_matrix(graph(), p_D, rn, c = c_value)
+          incProgress(0.4, detail = "Done")
+        })
+        TRUE
+      }, error = function(e) {
+        showNotification(paste("Could not apply the scenario:", conditionMessage(e)), type = "error", duration = NULL)
+        FALSE
       })
+      if (!ok) return()
 
       current_scenario(list(
         name = input$scenario_name,
@@ -487,15 +515,23 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
 
       windows <- input$temporal_windows
 
-      withProgress(message = "Simulating temporal windows", value = 0, {
-        simulate_temporal_pair(
-          graph(), sc$p_D, sc$press, windows = windows,
-          mode_D = input$temporal_mode_pressure, mode_R = input$temporal_mode_response,
-          on_step = function(t, total) {
-            incProgress(1 / total, detail = sprintf("Window %d of %d", t, total))
-          }
-        )
-      })
+      # Revisao 2, item 0.5: report the failure instead of leaving the
+      # table/chart blank with Shiny's terse grey error text.
+      tryCatch(
+        withProgress(message = "Simulating temporal windows", value = 0, {
+          simulate_temporal_pair(
+            graph(), sc$p_D, sc$press, windows = windows,
+            mode_D = input$temporal_mode_pressure, mode_R = input$temporal_mode_response,
+            on_step = function(t, total) {
+              incProgress(1 / total, detail = sprintf("Window %d of %d", t, total))
+            }
+          )
+        }),
+        error = function(e) {
+          showNotification(paste("The temporal simulation failed:", conditionMessage(e)), type = "error", duration = NULL)
+          req(FALSE)
+        }
+      )
     })
 
     output$temporal_stability_note <- renderUI({
@@ -697,6 +733,41 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
       comparison_selection(sel)
     })
 
+    # Revisao 2, item 0.2: a new project (any Start action - see
+    # mod_data.R's rv$epoch) must not inherit the previous project's
+    # applied/saved scenarios, comparison selection or name counter.
+    reset_scenario_state <- function() {
+      current_scenario(NULL)
+      saved_scenarios$list <- list()
+      comparison_selection(NULL)
+      scenario_counter(1)
+      updateTextInput(session, "scenario_name", value = "Scenario 1")
+    }
+
+    if (!is.null(epoch)) {
+      observeEvent(epoch(), reset_scenario_state(), ignoreInit = TRUE)
+    }
+
+    # Revisao 2, item 0.3: saved scenarios store press vectors and results
+    # computed on the network as it was when they were saved. Once the
+    # network changes and the graph is rebuilt (mod_data.R's graph_version),
+    # those results no longer describe this network - clear them rather
+    # than let the report mix old and new numbers.
+    if (!is.null(graph_version)) {
+      observeEvent(graph_version(), {
+        n_saved <- length(saved_scenarios$list)
+        current_scenario(NULL)
+        saved_scenarios$list <- list()
+        comparison_selection(NULL)
+        if (n_saved > 0) {
+          showNotification(
+            sprintf("The network changed and was rebuilt: %d saved scenario(s) were cleared. Apply and save them again.", n_saved),
+            type = "warning", duration = 10
+          )
+        }
+      }, ignoreInit = TRUE)
+    }
+
     selected_scenario_names <- reactive({
       sel <- comparison_selection()
       req(sel)
@@ -747,7 +818,7 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
     # updates on "Apply scenario") - so a savepoint captures whatever the
     # user has configured on screen right now, applied or not. Read by
     # mod_wizard.R's download handler; never written to by this module.
-    current_scenario_state <- reactive({
+    live_state_from_inputs <- function() {
       rn <- response_nodes()
       pn <- pressure_nodes()
 
@@ -770,6 +841,41 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
         pressure_strengths = pressure_strengths,
         effect_horizon = input$effect_horizon %||% 0.5
       )
+    }
+
+    # Revisao 2, item 0.4: the last state read from live controls survives
+    # the controls going stale (network edited, graph invalidated) - so a
+    # user who configured a scenario, went back to fix a label and saved
+    # keeps what they configured, not the older savepoint's scenario.
+    last_live_state <- reactiveVal(NULL)
+    observe({
+      req(isTRUE(controls_live()))
+      last_live_state(live_state_from_inputs())
+    })
+    if (!is.null(epoch)) {
+      observeEvent(epoch(), last_live_state(NULL), ignoreInit = TRUE, priority = 100)
+    }
+
+    # Keeps only factors that still exist in the network, so a fallback
+    # state never saves ids of nodes removed since it was captured.
+    keep_existing_ids <- function(st) {
+      if (is.null(st)) return(NULL)
+      ids <- nodes()$id
+      st$response_active <- intersect(st$response_active, ids)
+      st$response_strengths <- st$response_strengths[names(st$response_strengths) %in% ids]
+      st$pressure_active <- intersect(st$pressure_active, ids)
+      st$pressure_strengths <- st$pressure_strengths[names(st$pressure_strengths) %in% ids]
+      st
+    }
+
+    # Revisao 1, Fase 3 / Revisao 2, item 0.4: the scenario state saved into
+    # the savepoint. Live controls when they exist for the current graph;
+    # otherwise the last live state, and failing that the restored one.
+    current_scenario_state <- reactive({
+      if (isTRUE(controls_live())) {
+        return(live_state_from_inputs())
+      }
+      keep_existing_ids(last_live_state() %||% restored())
     })
 
     list(

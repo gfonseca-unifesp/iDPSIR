@@ -217,32 +217,39 @@ compute_effective_layout <- function(
 # TOOLTIPS
 # =====================================================
 
+# Revisao 2, item 0.8: every free-text field is HTML-escaped before it goes
+# into the tooltip, which vis.js renders as HTML. A shared savepoint with a
+# label like `<img src=x onerror=...>` used to run script in the viewer's
+# browser - including on the public shinylive demo.
+tooltip_text <- function(x, empty = "-") {
+  x <- as.character(x)
+  out <- htmltools::htmlEscape(ifelse(is.na(x), "", x))
+  ifelse(is.na(x) | trimws(x) == "", empty, out)
+}
+
 build_node_tooltip <- function(nodes) {
-  descriptor_line <- ifelse(
-    is.na(nodes$descriptor) | nodes$descriptor == "",
-    "",
-    paste0("<i>", nodes$descriptor, "</i><br>")
-  )
+  descriptor <- tooltip_text(nodes$descriptor, empty = "")
+  descriptor_line <- ifelse(descriptor == "", "", paste0("<i>", descriptor, "</i><br>"))
 
   glue::glue(
-    "<b>{nodes$label}</b><br>",
+    "<b>{tooltip_text(nodes$label)}</b><br>",
     "{descriptor_line}",
-    "Category: {nodes$dpsir_category}<br>",
-    "Subsystem: {ifelse(is.na(nodes$subsystem) | nodes$subsystem == '', '-', nodes$subsystem)}<br>",
-    "Uncertainty: {ifelse(is.na(nodes$uncertainty), '-', round(nodes$uncertainty, 2))}<br>",
-    "Controllability: {ifelse(is.na(nodes$controllability), '-', round(nodes$controllability, 2))}<br>",
-    "Activation threshold: {ifelse(is.na(nodes$activation_threshold), '-', nodes$activation_threshold)}"
+    "Category: {tooltip_text(nodes$dpsir_category)}<br>",
+    "Subsystem: {tooltip_text(nodes$subsystem)}<br>",
+    "Uncertainty: {ifelse(is.na(nodes$uncertainty), '-', round(as.numeric(nodes$uncertainty), 2))}<br>",
+    "Controllability: {ifelse(is.na(nodes$controllability), '-', round(as.numeric(nodes$controllability), 2))}<br>",
+    "Activation threshold: {tooltip_text(nodes$activation_threshold)}"
   )
 }
 
 build_edge_tooltip <- function(edges) {
   glue::glue(
-    "{edges$from} &rarr; {edges$to}<br>",
-    "Weight: {ifelse(is.na(edges$weight), '-', edges$weight)}<br>",
-    "Confidence: {ifelse(is.na(edges$confidence), '-', edges$confidence)}<br>",
-    "Interaction: {ifelse(is.na(edges$interaction_type) | edges$interaction_type == '', '-', edges$interaction_type)}<br>",
-    "Evidence: {ifelse(is.na(edges$evidence_type) | edges$evidence_type == '', '-', edges$evidence_type)}<br>",
-    "Reference: {ifelse(is.na(edges$reference) | edges$reference == '', '-', edges$reference)}"
+    "{tooltip_text(edges$from)} &rarr; {tooltip_text(edges$to)}<br>",
+    "Weight: {tooltip_text(edges$weight)}<br>",
+    "Confidence: {tooltip_text(edges$confidence)}<br>",
+    "Interaction: {tooltip_text(edges$interaction_type)}<br>",
+    "Evidence: {tooltip_text(edges$evidence_type)}<br>",
+    "Reference: {tooltip_text(edges$reference)}"
   )
 }
 

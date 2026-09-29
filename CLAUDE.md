@@ -2593,6 +2593,22 @@ eram só andaime pra achar a causa, não fazem sentido em produção.
 
 ## Próximo
 
+**Revisão 2 em andamento** (`ROADMAP_REVISAO2_iDPSIR.md`, branch `roadmap-revisao2`; decisões D1–D24).
+**Fase 0 concluída, na branch `revisao2-fase0`:** 0.1 (editar nós/arestas invalida o
+grafo; `rv$graph <- NULL` via observer em `mod_data.R`), 0.2 (`epoch` em `mod_data`
+zera cenários/snapshots/contadores em `mod_responses`/`mod_graph` a cada Start), 0.3
+(`align_press_vector()` em `R/sufficiency.R`: vetores de cenário alinhados por nome
+em `sufficiency*()` e `simulate_temporal_pair()`; `graph_version` limpa cenários salvos
+quando a rede muda e é reconstruída), 0.4 (`current_scenario_state` usa o último
+estado da tela ou o restaurado quando os controles ainda não existem para o grafo
+atual), 0.5 (`tryCatch` + notificação em Apply scenario, simulação temporal e
+download do relatório), 0.6 (`read_savepoint()` roda `preflight_import()`; avisos
+aparecem no Start), 0.7 (sinal vazio bloqueia importação e validação; peso/confiança
+vazios numa célula recebem 1), 0.8 (`tooltip_text()` escapa HTML nos tooltips;
+`htmltools` em `required_packages`). 21 asserções novas (novo `test-graph.R`); todos
+os itens verificados no app rodando (R 4.5.1). Observação de teste: seleção de linha
+de DT não reage a clique sintético — usar `Shiny.setInputValue(..._rows_selected)`.
+
 Fase 5 está completa (Marcos A-D). Todos os 4 itens da lista pós-Fase 5 (1:
 exemplo didático, 2a: passos até neutralizar, 2b: threshold opcional por
 aresta, 3: qualidade das figuras, 4: legendas/parametrização) estão feitos.

@@ -239,3 +239,41 @@ test_that("format_reach_over_c_table never produces an empty column name (the re
   expect_equal(names(display)[length(names(display))], "Verdict")
   expect_equal(nrow(display), nrow(src))
 })
+
+# Revisao 2, item 0.3: press vectors are aligned by factor name, never by
+# position - a saved scenario whose vector is out of order, or that predates
+# a node added later, must give the right numbers (or a clear error).
+test_that("sufficiency() aligns press vectors by name: shuffled order gives identical results", {
+  g <- mangi_graph()
+  p_D <- zero_press(g); p_D[c("D1", "D3")] <- 1
+  p_R <- zero_press(g); p_R["R1"] <- 1
+
+  base <- sufficiency(g, p_D, p_R)
+  shuffled <- sufficiency(g, rev(p_D), sample(p_R))
+
+  expect_equal(shuffled, base)
+})
+
+test_that("sufficiency() treats factors missing from a named press vector as 0 (scenario saved before a node was added)", {
+  g <- mangi_graph()
+  p_D_full <- zero_press(g); p_D_full[c("D1", "D3")] <- 1
+  p_R_full <- zero_press(g); p_R_full["R1"] <- 1
+
+  expect_equal(
+    sufficiency(g, p_D_full[c("D1", "D3")], p_R_full["R1"]),
+    sufficiency(g, p_D_full, p_R_full)
+  )
+})
+
+test_that("sufficiency() stops with a clear message when a press vector names a factor not in the network", {
+  g <- mangi_graph()
+  p_D <- zero_press(g); p_D["D1"] <- 1
+  p_R <- c(p_D * 0, R_removed = 1)
+
+  expect_error(sufficiency(g, p_D, p_R), "not in the network: R_removed")
+})
+
+test_that("align_press_vector() rejects an unnamed vector of the wrong length instead of recycling it", {
+  expect_error(align_press_vector(c(1, 0), c("A", "B", "C")), "has 2 values but the network has 3")
+  expect_equal(align_press_vector(c(1, 0, 0), c("A", "B", "C")), c(A = 1, B = 0, C = 0))
+})

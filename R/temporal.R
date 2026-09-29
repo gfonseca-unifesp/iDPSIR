@@ -251,8 +251,9 @@ simulate_temporal_pair <- function(g, p_D, p_R, windows = 5,
   if (is.null(reference_values)) reference_values <- build_reference_values(g)
   if (is.null(threshold_matrix)) threshold_matrix <- build_threshold_matrix(g)
 
-  p_D <- as.numeric(p_D)
-  p_R <- as.numeric(p_R)
+  # Revisao 2, item 0.3: align by name (R/sufficiency.R), never by position.
+  p_D <- unname(align_press_vector(p_D, node_names, "pressure scenario"))
+  p_R <- unname(align_press_vector(p_R, node_names, "response scenario"))
 
   x_baseline <- setNames(rep(0, n), node_names)
   x_scenario <- setNames(rep(0, n), node_names)

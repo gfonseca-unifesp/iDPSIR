@@ -139,7 +139,7 @@ mod_graph_ui <- function(id) {
   )
 }
 
-mod_graph_server <- function(id, schema, nodes, edges, graph, positions, set_positions) {
+mod_graph_server <- function(id, schema, nodes, edges, graph, positions, set_positions, epoch = NULL) {
   moduleServer(id, function(input, output, session) {
     observeEvent(nodes(), {
       n <- nodes()
@@ -465,6 +465,19 @@ mod_graph_server <- function(id, schema, nodes, edges, graph, positions, set_pos
     snapshot_counter <- reactiveVal(1)
     pending_snapshot_name <- reactiveVal(NULL)
     pending_snapshot_caption <- reactiveVal(NULL)
+
+    # Revisao 2, item 0.2: snapshots belong to the project they were taken
+    # in - a new Start action (mod_data.R's rv$epoch) clears them, so project
+    # B's report never shows project A's images.
+    if (!is.null(epoch)) {
+      observeEvent(epoch(), {
+        graph_snapshots$list <- list()
+        snapshot_counter(1)
+        updateTextInput(session, "snapshot_name", value = "Snapshot 1")
+        pending_snapshot_name(NULL)
+        pending_snapshot_caption(NULL)
+      }, ignoreInit = TRUE)
+    }
 
     # Describes exactly which display/filter/highlight choices produced this
     # view, so the Report tab can caption the figure instead of showing a

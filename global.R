@@ -11,7 +11,7 @@
 
 required_packages <- c(
   "shiny", "bs4Dash", "visNetwork", "igraph", "DT", "dplyr",
-  "data.table", "htmlwidgets", "shinyWidgets", "glue", "purrr", "scales", "jsonlite"
+  "data.table", "htmlwidgets", "shinyWidgets", "glue", "purrr", "scales", "jsonlite", "htmltools"
 )
 
 missing_packages <- required_packages[!vapply(required_packages, requireNamespace, logical(1), quietly = TRUE)]

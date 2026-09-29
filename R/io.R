@@ -176,6 +176,27 @@ read_savepoint <- function(path) {
   schema <- as.data.frame(raw$schema, stringsAsFactors = FALSE)
   validate_schema(schema)
 
+  # Revisao 2, item 0.6: a savepoint is checked exactly like an imported
+  # CSV before normalize_dpsir_*() fills in defaults. A hand-edited or
+  # shared file with confidence 3 used to reach runif(min > max) (NaN), and
+  # a negative weight flipped an edge's sign on top of interaction_type.
+  raw_nodes <- if (is.null(raw$nodes) || length(raw$nodes) == 0) NULL else as.data.frame(raw$nodes, stringsAsFactors = FALSE)
+  raw_edges <- if (is.null(raw$edges) || length(raw$edges) == 0) NULL else as.data.frame(raw$edges, stringsAsFactors = FALSE)
+  preflight <- if (is.null(raw_nodes)) {
+    list(blocking = character(), warnings = character())
+  } else {
+    preflight_import(raw_nodes, raw_edges, schema)
+  }
+  if (length(preflight$blocking) > 0) {
+    stop(
+      paste0(
+        "This savepoint has values the app cannot use: ",
+        paste(sub("^Edges file", "Edges", sub("^Nodes file", "Nodes", preflight$blocking)), collapse = " ")
+      ),
+      call. = FALSE
+    )
+  }
+
   nodes <- normalize_dpsir_nodes(as.data.frame(raw$nodes, stringsAsFactors = FALSE))
 
   edges <- if (is.null(raw$edges) || length(raw$edges) == 0) {
@@ -222,6 +243,7 @@ read_savepoint <- function(path) {
     nodes = nodes,
     edges = edges,
     positions = positions,
-    scenario_state = scenario_state
+    scenario_state = scenario_state,
+    warnings = sub("^Edges file", "Savepoint edges", sub("^Nodes file", "Savepoint nodes", preflight$warnings))
   )
 }

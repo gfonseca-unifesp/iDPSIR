@@ -343,3 +343,19 @@ test_that("threshold gating (relative to reference_value) blocks an edge until t
   expect_true(all(result$baseline[1:5, "I1"] == 0))
   expect_false(result$baseline[6, "I1"] == 0)
 })
+
+# Revisao 2, item 0.3: same name-based alignment in the temporal engine,
+# which used to call as.numeric() and drop the names.
+test_that("simulate_temporal_pair() aligns press vectors by name, not position", {
+  g <- build_test_network()
+  p_D <- zero_press(g); p_D["D1"] <- 1
+  p_R <- zero_press(g); p_R["R1"] <- 1
+
+  base <- simulate_temporal_pair(g, p_D, p_R, windows = 4)
+  shuffled <- simulate_temporal_pair(g, rev(p_D), rev(p_R), windows = 4)
+  partial <- simulate_temporal_pair(g, p_D["D1"], p_R["R1"], windows = 4)
+
+  expect_equal(shuffled$scenario, base$scenario)
+  expect_equal(partial$scenario, base$scenario)
+  expect_error(simulate_temporal_pair(g, c(p_D, ghost = 1), p_R, windows = 2), "not in the network: ghost")
+})

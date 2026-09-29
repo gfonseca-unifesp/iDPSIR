@@ -332,3 +332,27 @@ test_that("preflight_import combines node and edge results, and an empty edges t
 
   expect_true(any(grepl("dpsir_category 'Pressures'", result$blocking, fixed = TRUE)))
 })
+
+# Revisao 2, item 0.7: the sign of an edge has no default.
+test_that("preflight blocks a blank interaction_type cell and a missing interaction_type column", {
+  nodes <- data.frame(id = c("D1", "P1"), label = c("a", "b"), dpsir_category = c("Driver", "Pressure"))
+  blank_cell <- data.frame(from = "D1", to = "P1", weight = 1, interaction_type = NA)
+  no_column <- data.frame(from = "D1", to = "P1", weight = 1)
+
+  expect_true(any(grepl("row 2: interaction_type is empty", preflight_import(nodes, blank_cell)$blocking)))
+  expect_true(any(grepl("missing column 'interaction_type'", preflight_import(nodes, no_column)$blocking)))
+})
+
+test_that("validate_dpsir_edges rejects an edge without a sign instead of treating it as positive", {
+  nodes <- data.frame(id = c("D1", "P1"), label = c("a", "b"), dpsir_category = c("Driver", "Pressure"))
+  edges <- data.frame(from = "D1", to = "P1", weight = 1, confidence = 1, interaction_type = "", stringsAsFactors = FALSE)
+  expect_error(validate_dpsir_edges(nodes, edges), "Every edge needs a sign.*D1 -> P1")
+})
+
+test_that("normalize_dpsir_edges fills a blank weight or confidence cell with the documented default 1", {
+  edges <- data.frame(from = c("D1", "D1"), to = c("P1", "P2"), weight = c(NA, 0.5), confidence = c(0.4, NA),
+                      interaction_type = "positive", stringsAsFactors = FALSE)
+  out <- normalize_dpsir_edges(edges)
+  expect_equal(out$weight, c(1, 0.5))
+  expect_equal(out$confidence, c(0.4, 1))
+})

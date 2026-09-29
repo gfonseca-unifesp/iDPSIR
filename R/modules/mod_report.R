@@ -283,7 +283,10 @@ mod_report_server <- function(id, schema, nodes, edges, graph, saved_scenarios, 
         sel <- sort(input$scenarios_table_rows_selected)
         selected_scenario_names <- if (length(sel) > 0) names(saved)[sel] else character()
 
-        page <- build_full_report_html(
+        # Revisao 2, item 0.5: a failure while building the report used to
+        # surface only as a broken browser download. Tell the user, and still
+        # hand them a small HTML file that says what went wrong.
+        page <- tryCatch(build_full_report_html(
           schema = schema(),
           graph = graph(),
           graph_snapshots = snaps,
@@ -299,7 +302,13 @@ mod_report_server <- function(id, schema, nodes, edges, graph, saved_scenarios, 
           include_temporal_section = isTRUE(input$include_temporal_section),
           metadata = if (is.null(metadata)) NULL else metadata(),
           savepoint_filename = if (is.null(savepoint_filename)) NULL else savepoint_filename()
-        )
+        ), error = function(e) {
+          showNotification(paste("Could not build the report:", conditionMessage(e)), type = "error", duration = NULL)
+          htmltools::tags$html(htmltools::tags$body(
+            htmltools::tags$h2("The iDPSIR report could not be built"),
+            htmltools::tags$p(conditionMessage(e))
+          ))
+        })
 
         htmltools::save_html(page, file)
       }

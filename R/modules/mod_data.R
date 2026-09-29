@@ -110,7 +110,17 @@ mod_data_server <- function(id, seed = NULL) {
       start_blocking = character(),
       start_warnings = character(),
       graph = NULL,
-      graph_message = ""
+      graph_message = "",
+      # Revisao 2, item 0.2: incremented on every successful Start action
+      # (new/import/savepoint/merge) - the other modules watch it and clear
+      # their own per-project state (saved scenarios, snapshots, ...), which
+      # otherwise leaked from project A into project B's report.
+      epoch = 0,
+      # Revisao 2, item 0.3: incremented each time a graph is built on top of
+      # a network that changed since the previous build (rv$graph was NULL).
+      # Saved scenarios hold press vectors and results computed on the old
+      # network, so mod_responses clears them when this moves.
+      graph_version = 0
     )
 
     editing_node_id <- reactiveVal(NULL)
@@ -237,6 +247,7 @@ mod_data_server <- function(id, seed = NULL) {
       rv$start_blocking <- character()
       rv$start_warnings <- character()
       rv$loaded <- TRUE
+      rv$epoch <- rv$epoch + 1
       rv$start_message <- "New project started with the default DPSIR schema."
     })
 
@@ -280,6 +291,7 @@ mod_data_server <- function(id, seed = NULL) {
           rv$savepoint_filename <- NULL
           rv$graph <- NULL
           rv$loaded <- TRUE
+          rv$epoch <- rv$epoch + 1
           rv$start_warnings <- preflight$warnings
           rv$start_message <- paste0(
             "Matrices imported: ", nrow(imported$nodes), " nodes, ",
@@ -309,8 +321,10 @@ mod_data_server <- function(id, seed = NULL) {
           rv$scenario_state <- restored$scenario_state
           rv$metadata <- restored$metadata
           rv$savepoint_filename <- input$savepoint_file$name
+          rv$start_warnings <- restored$warnings
           rv$graph <- NULL
           rv$loaded <- TRUE
+          rv$epoch <- rv$epoch + 1
           rv$start_message <- paste0(
             "Savepoint loaded: '", restored$metadata$project_name %||% "Untitled",
             "' (last updated ", restored$metadata$updated_at %||% "?", ")."
@@ -348,6 +362,7 @@ mod_data_server <- function(id, seed = NULL) {
           rv$savepoint_filename <- NULL
           rv$graph <- NULL
           rv$loaded <- TRUE
+          rv$epoch <- rv$epoch + 1
 
           rename_note <- if (length(merged$renamed_ids) > 0) {
             paste0(" IDs renamed to avoid collisions: ", paste(merged$renamed_ids, collapse = ", "), ".")
@@ -868,10 +883,26 @@ mod_data_server <- function(id, seed = NULL) {
       }
     })
 
+    # Revisao 2, item 0.1: the Graph tab draws nodes()/edges() live, but
+    # Metrics/Scenarios/Report all read graph(), frozen at the last "Build" -
+    # removing a node after building left them still counting it. Any edit
+    # to the network now drops the built graph, so step 5's Next guard (and
+    # Explore) require a rebuild. Start actions already set rv$graph to NULL
+    # themselves in the same flush, so the `!is.null()` check keeps this from
+    # overwriting their own message.
+    observeEvent(list(rv$nodes, rv$edges, rv$schema), {
+      if (!is.null(rv$graph)) {
+        rv$graph <- NULL
+        rv$graph_message <- "The network changed since the graph was built - rebuild it in step 5 (Review and build)."
+      }
+    }, ignoreInit = TRUE)
+
     observeEvent(input$build_graph, {
       tryCatch(
         {
+          was_stale <- is.null(rv$graph)
           rv$graph <- build_igraph(rv$nodes, rv$edges, rv$schema)
+          if (was_stale) rv$graph_version <- rv$graph_version + 1
           rv$graph_message <- "Graph built successfully."
         },
         error = function(e) {
@@ -895,7 +926,9 @@ mod_data_server <- function(id, seed = NULL) {
       metadata = reactive(rv$metadata),
       savepoint_filename = reactive(rv$savepoint_filename),
       graph = reactive(rv$graph),
-      loaded = reactive(rv$loaded)
+      loaded = reactive(rv$loaded),
+      epoch = reactive(rv$epoch),
+      graph_version = reactive(rv$graph_version)
     )
   })
 }

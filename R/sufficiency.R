@@ -138,10 +138,43 @@ propagate <- function(W, p, c = 0.5) {
 # strength to show an absolute "how strong would it need to be" number -
 # sufficiency() itself stays agnostic to what p_R is made of (one response
 # or several combined), since only the ratio composes cleanly in that case.
+# Revisao 2, item 0.3: press vectors are aligned to the network BY NAME,
+# never by position. A scenario saved before a node was added used to be
+# silently recycled by as.numeric() (wrong numbers, no error). A named vector
+# is reordered to `node_names` (missing names = 0); a name that is not in the
+# network is an error. An unnamed vector is accepted only when its length
+# matches exactly (legacy callers/tests that build vectors in node order).
+align_press_vector <- function(p, node_names, what = "scenario") {
+  if (is.null(p)) {
+    return(setNames(rep(0, length(node_names)), node_names))
+  }
+  if (is.null(names(p))) {
+    if (length(p) != length(node_names)) {
+      stop(sprintf(
+        "The %s vector has %d values but the network has %d factors, and it has no factor names to align by.",
+        what, length(p), length(node_names)
+      ), call. = FALSE)
+    }
+    return(setNames(as.numeric(p), node_names))
+  }
+  unknown <- setdiff(names(p), node_names)
+  if (length(unknown) > 0) {
+    stop(sprintf(
+      "The %s refers to factor(s) that are not in the network: %s. Apply the scenario again.",
+      what, paste(unknown, collapse = ", ")
+    ), call. = FALSE)
+  }
+  out <- setNames(as.numeric(p[node_names]), node_names)
+  out[is.na(out)] <- 0
+  out
+}
+
 sufficiency <- function(g, p_D, p_R, c = 0.5, threshold = 1e-9) {
   stopifnot(inherits(g, "igraph"))
 
   node_names <- V(g)$name
+  p_D <- align_press_vector(p_D, node_names, "pressure scenario")
+  p_R <- align_press_vector(p_R, node_names, "response scenario")
   categories <- V(g)$dpsir_category
   is_impact <- !is.null(categories) & categories == "Impact"
   impact_ids <- node_names[is_impact]
@@ -192,6 +225,8 @@ sufficiency_confidence <- function(g, p_D, p_R, c = 0.5, n_simulations = 300, sp
   stopifnot(n_simulations >= 1)
 
   node_names <- V(g)$name
+  p_D <- align_press_vector(p_D, node_names, "pressure scenario")
+  p_R <- align_press_vector(p_R, node_names, "response scenario")
   categories <- V(g)$dpsir_category
   is_impact <- !is.null(categories) & categories == "Impact"
   impact_ids <- node_names[is_impact]
@@ -237,6 +272,8 @@ sufficiency_reach_over_c <- function(g, p_D, p_R, cs = c(0.2, 0.35, 0.5, 0.65, 0
   stopifnot(inherits(g, "igraph"))
 
   node_names <- V(g)$name
+  p_D <- align_press_vector(p_D, node_names, "pressure scenario")
+  p_R <- align_press_vector(p_R, node_names, "response scenario")
   categories <- V(g)$dpsir_category
   is_impact <- !is.null(categories) & categories == "Impact"
   impact_ids <- node_names[is_impact]

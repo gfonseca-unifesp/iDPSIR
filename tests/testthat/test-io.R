@@ -124,3 +124,51 @@ test_that("merge_savepoints prefixes only colliding node ids, and remaps their e
   expect_equal(merged$edges$from, "siteB__D1") # edge remapped to the prefixed id
   expect_equal(merged$edges$to, "P2")
 })
+
+# Revisao 2, item 0.6: a savepoint goes through the same preflight as an
+# imported CSV. Built by writing the JSON directly, the way a hand-edited or
+# shared file would arrive.
+write_raw_savepoint <- function(edges) {
+  nodes <- data.frame(
+    id = c("D1", "P1"), label = c("Driver test", "Pressure test"),
+    dpsir_category = c("Driver", "Pressure"), stringsAsFactors = FALSE
+  )
+  sp <- build_savepoint(get_default_dpsir_schema(), nodes, data.frame(
+    from = "D1", to = "P1", weight = 1, confidence = 1, interaction_type = "positive",
+    stringsAsFactors = FALSE
+  ))
+  sp$edges <- edges
+  tmp <- tempfile(fileext = ".idpsir.json")
+  write_savepoint(sp, tmp)
+  tmp
+}
+
+test_that("read_savepoint blocks an out-of-range confidence instead of producing NaN later", {
+  tmp <- write_raw_savepoint(data.frame(
+    from = "D1", to = "P1", weight = 1, confidence = 3, interaction_type = "positive",
+    stringsAsFactors = FALSE
+  ))
+  on.exit(unlink(tmp))
+  expect_error(read_savepoint(tmp), "confidence 3 is outside the valid range")
+})
+
+test_that("read_savepoint blocks a negative weight (it would flip the sign on top of interaction_type)", {
+  tmp <- write_raw_savepoint(data.frame(
+    from = "D1", to = "P1", weight = -2, confidence = 1, interaction_type = "negative",
+    stringsAsFactors = FALSE
+  ))
+  on.exit(unlink(tmp))
+  expect_error(read_savepoint(tmp), "weight -2 must be greater than 0")
+})
+
+test_that("read_savepoint blocks an edge with no sign, and reports optional-column warnings for old savepoints", {
+  tmp <- write_raw_savepoint(data.frame(
+    from = "D1", to = "P1", weight = 1, confidence = 1, interaction_type = "",
+    stringsAsFactors = FALSE
+  ))
+  on.exit(unlink(tmp))
+  expect_error(read_savepoint(tmp), "interaction_type is empty")
+
+  old <- read_savepoint("../../docs/example_fisheries.idpsir.json")
+  expect_true(any(grepl("^Savepoint nodes: column 'temporal_scale'", old$warnings)))
+})
