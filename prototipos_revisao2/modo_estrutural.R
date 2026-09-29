@@ -35,3 +35,28 @@ cat("rho(B):", round(max(Mod(eigen(B)$values)),3), "\n")
 # modo estrutural 'ingenuo' (beta = a_ij, sem escalar pela autorregulacao)
 B2 <- A; diag(B2) <- 0; s2 <- solve(diag(4)-B2,u)-u
 cat("Estrut. beta=a_ij:", round(s2,3), " D:", round(abs(s2[3:4])/max(abs(s2[3:4])),2), "\n")
+
+cat("
+== C1: gatilho no modo estrutural (limiar z = -0,4 em S)
+")
+nm <- c("P1","P2","S","I","R")
+run <- function(bRP1, pP1, pP2, pR, z = -0.4) {
+  B <- matrix(0,5,5,dimnames=list(nm,nm)); B["S","P1"] <- -.3; B["S","P2"] <- -.3; B["I","S"] <- -.8; B["P1","R"] <- -bRP1
+  p <- c(pP1,pP2,0,0,pR)
+  lev <- solve(diag(5)-B, p); lev[1:2] <- pmax(lev[1:2], 0)   # D/P recortados em >= 0 (D7)
+  xS <- sum(B["S",] * lev); open <- if (z < 0) xS <= z else xS >= z
+  Bg <- B; if (!open) Bg[, "S"] <- 0
+  phi <- solve(diag(5)-Bg, p) - p
+  c(S = round(xS,3), aberto = open, I = round(phi[4],3))
+}
+casos <- list("1 so P1"=c(.5,1,0,0), "2 P1+P2"=c(.5,1,1,0), "3 P1+P2+R (b=.5)"=c(.5,1,1,1),
+              "4 P1+P2+R (b=.8)"=c(.8,1,1,1), "5 P1+P2 a 70%"=c(.8,.7,.7,0), "6 P1+P2 a 60%"=c(.8,.6,.6,0))
+for (k in names(casos)) { a <- casos[[k]]; cat(sprintf("%-20s %s\n", k, paste(names(run(a[1],a[2],a[3],a[4])), run(a[1],a[2],a[3],a[4]), sep="=", collapse="  "))) }
+
+cat("
+== D20: equilibrio temporal com persistencia a = 1 - sr
+")
+nm <- c("P","S","I"); B <- matrix(0,3,3,dimnames=list(nm,nm)); B["S","P"] <- -.7; B["I","S"] <- -.6; p <- c(1,0,0)
+for (s in c(1, .5, .3, 0)) { x <- rep(0,3); for (t in 1:300) x <- (1-s)*x + as.numeric(B %*% x) + p
+  eq <- if (s > 0) solve(s*diag(3) - B, p)[3] else NA
+  cat(sprintf("sr=%.1f  I(300)=%.3f  equilibrio (sI-B)^-1 p = %s   estatico (I-B)^-1 p = %.3f\n", s, x[3], format(round(eq,3)), solve(diag(3)-B,p)[3])) }

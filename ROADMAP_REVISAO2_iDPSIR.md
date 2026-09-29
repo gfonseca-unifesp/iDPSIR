@@ -1,18 +1,18 @@
-# Roadmap — iDPSIR Revisão 2: modos de resposta, pesos 0–1, relevância de Impactos, gatilho do Estado, crescimento e correções
+# Roadmap — iDPSIR Revisão 2: modo estrutural (β), modos de resposta, relevância de Impactos, gatilho do Estado, crescimento e correções
 
 **Objetivo:** levar o iDPSIR da versão atual (`main`, commit `201d131`) a uma versão que:
 (1) ofereça três tipos de resposta no tempo, escolhidos pelo usuário;
-(2) trabalhe com todos os parâmetros na escala 0–1, inclusive o peso das arestas;
+(2) adote o **modo estrutural**: cada aresta é um coeficiente de caminho padronizado β, com faixa de incerteza, e o motor não tem mais o desconto c (Fase 1);
 (3) implemente a especificação *"Categorização dos nós de impacto & relevância por análise de loop"* v1.0 (decisões V1–V5 fechadas);
-(4) torne operacional o limiar dos Estados, disparado pela carga das Pressões; (5) propague o `growth_rate` de um nó para as arestas que saem dele; (6) corrija os bugs de estado e as inconsistências encontrados na avaliação de 25/09/2026.
+(4) torne operacional o limiar dos Estados, em unidade real e disparado pelas Pressões; (5) propague o `growth_rate` de um nó para as arestas que saem dele; (6) corrija os bugs de estado e as inconsistências encontrados na avaliação de 25/09/2026.
 
 **Como usar com o Claude Code:** leia antes o `CLAUDE.md` e o `README.md`. Cada item traz *motivação*, *o que fazer*, *arquivos*, *testes* e um critério **Pronto quando**, e cada item é uma unidade de trabalho (um commit ou um PR).
 
-A ordem das fases importa: a Fase 0 corrige bugs nos mesmos módulos que as Fases A–C vão tocar. Rode `testthat::test_dir("tests/testthat")` e **suba o app** a cada item que mexer em módulo Shiny, porque erros de Shiny só aparecem em runtime.
+A ordem das fases importa: a Fase 0 corrige bugs nos mesmos módulos que as outras fases vão tocar, e a Fase 1 troca o motor sobre o qual as Fases A–D são escritas. Rode `testthat::test_dir("tests/testthat")` e **suba o app** a cada item que mexer em módulo Shiny, porque erros de Shiny só aparecem em runtime.
 
 **Protótipos numéricos:** a pasta `prototipos_revisao2/` (na raiz do repositório) tem os scripts em Python que geraram os valores de referência citados aqui. Veja o `README.md` dela.
 
-**Modo estrutural (29/09/2026):** o usuário decidiu propor nesta revisão o modo estrutural (aresta = coeficiente de caminho padronizado β). A proposta e o impacto em cada fase estão no **Anexo, seções X2 e X3**. As fases abaixo ainda não foram reescritas: isso depende das decisões do X3.4. As conferências em R estão em `prototipos_revisao2/modo_estrutural.R`.
+**Modo estrutural (29/09/2026):** adotado nesta revisão como **único** modo (decisões D17–D23). As fases abaixo já foram reescritas para acomodá-lo. A justificativa está no **Anexo, seções X2 e X3**, e as conferências em R em `prototipos_revisao2/modo_estrutural.R`.
 
 **Conferência em R (29/09/2026):** os valores de referência foram conferidos contra o motor R real de `main` (`201d131`) com `prototipos_revisao2/confere_em_R.R`. Todos bateram. Nesta conferência foram feitas quatro correções: a fórmula da tendência exógena (D2), a referência de código da 0.4, uma ressalva sobre o exemplo do PDF (B3) e o impacto da Fase C no exemplo Gnanapragasam (C6). Depois, a D1 e a D2 foram revisadas e a D16 foi cancelada: "até neutralizar" virou critério de parada da simulação (A2), com novos valores de referência na A6.
 
@@ -24,24 +24,36 @@ A ordem das fases importa: a Fase 0 corrige bugs nos mesmos módulos que as Fase
 |---|---|---|
 | D1 | A pressão e a resposta têm, cada uma, **dois modos** escolhidos pelo usuário: `permanent` ou `impulse`. "Até neutralizar" **não é um modo da resposta**: é um **critério de parada da simulação** (duração "N janelas fixas" ou "até a resposta neutralizar o Impacto", com máximo de janelas). | Usuário, 25/09; revisado 29/09 |
 | D2 | Padrões na tela: pressão `permanent`, **resposta `permanent`** (hoje é `impulse`) e duração **"até neutralizar"**, com **máximo de 50 janelas**, editável. | Usuário, 25/09; revisado 29/09 |
-| D3 | O fator λ da leitura estática (`propagate()`, `λ = c` sem ciclo, `c/ρ` com ciclo) **fica como está**. O desconto por elo representa corretamente o atraso de uma resposta mais distante do Impacto. | Usuário, 25/09 |
+| D3 | (Cancelada em 29/09 pela D19.) Antes: o fator λ da leitura estática ficava como estava. Agora não há desconto c: a atenuação de uma resposta distante vem do produto dos β < 1 ao longo do caminho. | Usuário, 25/09; cancelada 29/09 |
 | D4 | Na estrutura DPSIR do app, **ciclos só existem via Resposta** (arestas I→R). Uma cadeia causal sem Resposta tem no máximo D→P→S→I. | Usuário + `schema_allowed_connections()` |
-| D5 | **Pesos das arestas na escala (0, 1]**, como todos os outros parâmetros. | Usuário, 25/09 + especificação v1.0 |
-| D6 | Especificação de relevância v1.0 com V1–V5 fechadas: `endpoint_class`, valor `v` (swing weights), D max-normalizado, ρ multiplicativo, blend de centralidade só como fallback, eficácia = cobertura × confiança. | PDF v1.0 |
-| D7 | Carga que dispara o gatilho do Estado = soma com sinal, sem desconto, de peso × intensidade das Pressões e Respostas que chegam ao Estado (intensidade de D/P recortada em ≥ 0). Não depende de `c`. | Usuário (Q5), 25/09 |
+| D5 | (Substituída em 29/09 pelas D17 e D18.) A magnitude de β fica, como regra, em (0, 1]; β > 1 gera aviso, não bloqueio. | Usuário, 25/09; substituída 29/09 |
+| D6 | Especificação de relevância v1.0 com V1–V5 fechadas: `endpoint_class`, valor `v` (swing weights), D max-normalizado, ρ multiplicativo, blend de centralidade só como fallback. A eficácia foi alterada pela D15. | PDF v1.0 |
+| D7 | O que dispara o gatilho do Estado = soma com sinal de β × nível das Pressões e Respostas que chegam ao Estado, em DP (nível de D/P recortado em ≥ 0). No modo estrutural, na leitura estática, isso é o próprio desvio do Estado. | Usuário (Q5), 25/09; ajustada 29/09 |
 | D8 | Gatilho **binário**: liga ou desliga todas as arestas de saída do Estado. | Usuário (Q6), 25/09 |
 | D9 | O crescimento (`growth_rate`) **fica no nó**, como hoje. A influência das arestas de saída cresce na proporção (1+g) por meio do valor do nó. O peso da aresta não é multiplicado (evita dupla contagem). | Usuário (Q9), 25/09 |
 | D10 | Um nó com `growth_rate > 0` cresce como tendência exógena mesmo fora do cenário de pressão, nas duas rodadas (baseline e cenário). | Usuário (Q10), 25/09 |
 | D11 | Gatilho na simulação temporal: os dois critérios ("carga na janela" e "nível acumulado do Estado") ficam disponíveis na tela. O usuário escolhe qual usar e pode ver os dois resultados lado a lado. Padrão: carga. | Usuário (Q7), 25/09 |
 | D12 | Reach: mostrar os dois, o topológico (como hoje) e o efetivo no cenário, que não atravessa Estados com gatilho fechado, lado a lado. | Usuário (Q8), 25/09 |
-| D13 | **Escala 0–1 é a norma do app.** Os exemplos do repositório (CSVs em `data/` e savepoints em `docs/`) serão **re-parametrizados** na escala 0–1, com cada peso revisado, e não apenas divididos. O app e os exemplos publicados no GitHub e na demo shinylive são atualizados juntos. Um arquivo antigo com peso > 1 é bloqueado com mensagem clara, com a opção de reescalar automaticamente (÷ maior peso) e aviso. | Usuário (Q1), 25/09 |
-| D14 | Importância dinâmica D = **sempre pela propagação do app** (`propagate()`, a mesma da leitura de suficiência). **Levins não entra como alternativa**, para não aumentar a complexidade. Tela e relatório mostram um aviso de que D vem da propagação do app e não do equilíbrio de Levins da especificação v1.0. Validar com os exemplos antes de fechar (ver B3). | Usuário (Q2), 25/09 |
-| D15 | Eficácia da resposta = **cobertura** (a força do slider). A confiança da aresta entra **só na incerteza** (reamostragem de ρ e da suficiência), não multiplica a eficácia. Isto altera a V5 do PDF v1.0, que deve ser atualizado. | Usuário (Q3), 25/09 |
-| D16 | ~~Modo `until_neutralized` com "manter"/"retirar" a medida.~~ **Cancelada em 29/09**: com a D1 revisada, a resposta não liga e desliga; é a simulação que para quando o Impacto é neutralizado. | Usuário (Q4), 25/09; cancelada 29/09 |
+| D13 | (Revisada em 29/09 pelas D19 e D22.) Os exemplos passam ao modo estrutural com a classe de cada aresta revisada com o usuário. O app e os exemplos publicados no GitHub e na demo shinylive são atualizados juntos. Arquivo antigo é **convertido** na importação (β = λ·w, preservando os números antigos), com aviso, em vez de bloqueado. | Usuário (Q1), 25/09; revisada 29/09 |
+| D14 | Importância dinâmica D = **sempre pela propagação do app** (`propagate()`, a mesma da leitura de suficiência); Levins não entra como alternativa. No modo estrutural, isso é o equilíbrio de Levins em forma padronizada (β_ij = a_ij/\|a_ii\|; conferido em R), então o aviso de divergência sai. | Usuário (Q2), 25/09; revisada 29/09 |
+| D15 | Eficácia da resposta = **cobertura** (a força do slider). A incerteza da aresta (faixa de β, D21) entra **só na incerteza** (reamostragem de ρ e da suficiência), não multiplica a eficácia. Isto altera a V5 do PDF v1.0, que deve ser atualizado. | Usuário (Q3), 25/09 |
+| D16 | (Cancelada em 29/09.) Antes: modo `until_neutralized` com "manter"/"retirar" a medida. Com a D1 revisada, a resposta não liga e desliga; é a simulação que para quando o Impacto é neutralizado. | Usuário (Q4), 25/09; cancelada 29/09 |
+| D17 | **Aresta = coeficiente de caminho padronizado β:** quantos desvios-padrão o destino muda quando a origem muda 1 DP. O sinal vem de `interaction_type`, a magnitude fica em `weight`, e o segundo campo é a faixa de incerteza (`weight_low`/`weight_high`). O r² é só atalho (\|β\| = √r²) e diagnóstico. O slope bruto é só conversor, na camada dos nós. | Usuário, 29/09 |
+| D18 | Sem dados, o usuário escolhe uma classe: **fraca** < 0,3 (valor 0,15, faixa 0–0,3), **moderada** 0,3–0,6 (**0,45, padrão**), **forte** ≥ 0,6 (0,80, faixa 0,6–1,0). O sinal nunca tem padrão. Arestas com classe ou padrão ficam marcadas na tabela e no relatório. | Usuário, 29/09 |
+| D19 | **Só o modo estrutural.** Sai o desconto c (slider "How far to trace the effect") e a tabela "Does it hold up across how far the effect is traced". O motor é único sobre B, com efeito (I − B)⁻¹p − p, e exige ρ(B) < 1. Arquivos antigos são convertidos na importação. | Usuário, 29/09 |
+| D20 | Persistência temporal a = 1 − `self_regulation` + g, como hoje: com sr = 0 (padrão), o nó acumula como estoque; sr pode valer 1 (sem memória). A leitura estática, (I − B)⁻¹p − p, coincide com o equilíbrio temporal só nos nós com sr = 1. Com sr < 1, o equilíbrio temporal é (sr·I − B)⁻¹p (Levins com diagonal −sr); com sr = 0, não há equilíbrio (conferido em R). | Usuário, 29/09 |
+| D21 | O `confidence` das arestas vira a faixa de β. Sem faixa informada, vale a faixa da classe. Confiança antiga κ é convertida pela regra atual de reamostragem: β·[1 − 0,5(1 − κ), 1 + 0,5(1 − κ)]. | Usuário, 29/09 |
+| D22 | Os exemplos (Fisheries, Mangi, Gnanapragasam e `sample`) ficam **só no modo estrutural**, com a classe de cada aresta revisada com o usuário. | Usuário, 29/09 |
+| D23 | **Camada de medida:** nós podem ter valor de referência (> 0) e variação típica (DP ou CV). O limiar do Estado é um nível na unidade do nó, **sem teto em 0–1**, convertido para z = (limiar − ref)/DP, com direção pelo sinal de z. Pressão e resposta podem passar de 100% ou ser informadas em unidade real. | Usuário, 29/09 |
 
 ## Decisões a confirmar
 
-Nenhuma. Todas as perguntas Q1–Q10 foram respondidas pelo usuário em 25/09/2026 e viraram as decisões D7–D16 acima. D1 e D2 foram revisadas e D16 foi cancelada em 29/09/2026.
+As perguntas Q1–Q10 de 25/09 viraram as decisões D7–D16. Em 29/09, D1 e D2 foram revisadas, D16 foi cancelada, e as decisões do modo estrutural (D17–D23) revisaram D3, D5, D7, D13, D14 e D15. Ficam em aberto:
+
+| # | Pergunta | Proposta | Onde entra |
+|---|---|---|---|
+| P1 | Critério padrão do gatilho na temporal: "carga que chega" (D11 atual) ou "desvio acumulado"? Com a D20 os dois diferem. O usuário descreveu o limiar como perda acumulada (estoque, contaminante no sedimento), o que favorece "desvio acumulado". | Desvio acumulado | C3 |
+| P2 | Arquivo antigo que, convertido, fica com \|β\| > 1 (rede sem ciclo com peso > 2): aviso e revisão, ou bloqueio? | Aviso e revisão | 1.5 |
 
 ---
 
@@ -77,7 +89,7 @@ Bugs encontrados por leitura de código. Todos têm correção pequena.
 
 ### 0.6 — Savepoint JSON passa pela mesma validação do CSV
 **Motivação:** `read_savepoint()` (`io.R:179–185`) só chama `normalize_*`. Um `confidence: 3` gera `runif(min > max)` → NaN. Um peso negativo com `interaction_type: negative` inverte o sinal.
-**O que fazer:** rodar `preflight_import()` sobre `raw$nodes`/`raw$edges`, com as mesmas mensagens bloqueantes. Depende de 1.1 para a nova faixa de peso.
+**O que fazer:** rodar `preflight_import()` sobre `raw$nodes`/`raw$edges`, com as mesmas mensagens bloqueantes. Depende de 1.1 para os novos campos de aresta (β, faixa, classe).
 
 ### 0.7 — Sinal ausente é erro, não "+1"
 **O que fazer:** em `validate.R:219–223`, uma célula `interaction_type` vazia vira erro bloqueante. Na normalização, peso e confiança NA recebem os defaults documentados (hoje o default só vale quando a coluna inteira falta).
@@ -89,40 +101,101 @@ Bugs encontrados por leitura de código. Todos têm correção pequena.
 
 ---
 
-## Fase 1 — Pesos das arestas na escala 0–1
+## Fase 1 — Modo estrutural: aresta = β, motor único e conversão (D17–D23)
 
-**Situação atual (verificada):** o peso só precisa ser > 0, sem limite superior (`validate.R:231–247`). O modal de aresta usa `numericInput("Weight (> 0)", min = 0.01, step = 0.5)` (`mod_data.R:731`), e o padrão é 1. Todos os exemplos usam pesos acima de 1: Fisheries 0,5–3; Mangi 1–3; Gnanapragasam 1–2,5; `sample_edges.csv` 1–3. **Não é possível parametrizar em 0–1 hoje sem reescalar à mão**, e o app não impede valores maiores.
+**Situação atual (verificada):**
+- O peso só precisa ser > 0, sem limite superior (`validate.R:231–247`).
+- O modal de aresta usa `numericInput("Weight (> 0)", min = 0.01, step = 0.5)` (`mod_data.R:731`), com padrão 1.
+- A leitura estática aplica um desconto global λ = c (sem ciclo) ou c/ρ(W) (com ciclo), controlado pelo slider "How far to trace the effect" (`effect_horizon`).
+- Todos os exemplos usam pesos acima de 1: Fisheries 0,5–3; Mangi 1–3; Gnanapragasam 1–2,5; `sample_edges.csv` 1–3.
 
-### 1.1 — Validar peso em (0, 1]
+**Justificativa e conferências:** Anexo X2 e X3; script `prototipos_revisao2/modo_estrutural.R`.
+
+### 1.1 — Campos da aresta e validação (D17, D18, D21)
 **O que fazer:**
-- `validate.R`: bloquear `weight <= 0` **ou** `weight > 1`, com a mensagem "weight must be in (0, 1]".
-- `mod_data.R:731`: `numericInput(…, "Weight (0–1)", min = 0.01, max = 1, step = 0.05)`, ou um `sliderInput` 0,05–1. Validar também em `mod_data.R:781`.
-- O padrão continua 1 (`mod_data.R:721`, `validate.R:207`).
-- Documentar em README/tutorial: 1 = efeito máximo plausível; os pesos são relativos entre si.
+- `weight` passa a ser a magnitude de β. O sinal continua em `interaction_type`.
+- Novas colunas opcionais: `weight_low`, `weight_high` (faixa de incerteza) e `strength_class` (`weak | moderate | strong`).
+- **Validação:**
+  - bloquear `weight <= 0` ou NA;
+  - **aviso** (não bloqueio) para `weight > 1`: um β padronizado pode passar de 1 em regressão múltipla com origens correlacionadas;
+  - bloquear faixa inválida (`low > weight` ou `high < weight`).
+- **Padrões por classe (D18):**
+  - weak = 0,15 (faixa 0–0,3);
+  - moderate = 0,45 (0,3–0,6), **padrão**;
+  - strong = 0,80 (0,6–1,0).
+- Sem faixa informada, vale a faixa da classe; sem classe, vale moderate.
+- `confidence` sai do formulário (D21). Em arquivos antigos, é convertido para faixa pela regra atual de reamostragem: `β·[1 − 0,5(1 − κ), 1 + 0,5(1 − κ)]`.
+- Validação por nó: aviso quando Σ β² das arestas que chegam > 1 ("a rede explicaria mais de 100% da variação deste fator; revise os β").
 
-### 1.2 — Arquivos antigos (decisão D13)
-**O que fazer:** em `read_savepoint()`, `import_matrices()` e `merge_savepoints()`, quando `max(weight) > 1`, **bloquear** com a mensagem "Este arquivo usa pesos acima de 1. O iDPSIR agora usa a escala 0–1." e oferecer o botão "Reescalar automaticamente (÷ maior peso)". Ao reescalar, mostrar o divisor usado e gravar `metadata$weight_rescaled_from = <max original>`. No merge, aplicar o mesmo tratamento a cada savepoint antes de juntar.
-**Testes:** em `test-io.R`, savepoint com pesos 1–3 carrega com pesos 1/3–1 e a metadata registrada.
+**Arquivos:** `validate.R` (preflight e normalize), `io.R`, `schema.R` (campos conhecidos), `graph.R` (tooltip e espessura por |β|).
+**Testes:** `test-validate.R` (faixas, classes, aviso > 1, soma de β²) e `test-io.R` (round-trip).
 
-### 1.3 — Re-parametrizar exemplos, tutorial e testes (decisão D13)
+### 1.2 — Formulário de aresta (D17, D18)
+**O que fazer:** em `mod_data.R:731` (modal de aresta):
+- seletor "Strength": Weak / Moderate (default) / Strong / "I have a value";
+- com "I have a value": entrada de β, ou os atalhos:
+  - r² → |β| = √r² (aviso: vale para origens independentes);
+  - r² e n → faixa pelo erro-padrão √((1 − r²)/(n − 2));
+- a faixa aparece preenchida pela classe e pode ser editada;
+- na tabela de arestas e no relatório, marcar as arestas cujo valor veio de classe ou padrão.
+- Validar também em `mod_data.R:781`.
+
+### 1.3 — Motor único sobre B (D19)
 **O que fazer:**
-- **Re-parametrizar** os exemplos na escala 0–1, revisando cada peso com o usuário (não apenas dividir): `data/*_edges.csv`, `data/sample_edges.csv` e `docs/*.idpsir.json` (Fisheries, Mangi, Gnanapragasam). Como ponto de partida, usar a divisão (Mangi e Fisheries ÷ 3, Gnanapragasam ÷ 2,5) e ajustar a partir dela.
-- **Publicar no GitHub:** os exemplos novos substituem os antigos em `main`, e a demo shinylive é republicada pelo workflow. Conferir que o link "Try it live" e os links de download do tutorial abrem os arquivos novos.
-- Refazer os números do tutorial e as figuras `docs/example_gnanapragasam_*.png`.
-- **Efeito esperado nos resultados:**
-  - Rede com ciclo (Mangi): a leitura estática é invariante à escala, porque λ = c/ρ e ρ escala junto com W.
-  - Rede sem ciclo (Gnanapragasam): λ = c, então **os números mudam** e o veredito pode mudar. É consequência de D3.
-  - Simulação temporal: o Impacto cresce mais devagar por janela.
-- Atualizar os fixtures de `tests/testthat` que usam peso > 1 e recalcular os valores esperados à mão.
+- `effect_matrix(g)` devolve B, a matriz de β com sinal, `B[to, from]` e diagonal zero. Substitui `build_signed_matrix()`.
+- `propagate(B, p)` = (I − B)⁻¹p − p, **sem** c e sem λ.
+- **Validação bloqueante:** ρ(B) ≥ 1 ("the network's feedback loops amplify without bound; reduce the β values on the loop"), com a lista das arestas do ciclo dominante.
+- **Remover o alcance c:**
+  - o slider `effect_horizon`;
+  - `sufficiency_reach_over_c()`, `format_reach_over_c_table()` e a tabela "Does it hold up across how far the effect is traced" na tela e no relatório;
+  - o argumento `c` de `sufficiency()`, `sufficiency_confidence()` e dos demais.
+- `effect_horizon` em savepoint antigo é lido só para a conversão (1.5) e depois descartado.
+- `strength_to_neutralize` continua uma razão linear (sem gatilho), agora sem c.
+- Comentário de cabeçalho de `sufficiency.R` reescrito: o efeito total é a regra de rastreamento de caminhos da path analysis. A atenuação de uma resposta distante vem do produto dos β < 1, o que cumpre o papel da antiga D3.
 
-**Pronto quando:** nenhuma aresta aceita peso fora de (0, 1], os exemplos carregam sem aviso, os testes passam e o tutorial bate número a número com o app.
+**Testes (`test-sufficiency.R`):**
+- cadeia P→S→I com β −0,7/−0,6: efeito 0,42;
+- exemplo do X2.4: P1→I = 0,42, R→I = −0,336, mitigação de 80%, força para neutralizar 125%;
+- bloqueio de ρ(B) ≥ 1;
+- os testes com c são removidos ou reescritos.
+
+### 1.4 — Incerteza pela faixa de β (D21)
+**O que fazer:** `sufficiency_confidence()` e, depois, `prediction_reliability()` (B4) reamostram cada β uniformemente em `[weight_low, weight_high]`, e não mais por `confidence × spread`. Usar `withr::with_seed()` (ver 2.4).
+**Testes:** faixa degenerada (low = high = β) dá 100% ou 0%; reprodutibilidade com semente.
+
+### 1.5 — Arquivos antigos: conversão na importação (substitui a D13)
+**O que fazer:** em `read_savepoint()`, `import_matrices()` e `merge_savepoints()`, arquivo sem `metadata$weight_mode = "structural"`:
+- converter cada peso para **β = λ·w**, com o λ da leitura antiga (c/ρ(W) com ciclo, c sem ciclo; c = `effect_horizon` do savepoint ou 0,5). **Isso preserva exatamente os números da leitura estática antiga**, porque a antiga já era (I − λW)⁻¹p − p;
+- converter `confidence` para faixa (regra da 1.1) e marcar todas as arestas como "convertidas";
+- mostrar um aviso com o λ usado e as arestas com |β| > 1 (redes sem ciclo com peso > 2); ver P2;
+- gravar `metadata$weight_mode = "structural"` e `metadata$converted_from = list(lambda, c)`;
+- no merge, converter cada arquivo antes de juntar.
+
+**Testes (`test-io.R`):** o savepoint Mangi antigo convertido reproduz os números atuais de `sufficiency()` com c = 0,5 (tolerância 1e-9); um CSV sem ciclo com peso 3 gera aviso de |β| = 1,5.
+
+### 1.6 — Exemplos no modo estrutural (D22, substitui a antiga 1.3)
+**O que fazer:**
+- Revisar **com o usuário** a classe de cada aresta (fraca/moderada/forte), partindo da conversão da 1.5. Arquivos: `data/*_edges.csv`, `data/sample_edges.csv` e `docs/*.idpsir.json` (Fisheries, Mangi, Gnanapragasam).
+- Validar ρ(B) < 1 e Σβ² ≤ 1 por nó.
+- Rodar a comparação da B3 nos três exemplos.
+- **Publicar no GitHub:** os exemplos novos substituem os antigos em `main`, e a demo shinylive é republicada. Conferir o link "Try it live" e os downloads do tutorial.
+- Refazer os números do tutorial e as figuras `docs/example_gnanapragasam_*.png`, junto com a A7.
+- Atualizar os fixtures de `tests/testthat` que usam peso > 1 ou c.
+
+**Pronto quando:**
+- toda aresta tem β e faixa (informados, por classe ou convertidos);
+- o motor não tem mais c;
+- ρ(B) ≥ 1 é bloqueado;
+- arquivos antigos convertem preservando os números;
+- os exemplos carregam sem aviso;
+- os testes passam e o tutorial bate número a número com o app.
 
 ---
 
 ## Fase A — Modos de pressão e resposta e critério "até neutralizar" (D1 e D2 revisadas em 29/09)
 
 **Contexto (verificado por simulação da cadeia P→E→I com R→P, pesos 1):**
-- O motor é `x(t+1) = x(t) + λW·x(t) + p`. Cada nó funciona como um estoque que acumula o que chega a cada janela.
+- O motor é `x(t+1) = (1 − sr + g)·x(t) + B·x(t) + p` (D20), com B da Fase 1. Os valores da A6 usam β = 1, sem o estabilizador λ, e continuam válidos. Cada nó funciona como um estoque que acumula o que chega a cada janela.
 - `impulse` não age só uma janela: vira um **nível constante** do nó, que continua agindo a cada janela enquanto o nó não tiver `self_regulation`.
 - `permanent` soma +1 a cada janela, então o esforço cresce sem limite e pode ultrapassar a meta.
 - Nenhuma opção atual para a simulação quando o Impacto zera.
@@ -193,6 +266,8 @@ Janelas fixas, pressão `permanent`:
 
 - Com tolerância de 5%, o caso resposta `impulse` com self_regulation 0,3 aparece como **"Neutralized (relative)"** na tabela na janela 30 (A3), mas a simulação "até neutralizar" não para, porque I continua positivo e não chega a zero. Documentar essa diferença na ajuda.
 - Contraexemplo da A3: pressão `permanent`, resposta `impulse`, sem self_regulation. Na janela 60, |net| < 5% do baseline, mas o Impacto está crescendo; a tabela **não** pode mostrar "Neutralized".
+- **Coerência com a leitura estática (D20):** cadeia P→S→I com β −0,7/−0,6, sr = 1 em todos os nós e pressão `permanent` converge para I = 0,42, igual a (I − B)⁻¹p. Com sr = 0,5, converge para 3,36 = (0,5·I − B)⁻¹p. Os dois casos entram como teste.
+- `self_regulation` passa a aceitar 1 (hoje a faixa é [0, 1)).
 
 ### A7 — Documentação
 **O que fazer:** atualizar a seção temporal do README e do tutorial com os dois modos e o critério "até neutralizar", usando a tabela acima como exemplo didático. Mensagem central: *"quem faz o Impacto convergir é a autorregulação da cadeia; o modo da resposta decide o esforço; o critério de parada diz em que janela o problema foi resolvido"*. **A mudança de padrão (D2) altera o gráfico temporal do exemplo Gnanapragasam**: regenerar a figura e os números.
@@ -206,10 +281,10 @@ Janelas fixas, pressão `permanent`:
 **Avaliação da especificação frente ao código atual:**
 - O exemplo numérico da seção 4 **confere**. Autovalores −0,7, −0,7, −0,6, −0,5. δ = −A⁻¹u = [+2,00; −2,67; −3,43; −2,95] para P, S, I1, I2.
 - Três pontos exigem adaptação:
-  1. **D por Levins (−A⁻¹) exige A estável.** Isso só acontece se todo nó tiver `self_regulation > 0`, mas o padrão do app é 0 e Drivers/Impacts raramente recebem valor. Por isso o `loop_analysis.R` saiu da UI (ver o cabeçalho de `sufficiency.R`). Decisão D14: usar só a propagação.
+  1. **D por Levins (−A⁻¹) exige A estável.** Isso só acontece se todo nó tiver `self_regulation > 0`, mas o padrão do app é 0. Decisão D14: usar só a propagação. No modo estrutural (Fase 1), a propagação é o próprio equilíbrio de Levins em forma padronizada, então a divergência desaparece (ver B3).
   2. **V5 (atenuar a aresta de saída da pressão-alvo)** usa outro modelo de resposta. No app, a resposta é um nó com arestas R→alvo, empurrado por uma força. Decisão D15: a força da resposta = cobertura (slider), e a confiança fica só na incerteza (B5).
   3. **Vocabulário de sinal:** o PDF usa increases/triggers/improves/reduces/mitigates, e o app usa `positive`/`negative`. Aceitar os dois (B6).
-- A escala 0–1 dos pesos (Fase 1) é pré-requisito, porque a especificação assume |a_ij| ∈ (0, 1].
+- A Fase 1 (β e motor único) é pré-requisito.
 
 ### B1 — Campos novos no nó de Impacto
 **O que fazer:**
@@ -223,38 +298,37 @@ Janelas fixas, pressão `permanent`:
 **O que fazer:** no passo Nodes, um botão "Elicit values (swing weights)". Ele abre um modal que lista os Impactos `service`/`welfare`. O usuário ordena pela importância de "levar do pior ao melhor nível" e dá 100 ao primeiro e 0–100 aos demais; o app normaliza por ÷100 e grava em `value_v`. Editar `value_v` à mão continua possível.
 
 ### B3 — Importância dinâmica D (decisão D14)
-**O que fazer:** novo arquivo `R/relevance.R` com `dynamic_importance(g, p_D, c)`.
-- δ_I = `propagate(build_signed_matrix(g), p_D, c)[I]`, a mesma leitura da suficiência. Com a Fase C, usar a matriz com os gatilhos aplicados.
+**O que fazer:** novo arquivo `R/relevance.R` com `dynamic_importance(g, p_D)`.
+- δ_I = `propagate(effect_matrix(g), p_D)[I]`, a mesma leitura da suficiência. Com a Fase C, usar a matriz com os gatilhos aplicados.
 - D_I = |δ_I| / max_J |δ_J| sobre os Impactos (V2). Se todos forem 0, D = 0 e aparece um aviso.
-- Sem opção de Levins e sem blend de centralidade.
-- **Aviso fixo** na seção de priorização e no relatório: "D é calculado pela propagação do iDPSIR (a mesma da leitura de suficiência), não pelo equilíbrio de Levins (−A⁻¹) da especificação v1.0. A ordem dos Impactos pode diferir da obtida por Levins, sobretudo quando há autorregulação."
+- Sem blend de centralidade. Sem aviso de divergência com Levins (ver abaixo).
+- Nota de método na tela e no relatório: "D é o efeito total da pressão sobre cada Impacto (path analysis), equivalente ao equilíbrio de Levins da especificação v1.0 quando os coeficientes são padronizados."
 
-**Validação com exemplos (fazer antes de implementar a tela):**
-- **Já verificado no exemplo da seção 4 do PDF (`d_levins_vs_propagate.py`):** as duas leituras **invertem a ordem dos Impactos**.
+**Validação (conferida em R, `prototipos_revisao2/modo_estrutural.R`):**
 
-| Método | δ I1 (ecológico) | δ I2 (bem-estar) | D I1 | D I2 | Líder |
+| Leitura | δ I1 (ecológico) | δ I2 (bem-estar) | D I1 | D I2 | Líder |
 |---|---|---|---|---|---|
-| Levins (PDF) | −3,43 | −2,95 | 1,00 | 0,86 | I1 |
-| propagate, c = 0,5 | −0,18 | −0,33 | 0,55 | 1,00 | I2 |
-| propagate, c = 0,8 | −0,46 | −0,61 | 0,76 | 1,00 | I2 |
-| propagate, c = 0,95 | −0,65 | −0,76 | 0,85 | 1,00 | I2 |
+| Levins (PDF v1.0, −A⁻¹u) | −3,43 | −2,95 | 1,00 | 0,86 | I1 |
+| Estrutural, β_ij = a_ij/\|a_ii\| e push ÷ \|a_PP\| | −3,43 | −2,95 | 1,00 | 0,86 | I1 |
+| Estrutural com a_ij cru (sem dividir pela autorregulação) | −0,72 | −0,82 | 0,88 | 1,00 | I2 |
+| Antigo `propagate`, c = 0,5 | −0,18 | −0,33 | 0,55 | 1,00 | I2 |
 
-- **Causa:** Levins inclui a autorregulação (diagonal −0,5, −0,6, −0,7), que amplifica o caminho longo P→S→I1. A propagação ignora a diagonal e dá peso maior ao caminho direto P→I2. A inversão persiste mesmo com c alto.
-- **Ressalva:** a rede do exemplo tem uma aresta direta **P→I2**, que o schema padrão do app não permite (`schema_allowed_connections()`: P só liga a S). O teste de referência deve montar a matriz diretamente e chamar `propagate()`, não montar um grafo no app. A inversão da ordem depende justamente desse atalho. Nos exemplos reais do app, sem P→I, a comparação precisa ser refeita antes de generalizar a conclusão.
-- **Conclusão para o PDF:** o exemplo numérico da seção 4 (e a tabela 7.4) precisa ser refeito com a propagação, e o texto deve explicar a diferença.
-- Rodar a mesma comparação nos três exemplos re-parametrizados (Fase 1), com e sem `self_regulation`. Registrar numa tabela no `CLAUDE.md` e no tutorial em quantos casos a ordem de D muda.
-- Teste de referência: exemplo da seção 4 com c = 0,5, D(I1) = 0,55 e D(I2) = 1,00 (tolerância 1e-2).
+- **Conclusão:** a inversão registrada antes não era Levins × propagação, e sim coeficiente cru × padronizado. Um β de regressão já é padronizado, e com ele a leitura do app é a da especificação v1.0.
+- **Para o PDF v1.0:** explicar a equivalência na seção 4 e dizer que os a_ij da especificação correspondem a β_ij·|a_ii|.
+- **Ressalva:** a rede do exemplo tem uma aresta direta P→I2, que o schema padrão do app não permite. O teste monta a matriz diretamente.
+- Rodar D nos três exemplos no modo estrutural (Fase 1.6) e registrar no tutorial.
+- **Teste de referência:** exemplo da seção 4 com β padronizado: D(I1) = 1,00 e D(I2) = 0,86 (tolerância 1e-2).
 
 ### B4 — Confiabilidade ρ (sign determinacy empírica)
-**O que fazer:** `prediction_reliability(g, p_D, n_sim = 300, spread = 0.5, seed = 42)`. Reamostrar pesos como `sufficiency_confidence()` e medir a fração de simulações em que `sign(δ_I)` é igual ao do caso base.
-- Fazer `clamp` dos pesos reamostrados em (0, 1].
+**O que fazer:** `prediction_reliability(g, p_D, n_sim = 300, seed = 42)`. Reamostrar cada β uniformemente na sua faixa (D21, 1.4), como `sufficiency_confidence()`, e medir a fração de simulações em que `sign(δ_I)` é igual ao do caso base.
+- Pular reamostragens com ρ(B) ≥ 1 e informar quantas foram puladas.
 - Usar `withr::with_seed()`, e não `set.seed()` global (ver 2.4).
-**Testes:** ρ = 1 quando todas as confianças são 1.
+**Testes:** ρ = 1 quando todas as faixas são degeneradas (low = high = β).
 
 ### B5 — Eficácia da resposta e gap (decisão D15)
 **O que fazer:**
 - Eficácia da resposta R = **cobertura** = o slider de força (0–100% → 0–1). A confiança da aresta **não** multiplica a eficácia.
-- A confiança entra só na incerteza: é ela que define a faixa de reamostragem dos pesos em ρ (B4) e em `sufficiency_confidence()`.
+- A incerteza entra só como faixa de β (D21): é ela que define a reamostragem em ρ (B4) e em `sufficiency_confidence()`.
 - `gap_I = min(1, |net_I| / |worsening_I|)`, com net e worsening de `sufficiency()` (com os gatilhos da Fase C quando houver limiar). É o mesmo que |δ com resposta| / |δ sem resposta|.
 - Se `|worsening_I| <= tol`, o gap é `NA` e o Impacto aparece como "Not affected" (ver 2.1).
 - Documentar na tela e no relatório que esta implementação difere da V5 do PDF v1.0 (eficácia = cobertura × confiança), e atualizar o PDF.
@@ -269,102 +343,117 @@ Janelas fixas, pressão `permanent`:
 - Nova seção **"Impact prioritization"** na aba Scenarios, logo abaixo da tabela de suficiência. Ela depende do cenário de pressão (D) e do de resposta (gap).
   - Tabela com Impacto, endpoint_class, D, ρ, v, relevância, gap e prioridade, ordenada por prioridade.
   - Gráfico de barras horizontais da relevância com uma marca na prioridade, como na figura 7.4 do PDF, reaproveitando o estilo de `scenario_plots.R`.
-  - Aviso de que D vem da propagação (B3).
+  - Nota de método sobre D (B3).
 - Seção correspondente no relatório (`report.R`), depois de "Response sufficiency".
 - Download CSV da tabela.
 
 ### B8 — Exemplo novo trazido pelo usuário (fora do escopo agora)
-O exemplo portuário (tipo Santos) da seção 7 do PDF **não** será implementado nesta revisão. O usuário vai carregar outro exemplo. Quando ele chegar, validar com as Fases 1 e B (pesos 0–1, `endpoint_class`/`value_v`) e só então adicioná-lo aos exemplos e ao tutorial.
+O exemplo portuário (tipo Santos) da seção 7 do PDF **não** será implementado nesta revisão. O usuário vai carregar outro exemplo. Quando ele chegar, validar com as Fases 1 e B (β por classe, `endpoint_class`/`value_v`) e só então adicioná-lo aos exemplos e ao tutorial.
 
-**Pronto quando:** os campos B1 fazem round-trip no savepoint, o exemplo da seção 4 passa como teste, e a seção de priorização aparece na tela e no relatório com o aviso sobre D.
+**Pronto quando:** os campos B1 fazem round-trip no savepoint, o exemplo da seção 4 passa como teste, e a seção de priorização aparece na tela e no relatório com a nota de método sobre D.
 
 ---
 
-## Fase C — Gatilho operacional do limiar do Estado (`activation_threshold`)
+## Fase C — Camada de medida e gatilho do Estado (`activation_threshold`) (D7, D8, D11, D23)
 
-**Pedido:** o limiar do Estado (ex.: 0,4) deve decidir se a cadeia continua. Se a carga que chega ao Estado vinda das Pressões (arestas em 0–1) passar do limiar, as arestas Estado→Impacto ligam; caso contrário a cadeia para no Estado. A carga pode vir da **soma** de duas ou mais Pressões (0,3 + 0,3 = 0,6 > 0,4).
+**Pedido:** o limiar do Estado decide se a cadeia continua. Se o desvio do Estado causado pelas Pressões passar do limiar, as arestas Estado→Impacto ligam; caso contrário, a cadeia para no Estado. O desvio pode vir da **soma** de duas ou mais Pressões. O limiar é um nível real do Estado (ex.: perda de 40% do estoque; um contaminante no limite legal, 400% acima do fundo), sem teto em 0–1.
 
 **Situação atual (verificada no código):**
-- **Leitura estática (`sufficiency.R`):** ignora totalmente o limiar. `build_signed_matrix()` nunca chama `build_threshold_matrix()`.
-- **Simulação temporal (`temporal.R:120`, `apply_threshold_gate()`):** já existe um gatilho, mas ele compara o **nível acumulado** do próprio Estado (`|x_S(t)| / reference_value`) com o limiar, não a carga que chega das Pressões. É reavaliado a cada janela.
+- **Leitura estática (`sufficiency.R`):** ignora o limiar. `build_signed_matrix()` nunca chama `build_threshold_matrix()`.
+- **Simulação temporal (`temporal.R:120`, `apply_threshold_gate()`):** compara o nível acumulado `|x_S(t)| / reference_value` com um limiar em [0, 1], sem direção.
 - `build_threshold_matrix()` (`loop_analysis.R:150`) já aplica o limiar do nó a **todas** as arestas de saída do Estado. Essa parte serve como está.
 - Validação: limiar em [0, 1] e só em nós State (`validate.R:144–172`).
 
-**Protótipo (`gatilho.py`, porta em Python de `propagate()`, c = 0,5).** Rede P1→S e P2→S (peso 0,3 cada, negativas), S→I (0,8), limiar de S = 0,4, R→P1:
-
-| Caso | Carga sem resposta | Carga com resposta | Piora em I | Líquido em I |
-|---|---|---|---|---|
-| Só P1 a 100% | 0,30 (fechado) | — | 0 | 0 |
-| P1 + P2 a 100% | 0,60 (aberto) | — | +0,120 | +0,120 |
-| P1 + P2, R→P1 peso 0,5 | 0,60 (aberto) | 0,45 (aberto) | +0,120 | +0,105 |
-| P1 + P2, R→P1 peso 0,8 | 0,60 (aberto) | 0,36 (**fechado**) | +0,120 | **0** |
-| P1 + P2 a 70% | 0,42 (aberto) | — | +0,084 | +0,084 |
-| P1 + P2 a 60% | 0,36 (fechado) | — | 0 | 0 |
-
-- **Consequência central:** uma resposta pode neutralizar um Impacto **fechando o gatilho**, isto é, trazendo a carga para baixo do limiar, mesmo quando a mitigação linear seria só parcial (linha "peso 0,8").
-- **Isso quebra a linearidade** que a leitura estática usa hoje (líquido = piora + mitigação calculadas separadamente). Com gatilho, o líquido tem que ser calculado com os dois cenários juntos.
-
-### C1 — Cálculo de carga e estado do gatilho (novo `R/triggers.R`, decisões D7 e D8)
+### C0 — Camada de medida dos nós (D23)
 **O que fazer:**
-- `source_intensity(g, p)`: intensidade sem desconto de cada nó a montante do Estado.
-  - D = push.
-  - P = push + Σ w(D→P) · I(D).
-  - Efeito de R→D/R→P incluído com sinal.
-  - D e P recortados em ≥ 0.
-  - R = força da resposta.
-- `state_load(g, p)`: para cada Estado, `|Σ_j W[S, j] · I(j)|`, com j nas categorias Pressure e Response.
-- `state_gates(g, p)`: data.frame com `id`, `threshold`, `load` e `open` (`load >= threshold`; sem limiar = sempre aberto).
-- `gate_matrix(W, gates)`: zera as colunas dos Estados com gatilho fechado.
-- Com ciclo I→R→P, a carga depende do próprio gatilho. Iterar até estabilizar (no máximo 20 vezes). Se oscilar, marcar `unstable = TRUE` e usar gatilho aberto (conservador), com aviso.
-- A carga não depende de `c`, então o veredito do gatilho não muda na tabela "Does it hold up across how far the effect is traced".
+- Nós ganham `sd` opcional: a variação típica, na mesma unidade de `reference_value`. O formulário aceita DP ou CV (%) e converte.
+- `reference_value` passa a exigir > 0 (hoje só ≠ 0) e a distinguir "em branco" de "1". Guardar NA; o motor usa 1.
+- `activation_threshold` vira um **nível na unidade do nó**, sem teto em 0–1. Exige `reference_value` e `sd` no Estado. O limiar em DP é **z = (limiar − ref) / DP**.
+- **Direção pelo sinal de z:** z < 0 abre quando x_S ≤ z (ex.: estoque caindo); z > 0 abre quando x_S ≥ z (ex.: contaminante subindo).
+- **Limiar antigo** (fração f de 0–1, sem direção): converter para o modo "ambas as direções", |x_S| ≥ f·ref/DP. Usar DP = ref quando ausente, o que reproduz o critério atual `|x|/ref ≥ f`.
+- Pressão e resposta aceitam força acima de 100% (slider até 1000% ou entrada numérica), ou em unidade real quando o nó tem ref e DP. O push em DP é o valor informado dividido pelo DP.
+- **Tabela "Change relative to initial values"** (temporal e relatório): nível = ref + DP·x por nó com ref informado, % de mudança sem e com resposta, e janela em que o limiar foi cruzado. A opção "mostrar todos" inclui os nós sem ref.
+- **Aviso de extrapolação:** quando o cenário leva algum nó além de ±3 DP, lembrar que β é linear e que a relação real pode saturar ou ter forma dose-resposta.
+
+### C1 — Desvio do Estado e estado do gatilho (novo `R/triggers.R`, D7 e D8)
+**O que fazer:**
+- `state_deviation(g, p)`: x_S no cenário, em DP, com sinal.
+  - **Estático:** x_S = Σ_j β_Sj · ℓ_j, em que ℓ_j é o nível total da origem j (push + efeito total), com D/P recortados em ≥ 0 (D7).
+  - No modo estrutural, a carga imediata e o desvio estático do Estado são o mesmo número.
+- `state_gates(g, p)`: data.frame com `id`, `z`, `direction`, `deviation` e `open`. Sem limiar = sempre aberto.
+- `gate_matrix(B, gates)`: zera as colunas dos Estados com gatilho fechado.
+- Com ciclo I→R→P, o desvio depende do próprio gatilho. Iterar até estabilizar (no máximo 20 vezes). Se oscilar, marcar `unstable = TRUE` e usar gatilho aberto (conservador), com aviso.
+
+**Referência (modo estrutural, conferida em R).** Rede P1→S e P2→S (β −0,3 cada), S→I (β −0,8), R→P1 (β −0,5 ou −0,8). Limiar de S em z = −0,4 (S cai):
+
+| Caso | Desvio de S sem resposta | Com resposta | Piora em I | Líquido em I |
+|---|---|---|---|---|
+| Só P1 a 100% | −0,30 (fechado) | — | 0 | 0 |
+| P1 + P2 a 100% | −0,60 (aberto) | — | +0,48 | +0,48 |
+| P1 + P2, R→P1 β 0,5 | −0,60 (aberto) | −0,45 (aberto) | +0,48 | +0,36 |
+| P1 + P2, R→P1 β 0,8 | −0,60 (aberto) | −0,36 (**fechado**) | +0,48 | **0** |
+| P1 + P2 a 70% | −0,42 (aberto) | — | +0,336 | +0,336 |
+| P1 + P2 a 60% | −0,36 (fechado) | — | 0 | 0 |
+
+- **Consequência central:** uma resposta pode neutralizar um Impacto **fechando o gatilho**, mesmo quando a mitigação linear seria só parcial (linha "β 0,8").
+- **Isso quebra a linearidade:** com gatilho, o líquido tem que ser calculado com os dois cenários juntos.
+- Os valores diferem do protótipo `gatilho.py` (0,120 / 0,105 / 0,084) porque o protótipo aplicava o desconto c = 0,5, que sai na D19.
 
 ### C2 — Leitura estática com gatilho (`sufficiency.R`)
 **O que fazer:**
-- `worsening = propagate(gate(W, p_D), p_D)`.
-- `net = propagate(gate(W, p_D + p_R), p_D + p_R)`.
+- `worsening = propagate(gate(B, p_D), p_D)`.
+- `net = propagate(gate(B, p_D + p_R), p_D + p_R)`.
 - `mitigation = net − worsening`.
-- **Só quando algum Estado tem limiar.** Sem limiar, o caminho continua exatamente igual ao de hoje (teste de regressão byte a byte).
-- `strength_to_neutralize`: com gatilho, deixa de ser a razão linear. Buscar por bisseção a menor força da resposta (0–1000%) que zera o líquido, e informar se a neutralização vem "por mitigação" ou "por fechamento do gatilho".
+- **Só quando algum Estado tem limiar.** Sem limiar, o caminho continua exatamente igual ao da Fase 1 (teste de regressão byte a byte).
+- `strength_to_neutralize`: com gatilho, buscar por bisseção a menor força da resposta (0–1000%) que zera o líquido, e informar se a neutralização vem "por mitigação" ou "por fechamento do gatilho".
 - Novo valor de veredito: **"Neutralized (below threshold)"**.
 - `sufficiency_confidence()`: reavaliar os gatilhos em cada reamostragem e reportar também a % de simulações em que cada gatilho ficou aberto.
-- Atualizar o comentário de cabeçalho sobre linearidade.
 
-### C3 — Simulação temporal com os dois critérios de gatilho (decisão D11)
-**O que fazer:** em `apply_threshold_gate()`, acrescentar `gate_mode = c("load", "state_level")`.
-- `load`: a carga da janela t é `|Σ_j W[S, j] · x_j(t)|`, com j em Pressure/Response, comparada ao limiar. É o padrão.
-- `state_level`: comportamento atual, `|x_S(t)| / reference_value` comparado ao limiar.
-- Nos dois modos o gatilho é reavaliado a cada janela (reversível, sem trava).
-- **Na tela:** seletor "Trigger criterion" com as opções "Load arriving at the State (default)", "Accumulated State level" e "Compare both".
+### C3 — Simulação temporal com os dois critérios de gatilho (D11, D20)
+Com a persistência da D20, o Estado acumula (sr < 1). Por isso "o que chega nesta janela" e "o desvio acumulado" são diferentes, e os dois critérios continuam fazendo sentido. Coincidem só quando o Estado tem sr = 1.
+
+**O que fazer:** em `apply_threshold_gate()`, acrescentar `gate_mode = c("load", "state_level")`, os dois em DP e com direção (C0).
+- `load`: Σ_j β_Sj · x_j(t) (o que chega em t) comparado com z. É o padrão atual da D11; ver P1.
+- `state_level`: x_S(t) comparado com z.
+- Nos dois modos, o gatilho é reavaliado a cada janela (reversível, sem trava).
+- **Na tela:** seletor "Trigger criterion" com "Load arriving at the State", "Accumulated State level" e "Compare both".
   - Em "Compare both", rodar a simulação duas vezes e mostrar lado a lado: duas colunas na tabela por Impacto e janela, e dois painéis no gráfico.
-  - Destacar as janelas em que os dois critérios discordam (gatilho aberto num e fechado no outro).
-- Mostrar, por janela, se cada gatilho estava aberto: coluna na tabela e, no gráfico, marca nas janelas com gatilho fechado.
-- Gravar o critério no `scenario_state` e nos cenários salvos. O relatório mostra o critério usado, ou as duas colunas quando for "Compare both".
-- Texto de ajuda: "Load = a pressão desta janela passou do limite? Accumulated = o Estado já se desviou além do ponto crítico somando todas as janelas? Uma pressão fraca e constante pode nunca disparar por carga, mas disparar por acumulação."
-- **Teste de referência (`q7.py`):** P1 sozinha a 0,3 (limiar 0,4, impulso): por carga nunca abre (Impacto 0); por nível acumulado abre na janela 4.
-- `reference_value` só é usado no modo `state_level`. Documentar.
+  - Destacar as janelas em que os dois critérios discordam.
+- Mostrar, por janela, se cada gatilho estava aberto: coluna na tabela e marca no gráfico.
+- Gravar o critério no `scenario_state` e nos cenários salvos; o relatório mostra o critério usado.
+- Texto de ajuda: "Load = o que chega nesta janela passou do limite? Accumulated = o Estado já se desviou além do ponto crítico somando todas as janelas? Uma pressão fraca e constante pode nunca disparar por carga, mas disparar por acumulação."
+- **Teste de referência (`q7.py`, β 0,3/0,8, limiar em z = −0,4):** P1 sozinha a 100%, impulso. Por carga nunca abre (Impacto 0); por nível acumulado abre na janela 4. Reconferir em R com a convenção de direção da C0.
 
 ### C4 — Interface e relatório
 **O que fazer:**
-- Nova tabela "State triggers" em Results (Scenarios), com as colunas: State, limiar, carga só da pressão, carga com resposta, antes (aberto/fechado), depois, e "a resposta fecha o gatilho?".
+- Tabela "State triggers" em Results (Scenarios): Estado, limiar (unidade real e z), desvio só da pressão, desvio com resposta, antes (aberto/fechado), depois, e "a resposta fecha o gatilho?".
 - No grafo, Estados com limiar ganham uma marca (borda dupla ou ícone). Na aba Scenarios, as arestas de saída de um Estado fechado aparecem tracejadas em cinza.
-- Formulário de nó: novo texto de ajuda. "Activation threshold (0–1): o Estado só transmite efeito aos Impactos quando a carga que chega das Pressões — soma de peso × intensidade — atinge este valor."
+- Formulário de nó: "Activation threshold (in the factor's own units): the State only passes its effect on to Impacts once it crosses this level. Needs the reference value and typical variation."
 - Relatório: seção "State triggers", depois de "Response sufficiency".
-- Tutorial e README: explicar o gatilho com o exemplo da tabela acima.
+- Tutorial e README: explicar o gatilho com o exemplo da tabela acima e com o exemplo de contaminação.
 
 ### C5 — Validação e Reach
 **O que fazer:**
-- **Aviso na validação** quando um Estado tem limiar maior que a carga máxima possível (Σ dos pesos de entrada de P/R com intensidade 1). Mensagem: "este gatilho nunca dispara".
-- **Aviso na validação** quando um Estado tem limiar e nenhuma aresta de Pressão chegando.
-- **Reach (decisão D12):** mostrar lado a lado "N fatores alcançáveis na rede" (topológico, como hoje) e "M alcançados neste cenário" (travessia que não atravessa Estados com gatilho fechado). Listar os Estados fechados que explicam a diferença. Aplicar o mesmo na comparação de cenários salvos e no relatório.
+- **Aviso na validação:** limiar sem `reference_value` ou `sd` no Estado.
+- **Aviso:** |z| maior que o maior desvio possível com todas as Pressões a 100% ("este gatilho nunca dispara com pressões de até 100%").
+- **Aviso:** Estado com limiar e nenhuma aresta de Pressão chegando.
+- **Reach (D12):** mostrar lado a lado "N fatores alcançáveis na rede" (topológico) e "M alcançados neste cenário" (sem atravessar Estados com gatilho fechado). Listar os Estados fechados que explicam a diferença, também na comparação de cenários e no relatório.
 
 ### C6 — Testes de referência
-- Os seis casos da tabela acima, com tolerância 1e-6: piora 0,120 no caso P1+P2; líquido 0 com R→P1 peso 0,8; 0 com P1 sozinho e com P1+P2 a 60%; 0,084 com P1+P2 a 70%.
-- Regressão: rede sem limiar dá resultado idêntico ao atual em `sufficiency()` e `simulate_temporal_pair()`.
-- **O exemplo Gnanapragasam não é coberto por essa regressão:** ele tem `activation_threshold = 0,15` em S1, e o critério padrão da simulação temporal muda de "nível acumulado" (hoje) para "carga" (D11). Os números dele mudam por causa da Fase C, e não só pelos pesos 0–1. Registrar os valores antes e depois e refazer o tutorial.
+- Os seis casos da tabela da C1, com tolerância 1e-6.
+- Conversão de limiar antigo: f = 0,15 com ref = 100 e sem DP reproduz o critério atual `|x|/ref ≥ 0,15`.
+- Direção: um contaminante com z = +8 não abre com desvio negativo.
+- Regressão: rede sem limiar dá resultado idêntico ao da Fase 1 em `sufficiency()` e `simulate_temporal_pair()`.
+- **Exemplo Gnanapragasam** (`activation_threshold = 0,15` em S1, ref = 100): os números mudam pela Fase 1 (β) e pelo critério padrão da C3. Registrar antes e depois e refazer o tutorial.
 - Ciclo I→R→P com gatilho oscilante: `unstable = TRUE` e aviso.
 - `strength_to_neutralize` por bisseção no caso de fechamento do gatilho.
 
-**Pronto quando:** o limiar de um Estado decide, na leitura estática e na temporal, se a cadeia passa para os Impactos. A soma de Pressões conta. A tela e o relatório mostram carga, limiar e estado de cada gatilho. Os testes C6 passam e redes sem limiar não mudam nada.
+**Pronto quando:**
+- o limiar de um Estado, em unidade real e com direção, decide na leitura estática e na temporal se a cadeia passa para os Impactos;
+- a soma de Pressões conta;
+- pressões acima de 100% funcionam;
+- a tela e o relatório mostram desvio, limiar e estado de cada gatilho, além da tabela em unidades reais;
+- os testes C6 passam e redes sem limiar não mudam nada.
 
 ---
 
@@ -373,7 +462,7 @@ O exemplo portuário (tipo Santos) da seção 7 do PDF **não** será implementa
 **Pedido:** se um nó tem `growth_rate` positivo, as arestas que saem dele devem aumentar de intensidade na mesma proporção a cada janela.
 
 **Situação atual (verificada no código e simulada, `crescimento.py`):**
-- O motor temporal faz `x(t+1) = x + g·x + W·x + p` (`temporal.R:139`). O crescimento fica no **valor do nó**, e a aresta transmite `w · x`.
+- O motor temporal faz `x(t+1) = x + g·x + B·x + p` (`temporal.R:139`, com B da Fase 1). O crescimento fica no **valor do nó**, e a aresta transmite `w · x`.
 - Por isso a influência que sai do nó **já cresce na proporção (1+g)** a cada janela, quando o nó tem um desvio. Exemplo: D com g = 0,10 e aresta D→P de peso 0,5, impulso em D. A contribuição em P é 0,50 → 0,55 → 0,605 → …, razão 1,10 por janela.
 - **Multiplicar também o peso da aresta por (1+g)^t contaria o crescimento duas vezes:** a razão viraria 1,21 por janela (decisão D9: o crescimento fica no nó).
 - **Lacuna real 1:** o crescimento só age sobre um desvio que já existe. Um Driver com `growth_rate` que não está no cenário de pressão fica em zero para sempre. O tutorial do Gnanapragasam contorna isso ativando D3 a 30% à mão.
@@ -398,7 +487,7 @@ O exemplo portuário (tipo Santos) da seção 7 do PDF **não** será implementa
 
 ### D2 — Tendência exógena sem precisar de semente (decisão D10)
 **O que fazer:**
-- Em `simulate_temporal_pair()`, todo nó com `g > 0` recebe, nas **duas** rodadas, uma entrada exógena que faz o seu desvio seguir `reference_value · ((1+g)^t − 1)`. Como o motor já aplica o termo `g·x` ao nó, isso equivale a uma entrada **constante** de `reference_value · g` por janela: `x(t+1) = (1+g)·x(t) + ref·g` dá exatamente `ref·((1+g)^t − 1)`. **Não** usar `ref · g · (1+g)^(t−1)`: somada ao termo `g·x`, ela contaria o crescimento duas vezes (na janela 2 daria `2g(1+g)` em vez de `g(2+g)`). Correção feita na conferência em R de 29/09/2026.
+- Em `simulate_temporal_pair()`, todo nó com `g > 0` recebe, nas **duas** rodadas, uma entrada exógena que faz o seu nível seguir `reference_value · ((1+g)^t − 1)`. Em DP (C0), a entrada é `ref·g/DP = g/CV` por janela; sem DP, usa DP = ref (entrada g, como no D5). Como o motor já aplica o termo `g·x` ao nó, isso equivale a uma entrada **constante** de `reference_value · g` por janela: `x(t+1) = (1+g)·x(t) + ref·g` dá exatamente `ref·((1+g)^t − 1)`. **Não** usar `ref · g · (1+g)^(t−1)`: somada ao termo `g·x`, ela contaria o crescimento duas vezes (na janela 2 daria `2g(1+g)` em vez de `g(2+g)`). Correção feita na conferência em R de 29/09/2026.
 - Se o nó também estiver no cenário de pressão, o push se soma a essa tendência.
 - Como a tendência entra nas duas rodadas, ela não enviesa a comparação cenário × baseline. Ela só faz o mundo de fundo se mover.
 - Checkbox "Apply growth trends even to factors outside the pressure scenario", padrão ligado. Gravar no `scenario_state`.
@@ -436,9 +525,9 @@ O exemplo portuário (tipo Santos) da seção 7 do PDF **não** será implementa
 | 2.2 | Confiança exibida não é a do veredito exibido | `mod_responses.R:73` | A matriz testa cada resposta sozinha a 100%. Acrescentar uma linha "Planned scenario" que reamostra `p_R` real com as forças dos sliders. |
 | 2.3 | Caminhos passando por mais de uma Resposta | `pathways.R:39–51` | `all_simple_paths(…, cutoff = nível_destino − nível_origem)` pelo `order` do schema, ou excluir nós Response do meio do caminho. Assim a busca respeita D-P-S-I-R (D4). Aplicar `max_paths` durante a enumeração. |
 | 2.4 | Reprodutibilidade | `sufficiency.R:211`, `metrics.R:96` | Trocar `set.seed()` global por `withr::with_seed()`. Fixar semente no Louvain. Adicionar `withr` a `required_packages`. |
-| 2.5 | Estabilizador temporal encolhe a autorregulação | `temporal.R:213, 248` | Aplicar λ só à parte fora da diagonal. Como a autorregulação é o que faz o Impacto convergir (Fase A), ela não pode ser reduzida junto. Recalcular os testes afetados. |
+| 2.5 | Estabilizador temporal encolhe a autorregulação | `temporal.R:213, 248` | **Remover o estabilizador λ** (`stability_cap`): no modo estrutural, os β são dados e não podem ser reescalados, e ρ(B) < 1 já é exigido (1.3). Manter só o aviso `temporal_stability_note()` quando ρ(a·I + B) > 1. Recalcular os testes afetados. |
 | 2.6 | Categorias com nome fixo | `sufficiency.R`, `temporal.R`, `metrics.R`, `reach.R`, `relevance.R` | Derivar os papéis (Impact, Pressure, Response) da coluna `role` do schema, para que renomear no passo Model não esvazie as tabelas. |
-| 2.7 | Score de caminho | `pathways.R:67–69` | Produto dos pesos × média da confiança, e sinal do caminho = produto dos sinais, mostrado na tela. |
+| 2.7 | Score de caminho | `pathways.R:67–69` | **Efeito do caminho = produto dos β com sinal**, que é o efeito indireto exato daquele caminho na path analysis. Mostrar o efeito, o sinal e a faixa (produto dos limites da faixa). |
 
 ---
 
@@ -449,13 +538,13 @@ O exemplo portuário (tipo Santos) da seção 7 do PDF **não** será implementa
 | 3.1 | Wizard frágil entre máquinas | `mod_wizard.R:18–44`, `mod_data.R` | Trocar os `conditionalPanel` guiados pelo `numericInput` escondido por `tabsetPanel(type = "hidden")` + `updateTabsetPanel()`. |
 | 3.2 | Grafo redesenha inteiro a cada arrasto ou slider | `mod_graph.R:269, 391` | `isolate(positions())`, `debounce()` nos sliders, `visNetworkProxy` para mudanças cosméticas. |
 | 3.3 | Simulação temporal recalcula a cada passo do slider | `mod_responses.R:484` | `bindEvent()` num botão "Run simulation". |
-| 3.4 | Matriz de confiança lenta no shinylive | `sufficiency.R` | `withProgress` e número de simulações configurável (100/300/1000). |
+| 3.4 | Matriz de confiança lenta no shinylive | `sufficiency.R` | `withProgress` e número de simulações configurável (100/300/1000). Sem a varredura de c (D19), o custo já cai. |
 | 3.5 | Sliders de cenário voltam ao padrão após qualquer edição | `mod_responses.R:188` | `isolate()` dos valores atuais ao re-renderizar. |
 | 3.6 | Upload antigo reimportado após erro | `mod_data.R:140–243` | Mensagens num `uiOutput` separado do card do `fileInput`. |
 | 3.7 | Erros em azul | `mod_data.R:193, 842` | `alert-danger` para erros. |
 | 3.8 | Snapshot falha em silêncio | `mod_report.R:87, 182` | Enviar o erro via `Shiny.setInputValue` e notificar. |
 | 3.9 | Remoção sem confirmação | `mod_data.R:588`, `mod_responses.R:655` | Modal "N arestas serão removidas" e aviso ao sobrescrever um cenário com o mesmo nome. |
-| 3.10 | Modais aceitam valores inválidos | `mod_data.R:644–657` | Validar NA e faixa 0–1 (uncertainty, controllability, self_regulation, value_v), auto-laço e aresta duplicada. |
+| 3.10 | Modais aceitam valores inválidos | `mod_data.R:644–657` | Validar NA e faixas (uncertainty, controllability, self_regulation em [0, 1], value_v, β, faixa de β, ref > 0, DP > 0), auto-laço e aresta duplicada. |
 | 3.11 | Duas paletas conflitantes | `mod_graph.R:273`, `schema.R:17` | Uma só fonte de paleta; Okabe-Ito como padrão. |
 | 3.12 | IDs de nó usados como IDs de input | `mod_responses.R` | Usar índice ou `make.names()` para os inputs. |
 | 3.13 | Cenários e snapshots salvos fora do savepoint | `io.R` | Persistir `saved_scenarios` no `.idpsir.json`. |
@@ -467,39 +556,40 @@ O exemplo portuário (tipo Santos) da seção 7 do PDF **não** será implementa
 - **6.1 do roadmap anterior:** `LICENSE` (MIT), `CITATION.cff`, `DESCRIPTION` com todas as dependências de `global.R`, incluindo `withr` e `htmltools`.
 - **6.2 renv:** `renv.lock` só para desenvolvimento e CI. O auto-install do `global.R` continua como fallback para `runGitHub()`.
 - **CI:** job de `testthat` antes do export shinylive; fixar a versão de R e do shinylive.
-- **Código morto:** mover para `legacy/` (ou uma tag git) o seguinte: as partes não usadas de `loop_analysis.R`, **exceto** `build_interaction_matrix`, `self_regulation_diagonal`, `build_threshold_matrix` e `build_press_vector`; `draw_trajectory_plot`, `draw_sensitivity_plot` e o storyboard antigo de `scenario_plots.R`; `responses.R` exceto `get_feedback_categories`; `R/dpsir/`; `mod_communities.R`; `mod_data_ui`. Corrigir o README (`find_response_targets` não é usada).
+- **Código morto:** mover para `legacy/` (ou uma tag git) o seguinte: `sufficiency_reach_over_c()`, `format_reach_over_c_table()` e `build_signed_matrix()` (substituída por `effect_matrix()`); as partes não usadas de `loop_analysis.R`, **exceto** `build_interaction_matrix`, `self_regulation_diagonal`, `build_threshold_matrix` e `build_press_vector`; `draw_trajectory_plot`, `draw_sensitivity_plot` e o storyboard antigo de `scenario_plots.R`; `responses.R` exceto `get_feedback_categories`; `R/dpsir/`; `mod_communities.R`; `mod_data_ui`. Corrigir o README (`find_response_targets` não é usada).
 - **Testes que faltam:** `pathways.R`, `report.R` (incluindo escape), `import_matrices`, rede vazia, NA em sinal/peso, savepoint fora de faixa e desalinhamento p–W.
-- **CLAUDE.md:** mover o histórico de bugs (~270 KB) para `docs/CHANGELOG.md`. Manter no `CLAUDE.md` só o resumo operacional e as decisões D1–D16 deste roadmap.
+- **CLAUDE.md:** mover o histórico de bugs (~270 KB) para `docs/CHANGELOG.md`. Manter no `CLAUDE.md` só o resumo operacional e as decisões D1–D23 deste roadmap.
 
 ---
 
 ## Ordem sugerida e dependências
 
-1. **Fase 0** (0.1–0.8): cerca de 1–2 dias. O 0.6 depende de 1.1 para a faixa do peso, então pode ser feito junto com 1.1.
-2. **Fase 1** (pesos 0–1): 1 dia, mais a atualização do tutorial. É pré-requisito da Fase B.
-3. **Fase A** (modos de resposta): 1–2 dias. A7 regenera as figuras do tutorial junto com 1.3; fazer as duas regenerações de uma vez.
-4. **Fase B** (relevância): 3–5 dias.
-5. **Fase C** (gatilho do Estado): 2–3 dias, depois da Fase 1 (pesos 0–1). Refazer os números do tutorial afetados por Estados com limiar (Gnanapragasam tem `activation_threshold = 0,15` em S1).
-6. **Fase D** (crescimento): 1–2 dias, junto com ou depois da Fase A (mesmo motor temporal). Refazer o exemplo Gnanapragasam sem a ativação manual de D3.
-7. **Fases 2, 3 e 4**, em paralelo conforme a disponibilidade.
+1. **Fase 0** (0.1–0.8): cerca de 1–2 dias. O 0.6 depende de 1.1 para os novos campos de aresta, então pode ser feito junto com 1.1.
+2. **Fase 1** (modo estrutural): 3–4 dias. 1.1–1.5 antes de qualquer outra fase, porque trocam o motor. A 1.6 (exemplos, com revisão de classes junto com o usuário) pode andar em paralelo com A–D, mas precisa terminar antes de refazer o tutorial.
+3. **Fase A** (modos de resposta e "até neutralizar"): 1–2 dias. A A7 regenera as figuras do tutorial junto com a 1.6.
+4. **Fase B** (relevância): 3–4 dias. Mais simples que antes: sem aviso de Levins, reamostragem pela faixa de β.
+5. **Fase C** (camada de medida e gatilho): 3–4 dias. A C0 (ref, DP, limiar em unidade real, força > 100%) vem antes de C1–C6. Precisa da decisão P1.
+6. **Fase D** (crescimento): 1–2 dias, junto com ou depois da Fase A (mesmo motor temporal) e depois da C0 (tendência em DP).
+7. **Fases 2, 3 e 4**, em paralelo conforme a disponibilidade. A 2.5 (remover o estabilizador λ) entra junto com a Fase A.
 
 ## Checklist final
 
 - [ ] `testthat::test_dir("tests/testthat")` passa.
 - [ ] App sobe localmente e na demo shinylive.
-- [ ] Os três exemplos, re-parametrizados em 0–1, carregam sem aviso no app local e na demo shinylive.
-- [ ] PDF de relevância atualizado (seção 4 e 7.4 com D pela propagação; V5 com eficácia = cobertura).
-- [ ] Tutorial e README batem número a número com o app (modos de pressão e resposta, critério "até neutralizar", pesos 0–1, priorização, gatilho, crescimento).
-- [ ] Decisões D1–D16 registradas no `CLAUDE.md`.
-- [ ] Relatório informa o modo da resposta, a tolerância, o critério do gatilho, o método de D e as sementes usadas.
+- [ ] Os três exemplos, no modo estrutural (β por classe revisada), carregam sem aviso no app local e na demo shinylive.
+- [ ] Um savepoint antigo convertido reproduz os números da leitura estática antiga.
+- [ ] PDF de relevância atualizado (seção 4 e 7.4: equivalência entre Levins e β padronizado; V5 com eficácia = cobertura).
+- [ ] Tutorial e README batem número a número com o app (β e classes, modos de pressão e resposta, critério "até neutralizar", priorização, gatilho em unidade real, crescimento).
+- [ ] Decisões D1–D23 registradas no `CLAUDE.md`.
+- [ ] Relatório informa o modo da resposta, a tolerância, o critério do gatilho, as arestas com valor por classe ou convertido, e as sementes usadas.
 
 ---
 
-# Anexo — Pontos em aberto e proposta do modo estrutural (29/09/2026)
+# Anexo — Justificativa do modo estrutural (29/09/2026)
 
-Este anexo registra a discussão que ficou em aberto depois das revisões de D1, D2 e D16. **Nada aqui altera as fases acima** até ser decidido. A Fase 0 não depende destes pontos. As Fases C e D dependem deles.
+Este anexo registra a discussão que levou ao modo estrutural. **As decisões resultantes já estão nas fases acima (D17–D23).** O que continua aberto está em "Decisões a confirmar" (P1, P2).
 
-## X1 — Limiar, valor de referência e leitura estática × temporal
+## X1 — Limiar, valor de referência e leitura estática × temporal (resolvido pelas D20 e D23, exceto P1)
 
 **Leitura proposta pelo usuário:**
 - `reference_value` é o valor inicial, positivo, de qualquer nó.
@@ -528,9 +618,9 @@ Este anexo registra a discussão que ficou em aberto depois das revisões de D1,
 - Ao ligar o limiar ao valor de referência em unidades do nó, os pesos passam a precisar ser comensuráveis **entre níveis**. Isso é, na prática, um problema de modelagem estrutural (path analysis ou SEM).
 - O X2 propõe uma saída alinhada com essa lógica.
 
-## X2 — Modo estrutural opcional: aresta = coeficiente de caminho padronizado β (em discussão)
+## X2 — Modo estrutural: aresta = coeficiente de caminho padronizado β (adotado: D17–D23)
 
-**Ideia:** o usuário escolhe entre dois modos de peso.
+**Ideia original** (antes da decisão Q1, que deixou só o modo estrutural): dois modos de peso.
 
 | Modo | O que o peso significa | Como o motor usa |
 |---|---|---|
@@ -629,9 +719,9 @@ Além disso, o r²:
 - como ficam a D3, a D7 e a D11 no modo estrutural;
 - as decisões pendentes do X1 no modo relativo.
 
-## X3 — Acomodação do modo estrutural no roadmap (proposta de 29/09, para revisão com o usuário)
+## X3 — Acomodação do modo estrutural no roadmap (aplicada em 29/09)
 
-O usuário decidiu propor o modo estrutural (X2) já nesta revisão. Esta seção passa por cada fase e diz o que muda. **As fases acima só serão reescritas depois que as decisões do X3.4 forem tomadas.**
+O usuário decidiu adotar o modo estrutural (X2) nesta revisão. Esta seção registra a análise fase a fase que orientou a reescrita. **As decisões do X3.4 foram tomadas em 29/09** (Q1: só o estrutural; Q2: a = 1 − sr; Q3: `confidence` vira faixa de β; Q4: exemplos só no estrutural) e aplicadas às fases. Com a Q2, parte do achado 3 do X3.1 vale só para nós com sr = 1 (ver D20 e P1).
 
 ### X3.1 — Três achados que simplificam a acomodação (conferidos em R)
 
@@ -674,6 +764,8 @@ O usuário decidiu propor o modo estrutural (X2) já nesta revisão. Esta seçã
 | **4** publicação | O tutorial ganha uma seção sobre o modo estrutural | Adicionar à A7 e à 1.3 |
 
 ### X3.3 — Fase E (nova): modo estrutural
+
+**Aplicação (29/09):** a Fase E não virou uma fase separada. E1–E3 e E7 foram para a nova Fase 1 (1.1–1.6), E5 foi para a C0, E4 foi para a Fase A e a 2.5, e E6 foi para a C0, a 1.1 e a 2.7. As referências abaixo a itens antigos (1.3 etc.) são da versão anterior do roadmap.
 
 - **E1 — Dados e savepoint.**
   - `metadata$weight_mode` com os valores `relative` ou `structural`.
