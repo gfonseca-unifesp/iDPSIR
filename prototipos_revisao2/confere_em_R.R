@@ -86,3 +86,9 @@ for (sr in list(NULL, list(P=.3,E=.3,I=.3))) for (mD in c("permanent","impulse")
   cat(sprintf("SR=%-3s P=%-9s R=%-9s  para em t=%-3s I=%-7s | 5%% relativo em t=%s\n", if(is.null(sr))"0" else ".3", mD, mR,
       t_stop, if (is.na(t_stop)) "-" else round(s[t_stop], 2), rel5))
 }
+
+cat("\n== X5: growth_rate x autorregulacao no motor atual (redundancia)\n")
+run_gsr <- function(g_, sr_) { g <- mk(c("D","P"), c("Driver","Pressure"), list(list("D","P",.5,"pos")))
+  V(g)$growth_rate <- c(D = g_, P = 0)[V(g)$name]; V(g)$self_regulation <- c(D = sr_, P = 0)[V(g)$name]
+  simulate_temporal_pair(g, pv(g, D = 1), pv(g), windows = 6, mode_D = "impulse")$baseline }
+cat("g=0.1,sr=0.3 identico a g=0,sr=0.2? ", isTRUE(all.equal(run_gsr(.1, .3), run_gsr(0, .2))), "\n")

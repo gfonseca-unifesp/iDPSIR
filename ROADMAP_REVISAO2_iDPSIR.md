@@ -41,7 +41,7 @@ A ordem das fases importa: a Fase 0 corrige bugs nos mesmos módulos que as outr
 | D17 | **Aresta = coeficiente de caminho padronizado β:** quantos desvios-padrão o destino muda quando a origem muda 1 DP. O sinal vem de `interaction_type`, a magnitude fica em `weight`, e o segundo campo é a faixa de incerteza (`weight_low`/`weight_high`). O r² é só atalho (\|β\| = √r²) e diagnóstico. O slope bruto é só conversor, na camada dos nós. | Usuário, 29/09 |
 | D18 | Sem dados, o usuário escolhe uma classe: **fraca** < 0,3 (valor 0,15, faixa 0–0,3), **moderada** 0,3–0,6 (**0,45, padrão**), **forte** ≥ 0,6 (0,80, faixa 0,6–1,0). O sinal nunca tem padrão. Arestas com classe ou padrão ficam marcadas na tabela e no relatório. | Usuário, 29/09 |
 | D19 | **Só o modo estrutural.** Sai o desconto c (slider "How far to trace the effect") e a tabela "Does it hold up across how far the effect is traced". O motor é único sobre B, com efeito (I − B)⁻¹p − p, e exige ρ(B) < 1. Arquivos antigos são convertidos na importação. | Usuário, 29/09 |
-| D20 | Persistência temporal a = 1 − `self_regulation` + g, como hoje: com sr = 0 (padrão), o nó acumula como estoque; sr pode valer 1 (sem memória). A leitura estática, (I − B)⁻¹p − p, coincide com o equilíbrio temporal só nos nós com sr = 1. Com sr < 1, o equilíbrio temporal é (sr·I − B)⁻¹p (Levins com diagonal −sr); com sr = 0, não há equilíbrio (conferido em R). | Usuário, 29/09 |
+| D20 | Persistência temporal a = 1 − `self_regulation` + g, como hoje (sobre g, ver P3). `self_regulation` aceita [0, 1] e tem **padrão 0,5 para nós novos** (meia-vida de 1 janela, acúmulo de 2× no equilíbrio; revisado em 29/09). Arquivos antigos mantêm o valor gravado. sr = 0: o nó acumula como estoque; sr = 1: sem memória. A leitura estática, (I − B)⁻¹p − p, coincide com o equilíbrio temporal só nos nós com sr = 1. Com sr < 1, o equilíbrio temporal é (sr·I − B)⁻¹p (Levins com diagonal −sr); com sr = 0, não há equilíbrio (conferido em R). | Usuário, 29/09 |
 | D21 | O `confidence` das arestas vira a faixa de β. Sem faixa informada, vale a faixa da classe. Confiança antiga κ é convertida pela regra atual de reamostragem: β·[1 − 0,5(1 − κ), 1 + 0,5(1 − κ)]. | Usuário, 29/09 |
 | D22 | Os exemplos (Fisheries, Mangi, Gnanapragasam e `sample`) ficam **só no modo estrutural**, com a classe de cada aresta revisada com o usuário. | Usuário, 29/09 |
 | D23 | **Camada de medida:** nós podem ter valor de referência (> 0) e variação típica (DP ou CV). O limiar do Estado é um nível na unidade do nó, **sem teto em 0–1**, convertido para z = (limiar − ref)/DP, com direção pelo sinal de z. Pressão e resposta podem passar de 100% ou ser informadas em unidade real. | Usuário, 29/09 |
@@ -50,12 +50,13 @@ A ordem das fases importa: a Fase 0 corrige bugs nos mesmos módulos que as outr
 
 As perguntas Q1–Q10 de 25/09 viraram as decisões D7–D16. Em 29/09, D1 e D2 foram revisadas, D16 foi cancelada, e as decisões do modo estrutural (D17–D23) revisaram D3, D5, D7, D13, D14 e D15.
 
-Nenhuma pendente. As duas perguntas que ficaram abertas foram respondidas pelo usuário em 29/09:
+P1 e P2 foram respondidas pelo usuário em 29/09. A P3 está em aberto:
 
 | # | Pergunta | Decisão | Onde entra |
 |---|---|---|---|
 | P1 | Critério padrão do gatilho na temporal | **Desvio acumulado** (revisa o padrão da D11) | C3 |
 | P2 | Arquivo antigo que, convertido, fica com \|β\| > 1 | **Aviso e revisão**, sem bloqueio | 1.5 |
+| P3 | **Em aberto (29/09).** `growth_rate` é redundante com a autorregulação no motor atual. Separar os dois? g sai da diagonal e vira só tendência exógena do nível de referência (Anexo X5) | Proposta: separar | Fase D, A |
 
 ---
 
@@ -271,10 +272,18 @@ Janelas fixas, pressão `permanent`:
 - **Coerência com a leitura estática (D20):** cadeia P→S→I com β −0,7/−0,6, sr = 1 em todos os nós e pressão `permanent` converge para I = 0,42, igual a (I − B)⁻¹p. Com sr = 0,5, converge para 3,36 = (0,5·I − B)⁻¹p. Os dois casos entram como teste.
 - `self_regulation` passa a aceitar 1 (hoje a faixa é [0, 1)).
 
-### A7 — Documentação
-**O que fazer:** atualizar a seção temporal do README e do tutorial com os dois modos e o critério "até neutralizar", usando a tabela acima como exemplo didático. Mensagem central: *"quem faz o Impacto convergir é a autorregulação da cadeia; o modo da resposta decide o esforço; o critério de parada diz em que janela o problema foi resolvido"*. **A mudança de padrão (D2) altera o gráfico temporal do exemplo Gnanapragasam**: regenerar a figura e os números.
+### A8 — Autorregulação: padrão, guia e aviso (D20)
+**O que fazer:**
+- **Padrão 0,5** para nós novos (`validate.R` normalize, `mod_data.R` `create_empty_nodes_table()` e formulário). Arquivos antigos e CSVs mantêm o valor gravado. Célula em branco num CSV novo recebe 0,5, com aviso no preflight.
+- Faixa aceita: [0, 1] (hoje [0, 1)).
+- **Guia no formulário de nó:** junto ao campo, a tabela do Anexo X4 (autorregulação × meia-vida × acúmulo no equilíbrio × exemplo) e uma frase: "0 = accumulates like a stock; 1 = no memory".
+- **Aviso na validação:** quando todos os nós têm autorregulação 0 ("nothing in this network recovers on its own; every effect accumulates window after window"), e quando um Estado com limiar tem autorregulação 0 (o desvio acumulado nunca se desfaz sozinho: o gatilho, uma vez aberto, só fecha se uma resposta empurrar o Estado de volta).
+- **Testes:** padrão 0,5 em nó novo; arquivo antigo preserva 0; os dois avisos.
 
-**Pronto quando:** os dois seletores e a duração aparecem com ajuda; `permanent`, `permanent` e "até neutralizar" (50 janelas) são os padrões em UI, motor e relatório; os testes A6 passam; o savepoint preserva as escolhas; e o tutorial reflete o novo padrão.
+### A7 — Documentação
+**O que fazer:** atualizar a seção temporal do README e do tutorial com os dois modos e o critério "até neutralizar", usando a tabela acima como exemplo didático. **Incluir no README e no tutorial o texto sobre autorregulação do Anexo X4** (pedido do usuário, 29/09). Mensagem central: *"quem faz o Impacto convergir é a autorregulação da cadeia; o modo da resposta decide o esforço; o critério de parada diz em que janela o problema foi resolvido"*. **A mudança de padrão (D2) altera o gráfico temporal do exemplo Gnanapragasam**: regenerar a figura e os números.
+
+**Pronto quando:** os dois seletores e a duração aparecem com ajuda; a autorregulação tem padrão 0,5, guia e avisos (A8); `permanent`, `permanent` e "até neutralizar" (50 janelas) são os padrões em UI, motor e relatório; os testes A6 passam; o savepoint preserva as escolhas; e o tutorial reflete o novo padrão.
 
 ---
 
@@ -460,6 +469,8 @@ Com a persistência da D20, o Estado acumula (sr < 1). Por isso "o que chega nes
 ---
 
 ## Fase D — Crescimento (`growth_rate`) propagado pelas arestas de saída
+
+**Atenção (P3, em aberto):** no motor atual, `growth_rate` é redundante com a autorregulação: só a diferença g − sr entra no passo (conferido com o motor real). A proposta do Anexo X5 separa os dois: g sai da diagonal e vira só a tendência exógena do nível de referência. Se aceita, D1, D2 e D5 são ajustados como descrito no X5, antes de implementar esta fase.
 
 **Pedido:** se um nó tem `growth_rate` positivo, as arestas que saem dele devem aumentar de intensidade na mesma proporção a cada janela.
 
@@ -802,3 +813,48 @@ O usuário decidiu adotar o modo estrutural (X2) nesta revisão. Esta seção re
   - ou a = 1 − sr, com sr informado por nó: estoques que acumulam, como hoje.
 - **Q3 — O que fazer com o `confidence` atual.** Mapear para a faixa de β (ex.: confiança 1 = faixa estreita) ou manter os dois campos separados.
 - **Q4 — Exemplos.** Os três exemplos passam para o modo estrutural (classes) ou ficam nos dois modos para comparação.
+
+## X4 — Texto para o README e o tutorial: autorregulação (a aplicar na A7)
+
+Rascunho em inglês, a língua do README. Entra no README (seção *Data format*, junto ao campo `self_regulation`) e no tutorial quando a Fase A estiver implementada: padrão 0,5, valor 1 aceito e motor sobre B. Os números foram conferidos em R (`prototipos_revisao2/modo_estrutural.R`, seção D20).
+
+> **Self-regulation — how a factor recovers on its own.** `self_regulation` (0–1, default 0.5) is the share of a factor's deviation that fades by itself each window, independently of the network: 0 = nothing fades and everything that arrives accumulates (a stock with no replenishment, a persistent contaminant); 0.3 = 30% of the deviation fades each window (a population rebuilding, a habitat regenerating); 1 = no memory, the factor only reflects what arrives in the current window.
+>
+> Each window: *new value = (1 − self_regulation) × previous value + what arrives through the edges + the push*.
+>
+> Example — fishing effort (P) → fish stock (S) → catch decline (I), with β = −0.7 and −0.6 and a pressure of 1 SD:
+>
+> | Case | Window 2 | 4 | 8 | 12 |
+> |---|---|---|---|---|
+> | Ongoing pressure, self-regulation 0 everywhere — fish stock | −0.70 | −4.20 | −19.6 | −46.2 |
+> | Ongoing pressure, stock recovers 30% per window — fish stock | −0.70 | −1.53 | −2.14 | −2.29 (settles at −0.7 ÷ 0.3 = −2.33) |
+> | Ongoing pressure, self-regulation 1 everywhere — fish stock | −0.70 | −0.70 | −0.70 | −0.70 (same as the static reading) |
+> | One-off pressure, stock recovers 30% per window — fish stock | −0.70 | −0.34 | −0.08 | −0.02 (back to normal) |
+>
+> Under a constant load, a factor settles at *load ÷ self-regulation*: a contaminant with self-regulation 0.05 accumulates up to 20 times what arrives each window, which is how a small per-window pressure can still cross a threshold through accumulation.
+>
+> | Self-regulation | Half-life of recovery | Build-up at equilibrium (1 ÷ self-regulation) | Typical of |
+> |---|---|---|---|
+> | 0.05 | 13.5 windows | 20× | contaminant in sediment |
+> | 0.10 | 6.6 windows | 10× | reef recovery, long-lived species |
+> | 0.30 | 1.9 windows | 3× | short-cycle fish stock |
+> | 0.50 (default) | 1 window | 2× | water quality that renews quickly |
+> | 1 | — | 1× | monthly income, catch in the window |
+
+## X5 — `growth_rate` × autorregulação (análise para a P3)
+
+**No motor atual, os dois são redundantes.** O passo é x(t+1) = (1 + g − sr)·x + B·x + p: g e sr entram no mesmo lugar e só a diferença conta. Conferido com o motor real (`simulate_temporal_pair()`): g = 0,1 com sr = 0,3 dá exatamente o mesmo resultado, janela a janela, que g = 0 com sr = 0,2. Assim, um g positivo no desvio é só uma autorregulação negativa: um fator que amplifica o próprio desvio.
+
+**Conceitualmente, são coisas diferentes:**
+- **autorregulação:** como o **desvio** de um fator se desfaz (memória, recuperação), algo endógeno;
+- **crescimento:** como o **nível de referência** de um fator se move por conta própria (crescimento populacional, tendência de consumo), algo exógeno, que existe com ou sem o cenário.
+
+**Proposta P3:** separar os dois.
+- g sai da diagonal. O passo do desvio fica dev(t+1) = (1 − sr)·dev + B·x + p.
+- g vira só a tendência exógena da D10: trend(t) = (ref/DP)·((1 + g)^t − 1), igual nas rodadas baseline e cenário.
+- O valor do nó é x = dev + trend, e as arestas transmitem x. Assim, a influência de um fator em crescimento cresce na proporção (1 + g), como a D9 quer, sem contar duas vezes, e a autorregulação não "come" a tendência.
+- **O que muda na Fase D:**
+  - a D2 volta a ter trend(t) explícita, sem entrada somada ao termo g·x;
+  - o teste D1 ("razão 1,10 com impulso em D") passa a valer para a tendência, e não mais para o desvio de um impulso;
+  - o teste D5 com D fora do cenário (0,05 / 0,105 / 0,1655) continua válido.
+- **Validação:** g > 0 deixa de exigir sr ≥ g, porque o crescimento não entra mais na estabilidade do desvio.
