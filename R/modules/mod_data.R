@@ -533,10 +533,16 @@ mod_data_server <- function(id, seed = NULL) {
         sd = NA_real_, threshold_level = NA_real_, threshold_direction = "auto", descriptor = "",
         endpoint_class = "ecological", value_v = 1
       )
-      impact_panel <- sprintf("input['%s'] == 'Impact'", ns("nm_category"))
-      state_panel <- sprintf("input['%s'] == 'State'", ns("nm_category"))
+      # Revisao 2, item 2.6: panels follow the level's role, not its name.
+      role_condition <- function(role) {
+        cats <- categories_with_role(role, rv$schema)
+        if (length(cats) == 0) return("false")
+        paste(sprintf("input['%s'] == '%s'", ns("nm_category"), gsub("'", "\\'", cats)), collapse = " || ")
+      }
+      impact_panel <- role_condition("impact")
+      state_panel <- role_condition("state")
       num_or_na <- function(x) if (is.null(x) || length(x) == 0 || is.na(x)) NA else x
-      value_panel <- sprintf("input['%s'] == 'Impact' && input['%s'] != 'ecological'", ns("nm_category"), ns("nm_endpoint_class"))
+      value_panel <- sprintf("(%s) && input['%s'] != 'ecological'", impact_panel, ns("nm_endpoint_class"))
 
       modalDialog(
         title = if (is.null(defaults)) "Add node" else "Edit node",
@@ -655,8 +661,8 @@ mod_data_server <- function(id, seed = NULL) {
     # its worst to its best level - 100 for the most important, 0-100 for the
     # others; the app stores the rating / 100 as value_v.
     swing_ids <- reactive({
-      n <- normalize_dpsir_nodes(rv$nodes)
-      n$id[n$dpsir_category == "Impact" & n$endpoint_class %in% c("service", "welfare")]
+      n <- normalize_dpsir_nodes(rv$nodes, rv$schema)
+      n$id[roles_of(n$dpsir_category, rv$schema) %in% "impact" & n$endpoint_class %in% c("service", "welfare")]
     })
 
     observeEvent(input$elicit_values, {
@@ -665,7 +671,7 @@ mod_data_server <- function(id, seed = NULL) {
         showNotification("No service or welfare Impacts yet - set an Impact's endpoint class first (Edit selected).", type = "warning")
         return()
       }
-      n <- normalize_dpsir_nodes(rv$nodes)
+      n <- normalize_dpsir_nodes(rv$nodes, rv$schema)
       rows <- lapply(ids, function(id) {
         i <- match(id, n$id)
         numericInput(ns(paste0("swing_", i)), n$label[i], value = round(100 * (n$value_v[i] %||% 1)), min = 0, max = 100, step = 5)
@@ -686,14 +692,14 @@ mod_data_server <- function(id, seed = NULL) {
       n <- rv$nodes
       for (id in ids) {
         i <- match(id, n$id)
-        val <- suppressWarnings(as.numeric(input[[paste0("swing_", match(id, normalize_dpsir_nodes(rv$nodes)$id))]]))
+        val <- suppressWarnings(as.numeric(input[[paste0("swing_", match(id, normalize_dpsir_nodes(rv$nodes, rv$schema)$id))]]))
         if (is.na(val) || val < 0 || val > 100) {
           showNotification("Each rating must be between 0 and 100.", type = "error")
           return()
         }
         n$value_v[i] <- val / 100
       }
-      rv$nodes <- normalize_dpsir_nodes(n)
+      rv$nodes <- normalize_dpsir_nodes(n, rv$schema)
       removeModal()
       showNotification("Values saved.", type = "message")
     })
@@ -750,7 +756,8 @@ mod_data_server <- function(id, seed = NULL) {
       }
 
       value_v <- input$nm_value_v %||% 1
-      if (identical(input$nm_category, "Impact") && !identical(input$nm_endpoint_class, "ecological") &&
+      is_impact_cat <- identical(roles_of(input$nm_category, rv$schema), "impact")
+      if (is_impact_cat && !identical(input$nm_endpoint_class, "ecological") &&
           (is.na(value_v) || value_v < 0 || value_v > 1)) {
         showNotification("The social value v must be between 0 and 1.", type = "error")
         return()
@@ -791,7 +798,7 @@ mod_data_server <- function(id, seed = NULL) {
         showNotification("The growth ceiling must be greater than 0 (or left blank).", type = "error")
         return()
       }
-      threshold_level <- if (identical(input$nm_category, "State")) num(input$nm_threshold_level) else NA_real_
+      threshold_level <- if (identical(roles_of(input$nm_category, rv$schema), "state")) num(input$nm_threshold_level) else NA_real_
       if (!is.na(threshold_level) && is.na(reference_value)) {
         showNotification("A threshold level needs the initial level (reference value).", type = "error")
         return()
@@ -812,13 +819,13 @@ mod_data_server <- function(id, seed = NULL) {
         threshold_level = threshold_level,
         threshold_direction = if (is.na(threshold_level)) NA_character_ else (input$nm_threshold_direction %||% "auto"),
         descriptor = trimws(input$nm_descriptor %||% ""),
-        endpoint_class = if (identical(input$nm_category, "Impact")) input$nm_endpoint_class %||% "ecological" else NA_character_,
-        value_v = if (identical(input$nm_category, "Impact")) value_v else NA_real_,
+        endpoint_class = if (is_impact_cat) input$nm_endpoint_class %||% "ecological" else NA_character_,
+        value_v = if (is_impact_cat) value_v else NA_real_,
         stringsAsFactors = FALSE
       )
 
       if (is.null(existing_id)) {
-        rv$nodes <- normalize_dpsir_nodes(dplyr::bind_rows(rv$nodes, new_row))
+        rv$nodes <- normalize_dpsir_nodes(dplyr::bind_rows(rv$nodes, new_row), rv$schema)
       } else {
         idx <- which(rv$nodes$id == existing_id)
         # Assign by name, not position: rv$nodes may have its columns in a
@@ -1120,9 +1127,9 @@ mod_data_server <- function(id, seed = NULL) {
             paste(sprintf("%s -> %s", e$from[review], e$to[review]), collapse = ", ")
           ))
         }
-        notes <- c(notes, explained_variance_warnings(normalize_dpsir_nodes(rv$nodes), e))
+        notes <- c(notes, explained_variance_warnings(normalize_dpsir_nodes(rv$nodes, rv$schema), e))
       }
-      if (length(messages) == 0) notes <- c(notes, self_regulation_warnings(normalize_dpsir_nodes(rv$nodes)), growth_warnings(normalize_dpsir_nodes(rv$nodes)))
+      if (length(messages) == 0) notes <- c(notes, self_regulation_warnings(normalize_dpsir_nodes(rv$nodes, rv$schema)), growth_warnings(normalize_dpsir_nodes(rv$nodes, rv$schema)))
       if (length(messages) == 0) {
         notes <- c(notes, tryCatch(
           threshold_warnings(build_igraph(rv$nodes, rv$edges, rv$schema)),

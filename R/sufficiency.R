@@ -107,15 +107,14 @@ sufficiency <- function(g, p_D, p_R, threshold = 1e-9) {
   node_names <- V(g)$name
   p_D <- align_press_vector(p_D, node_names, "pressure scenario")
   p_R <- align_press_vector(p_R, node_names, "response scenario")
-  categories <- V(g)$dpsir_category
-  is_impact <- !is.null(categories) & categories == "Impact"
+  is_impact <- has_role(g, "impact")
   impact_ids <- node_names[is_impact]
 
   empty <- data.frame(
     id = character(), node = character(),
     worsening = numeric(), mitigation = numeric(), net = numeric(),
     neutralized = logical(), strength_to_neutralize = numeric(),
-    neutralized_by = character(),
+    neutralized_by = character(), affected = logical(),
     stringsAsFactors = FALSE
   )
   if (length(impact_ids) == 0) {
@@ -175,6 +174,10 @@ sufficiency <- function(g, p_D, p_R, threshold = 1e-9) {
     neutralized = unname(net) <= threshold,
     strength_to_neutralize = unname(strength_to_neutralize),
     neutralized_by = unname(neutralized_by),
+    # Revisao 2, item 2.1: an Impact the pressure does not reach is "Not
+    # affected", not "neutralized" - it stays out of the confidence and the
+    # prioritization.
+    affected = abs(unname(worsening)) > threshold,
     stringsAsFactors = FALSE
   )
 }
@@ -193,6 +196,20 @@ with_local_seed <- function(seed, expr) {
   expr
 }
 
+# Revisao 2, item 2.4: same, for a whole function body - sets the seed and
+# restores the caller's RNG state when the calling function exits.
+local_seed <- function(seed, frame = parent.frame()) {
+  had_seed <- exists(".Random.seed", envir = globalenv(), inherits = FALSE)
+  old <- if (had_seed) get(".Random.seed", envir = globalenv()) else NULL
+  restore <- function() {
+    if (had_seed) assign(".Random.seed", old, envir = globalenv())
+    else if (exists(".Random.seed", envir = globalenv(), inherits = FALSE)) rm(".Random.seed", envir = globalenv())
+  }
+  do.call(on.exit, list(substitute(f(), list(f = restore)), add = TRUE), envir = frame)
+  set.seed(seed)
+  invisible(NULL)
+}
+
 # Revisao 2, item 1.4 (D15/D21): each edge's beta is resampled uniformly
 # within its uncertainty band [weight_low, weight_high]; `net` is recomputed
 # and the result is the % of simulations in which the Impact is still
@@ -205,8 +222,7 @@ sufficiency_confidence <- function(g, p_D, p_R, n_simulations = 300, seed = 42, 
   node_names <- V(g)$name
   p_D <- align_press_vector(p_D, node_names, "pressure scenario")
   p_R <- align_press_vector(p_R, node_names, "response scenario")
-  categories <- V(g)$dpsir_category
-  is_impact <- !is.null(categories) & categories == "Impact"
+  is_impact <- has_role(g, "impact")
   impact_ids <- node_names[is_impact]
 
   if (length(impact_ids) == 0) {
@@ -226,6 +242,11 @@ sufficiency_confidence <- function(g, p_D, p_R, n_simulations = 300, seed = 42, 
 
   gated <- has_state_thresholds(g)
   p_net <- p_D + p_R
+  # Revisao 2, item 2.1: Impacts the pressure does not reach (with the base
+  # strengths) get no percentage.
+  B0 <- effect_matrix(g)
+  worsening0 <- if (gated) propagate(gated_effect_matrix(g, p_D, B0), p_D)[impact_ids] else propagate(B0, p_D)[impact_ids]
+  affected <- abs(worsening0) > threshold
   with_local_seed(seed, {
     for (sim in seq_len(n_simulations)) {
       E(g_sim)$weight <- runif(length(base_weight), low, high)
@@ -245,7 +266,8 @@ sufficiency_confidence <- function(g, p_D, p_R, n_simulations = 300, seed = 42, 
   out <- data.frame(
     id = impact_ids,
     node = if (!is.null(V(g)$label)) V(g)$label[is_impact] else impact_ids,
-    neutralized_pct = unname(colMeans(matches, na.rm = TRUE)[impact_ids]) * 100,
+    neutralized_pct = ifelse(affected, unname(colMeans(matches, na.rm = TRUE)[impact_ids]) * 100, NA_real_),
+    affected = unname(affected),
     stringsAsFactors = FALSE
   )
   attr(out, "skipped") <- skipped
@@ -288,12 +310,28 @@ format_sufficiency_table <- function(suff_df, active_ids, strengths_pct) {
     `Mitigation (response)` = round(suff_df$mitigation, 3),
     Net = round(suff_df$net, 3),
     `Neutralizes?` = ifelse(
-      suff_df$neutralized,
-      ifelse(!is.null(suff_df$neutralized_by) & suff_df$neutralized_by %in% "trigger", "Yes (below threshold)", "Yes"),
-      "No"
+      !is.null(suff_df$affected) & suff_df$affected %in% FALSE,
+      # Revisao 2, item 2.1.
+      ifelse(suff_df$neutralized, "Not affected", "No (worsened by the response)"),
+      ifelse(
+        suff_df$neutralized,
+        ifelse(!is.null(suff_df$neutralized_by) & suff_df$neutralized_by %in% "trigger", "Yes (below threshold)", "Yes"),
+        "No"
+      )
     ),
     `Strength needed` = strength_display,
     check.names = FALSE,
     stringsAsFactors = FALSE
   )
+}
+
+# Revisao 2, items 2.1/2.2: the confidence matrix for display - percentages
+# rounded, "-" where the pressure does not reach the Impact.
+format_confidence_matrix <- function(df) {
+  cols <- setdiff(names(df), "Response")
+  for (col in cols) {
+    v <- suppressWarnings(as.numeric(df[[col]]))
+    df[[col]] <- ifelse(is.na(v), "\u2014", sprintf("%.0f", v))
+  }
+  df
 }

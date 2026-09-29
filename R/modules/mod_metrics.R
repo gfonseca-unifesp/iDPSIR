@@ -40,7 +40,7 @@ mod_metrics_ui <- function(id) {
         h4("All Driver-to-Impact pathways"),
         p(
           class = "text-muted",
-          "Every simple causal chain from a Driver to an Impact in this network, ranked by score (mean edge weight x mean confidence x number of links)."
+          PATHWAYS_CAPTION
         ),
         uiOutput(ns("pathways_note")),
         DTOutput(ns("pathways_table"))
@@ -144,12 +144,10 @@ mod_metrics_server <- function(id, schema, graph) {
       dp <- driver_impact_pathways()
 
       datatable(
-        dp$table[, c("nodes", "length", "score")],
-        colnames = c("Pathway", "Length (nodes)", "Score"),
+        format_pathways_table(dp$table),
         rownames = FALSE,
         options = list(pageLength = 10, scrollX = TRUE)
-      ) %>%
-        formatRound(columns = "score", digits = 3)
+      )
     })
 
     output$gaps_summary <- renderUI({

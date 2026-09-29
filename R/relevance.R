@@ -26,7 +26,7 @@
 dynamic_importance <- function(g, p_D, threshold = 1e-9) {
   stopifnot(inherits(g, "igraph"))
   node_names <- V(g)$name
-  impact_ids <- node_names[V(g)$dpsir_category %in% "Impact"]
+  impact_ids <- node_names[has_role(g, "impact")]
   if (length(impact_ids) == 0) {
     return(data.frame(id = character(), delta = numeric(), D = numeric(), stringsAsFactors = FALSE))
   }
@@ -48,7 +48,7 @@ dynamic_importance <- function(g, p_D, threshold = 1e-9) {
 prediction_reliability <- function(g, p_D, n_simulations = 300, seed = 42, threshold = 1e-9) {
   stopifnot(inherits(g, "igraph"))
   node_names <- V(g)$name
-  impact_ids <- node_names[V(g)$dpsir_category %in% "Impact"]
+  impact_ids <- node_names[has_role(g, "impact")]
   if (length(impact_ids) == 0) {
     return(data.frame(id = character(), rho = numeric(), stringsAsFactors = FALSE))
   }
@@ -97,7 +97,7 @@ impact_gap <- function(suff_df, threshold = 1e-9) {
 
 impact_prioritization <- function(g, p_D, suff_df, n_simulations = 300, seed = 42) {
   stopifnot(inherits(g, "igraph"))
-  impact_ids <- V(g)$name[V(g)$dpsir_category %in% "Impact"]
+  impact_ids <- V(g)$name[has_role(g, "impact")]
   empty <- data.frame(
     id = character(), node = character(), endpoint_class = character(),
     value_v = numeric(), D = numeric(), rho = numeric(), relevance = numeric(),

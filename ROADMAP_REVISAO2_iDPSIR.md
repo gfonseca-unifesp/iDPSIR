@@ -562,6 +562,10 @@ Com a persistência da D20, o Estado acumula (sr < 1). Por isso "o que chega nes
 
 ---
 
+**Executada (branch `revisao2-fase2`, 29/09):** 2.1 ("Not affected" na suficiência, na confiança — "—" — e no temporal; janela 0 = "—"), 2.2 (linha "Planned scenario (as set)" na matriz de confiança), 2.3 (caminhos respeitam a ordem do schema: `cutoff` pela distância entre níveis, sem Resposta no meio, `max_paths` durante a enumeração), 2.4 (sem `withr`: `with_local_seed()`/`local_seed()` em R base fazem o mesmo papel; semente fixa em Louvain/Infomap/Label Propagation e nas funções antigas de `loop_analysis.R`), 2.5 (já feita na Fase A), 2.6 (papéis driver/pressure/state/impact/feedback derivados do schema — coluna `role` ou ordem — gravados em `V(g)$dpsir_role`; renomear níveis no passo Model não esvazia mais tabelas), 2.7 (efeito do caminho = produto dos β com sinal, com faixa). Bug achado ao vivo e corrigido: os dropdowns de categoria de "Highlight pathway" ficavam vazios, porque a aba Explore é montada só ao chegar no passo 6 e a atualização enviada ao carregar o schema se perdia.
+
+---
+
 ## Fase 3 — Robustez, desempenho e UX
 
 | # | Item | Onde | O que fazer |

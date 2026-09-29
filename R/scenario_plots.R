@@ -259,7 +259,9 @@ idpsir_verdict_palette <- c(
   "Neutralized"             = "#1b8a3a", # verde - segurou no neutro
   "Neutralized (relative)"  = "#8fd19e", # verde claro - dentro da tolerancia relativa (Revisao 2, A3)
   "Partial"                 = "#e0a100", # ambar - ajudou, ainda positivo
-  "Failure/worsened"        = "#c0392b"  # vermelho - tao ruim ou pior que o baseline
+  "Failure/worsened"        = "#c0392b", # vermelho - tao ruim ou pior que o baseline
+  "Not affected"            = "#bdbdbd", # cinza - a pressao nao alcanca o Impacto (Revisao 2, 2.1)
+  "\u2014"                  = "#bdbdbd"  # janela 0, sem veredito
 )
 
 # @param temporal_df saida de format_temporal_table(): colunas id/node/

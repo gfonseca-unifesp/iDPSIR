@@ -389,7 +389,7 @@ robustness_check <- function(g, press, n_simulations = 100, spread = 0.5, thresh
   g_sim <- g
   any_singular <- used_immediate
 
-  set.seed(seed)
+  local_seed(seed) # Revisao 2, item 2.4: no change to the caller's RNG
   for (sim in seq_len(n_simulations)) {
     multiplier <- runif(length(base_weight), 1 - variation, 1 + variation)
     E(g_sim)$weight <- base_weight * multiplier
@@ -452,7 +452,7 @@ self_regulation_sensitivity <- function(g, press, n_simulations = 100, spread = 
   A_sim <- A_base
   any_singular <- used_immediate
 
-  set.seed(seed)
+  local_seed(seed) # Revisao 2, item 2.4: no change to the caller's RNG
   for (sim in seq_len(n_simulations)) {
     multiplier <- runif(length(base_diag), 1 - spread, 1 + spread)
     diag(A_sim) <- base_diag * multiplier

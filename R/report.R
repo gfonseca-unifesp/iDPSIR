@@ -215,7 +215,7 @@ build_full_report_html <- function(
             scenario_name
           )
         ),
-        report_html_table(sc$sufficiency_confidence_matrix),
+        report_html_table(format_confidence_matrix(sc$sufficiency_confidence_matrix)),
         caption_tag(
           "Table", next_table_n(),
           sprintf(
@@ -279,7 +279,7 @@ build_full_report_html <- function(
   if (length(selected_scenario_names) > 0 && length(saved_scenarios) > 0) {
     total_impacts <- count_impacts_in_graph(graph)
     reach_row <- function(scenario_name, reach) {
-      reached_impacts_row <- reach$by_category[reach$by_category$category == "Impact", "count"]
+      reached_impacts_row <- reach$impacts
       reached_impacts <- if (length(reached_impacts_row) == 0) 0L else reached_impacts_row
       data.frame(
         Scenario = scenario_name,
@@ -545,18 +545,14 @@ build_full_report_html <- function(
         ""
       }
 
-      pathways_df <- dp$table[, c("nodes", "length", "score")]
-      names(pathways_df) <- c("Pathway", "Length (nodes)", "Score")
+      pathways_df <- format_pathways_table(dp$table)
 
       appendix_sections <- c(appendix_sections, list(
         tags$h4("All Driver-to-Impact pathways"),
         report_html_table(pathways_df),
         caption_tag(
           "Table", next_table_n(),
-          paste0(
-            "Every simple causal chain from a Driver to an Impact in this network, ranked by score ",
-            "(mean edge weight x mean confidence x number of links).", truncated_note
-          )
+          paste0(PATHWAYS_CAPTION, truncated_note)
         )
       ))
     }

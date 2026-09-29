@@ -152,10 +152,21 @@ mod_graph_server <- function(id, schema, nodes, edges, graph, positions, set_pos
     # PATHWAY HIGHLIGHT (dropdown, same pattern as the other display options)
     # =================================================
 
-    observeEvent(schema(), {
+    # Fills the category choices whenever they are missing or no longer
+    # match the schema. Reading the inputs matters: the Explore tab is built
+    # only when step 6 is first reached, so an update sent when the schema
+    # loaded (before these dropdowns existed) was lost and they stayed empty.
+    observe({
+      req(schema())
       categories <- schema_categories(schema())
-      updateSelectInput(session, "path_from_category", choices = categories, selected = categories[1])
-      updateSelectInput(session, "path_to_category", choices = categories, selected = categories[length(categories)])
+      from <- input$path_from_category
+      to <- input$path_to_category
+      if (is.null(from) || !from %in% categories) {
+        updateSelectInput(session, "path_from_category", choices = categories, selected = categories[1])
+      }
+      if (is.null(to) || !to %in% categories) {
+        updateSelectInput(session, "path_to_category", choices = categories, selected = categories[length(categories)])
+      }
     })
 
     path_candidates <- reactive({
@@ -175,7 +186,7 @@ mod_graph_server <- function(id, schema, nodes, edges, graph, positions, set_pos
 
       choices <- setNames(
         as.character(seq_len(nrow(candidates))),
-        sprintf("%s (score %.2f)", candidates$nodes, candidates$score)
+        sprintf("%s (effect %+.3f)", candidates$path, candidates$effect)
       )
       updateSelectInput(session, "path_highlight", choices = c("None" = "none", choices), selected = "none")
     })
@@ -254,10 +265,11 @@ mod_graph_server <- function(id, schema, nodes, edges, graph, positions, set_pos
       # converted to undirected to avoid an error.
       switch(
         input$community_algorithm,
-        "Louvain" = cluster_louvain(as_undirected(g)),
+        # Revisao 2, item 2.4: the randomized algorithms run with a fixed seed.
+        "Louvain" = with_local_seed(42, cluster_louvain(as_undirected(g))),
         "Walktrap" = cluster_walktrap(g),
-        "Infomap" = cluster_infomap(g),
-        "Label Propagation" = cluster_label_prop(as_undirected(g))
+        "Infomap" = with_local_seed(42, cluster_infomap(g)),
+        "Label Propagation" = with_local_seed(42, cluster_label_prop(as_undirected(g)))
       )
     })
 
@@ -516,7 +528,7 @@ mod_graph_server <- function(id, schema, nodes, edges, graph, positions, set_pos
         candidates <- path_candidates()
         idx <- as.integer(input$path_highlight)
         if (!is.na(idx) && idx <= nrow(candidates)) {
-          parts <- c(parts, paste0("highlighted pathway: ", candidates$nodes[idx]))
+          parts <- c(parts, paste0("highlighted pathway: ", candidates$path[idx]))
         }
       }
 

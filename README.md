@@ -75,7 +75,7 @@ iDPSIR/
 │   ├── validate.R             # node/edge validation against the schema
 │   ├── graph.R                # igraph builder, layered layout, network/community visuals
 │   ├── metrics.R              # centralities, general metrics, DPSIR descriptors
-│   ├── pathways.R             # schema-aware causal pathway analysis
+│   ├── pathways.R             # causal pathways that follow the DPSIR order; effect = product of signed strengths (with band)
 │   ├── loop_analysis.R        # loop analysis (Levins 1974): interaction matrix (incl. optional per-node self-regulation, reused by the temporal engine below) and the older equilibrium reading (press perturbation, stability check, trajectory, robustness, edge/self-regulation sensitivity) - kept defined and tested, but no longer called from the UI/report, superseded by sufficiency.R and temporal.R
 │   ├── structural.R           # edge strengths as standardized path coefficients (beta): Weak/Moderate/Strong classes, uncertainty bands, r-squared shortcuts, the rho(B) < 1 check, conversion of older files
 │   ├── sufficiency.R          # primary Scenarios reading: the path-analysis total effect of each push (product of betas along each causal path) - worsening (pressure) vs. mitigation (response) vs. net, per Impact, plus a confidence check (every beta resampled within its uncertainty band)
@@ -400,7 +400,9 @@ advanced) → **Nodes** → **Edges** → **Review and build** → **Explore**, 
 has four tabs:
 
 - **Graph** — layered (by DPSIR category) or circular layout, filters, node/edge
-  emphasis, spacing controls, and pathway highlighting. "Color nodes by" switches
+  emphasis, spacing controls, and pathway highlighting (chains that follow the DPSIR
+  order, ranked by their effect: the product of the signed strengths along the chain, the
+  path's indirect effect in path analysis). "Color nodes by" switches
   between DPSIR category and detected community (Louvain/Walktrap/Infomap/Label
   Propagation, redrawn with edges, not bare colored dots) without leaving the tab.
   Dragging a node pins it in place (persisted in the savepoint, "Reset dragged
@@ -411,9 +413,11 @@ has four tabs:
   (which Responses are active, and how strongly). Applying them runs the primary,
   always-well-defined **sufficiency** reading (`R/sufficiency.R`): for each Impact, how
   much the pressure scenario worsens it, how much the response scenario mitigates (or
-  worsens) it, and whether that mitigation is enough to neutralize the worsening —
+  worsens) it, and whether that mitigation is enough to neutralize the worsening (an
+  Impact the pressure does not reach is reported as **Not affected**, not neutralized) —
   plus a confidence check (% of simulations, resampling every edge's strength within
-  its uncertainty band, in which the verdict holds) and an **Impact prioritization**:
+  its uncertainty band, in which the verdict holds; one row for the scenario as set with
+  the sliders, one per response alone at 100%) and an **Impact prioritization**:
   relevance = value v × importance D (the pressure's total effect on that Impact,
   relative to the most affected one — with standardized strengths this is the Levins
   equilibrium of the relevance specification) × reliability (share of simulations in

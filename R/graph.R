@@ -20,7 +20,7 @@ create_empty_graph_edges <- function() {
 }
 
 prepare_nodes_for_graph <- function(nodes, schema) {
-  nodes <- normalize_dpsir_nodes(nodes)
+  nodes <- normalize_dpsir_nodes(nodes, schema)
   nodes <- apply_schema_visual_mapping(nodes, schema)
   nodes
 }
@@ -75,6 +75,10 @@ build_igraph <- function(
     vertices = nodes,
     directed = TRUE
   )
+
+  # Revisao 2, item 2.6: the role of each node (driver/pressure/state/
+  # impact/feedback), so the engine never depends on category names.
+  V(g)$dpsir_role <- roles_of(V(g)$dpsir_category, schema)
 
   graph_attr(g, "network_type") <- "DPSIR"
   graph_attr(g, "directed") <- TRUE

@@ -63,7 +63,7 @@ plot_download_row <- function(ns, prefix) {
 # verified in tests/testthat/test-sufficiency.R (also computed at 100%).
 # Pure function (no Shiny reactives), so it's independently testable and
 # reusable from R/report.R later (Fase 3).
-build_confidence_matrix <- function(g, p_D, response_nodes_df, n_simulations = 300, seed = 42) {
+build_confidence_matrix <- function(g, p_D, response_nodes_df, n_simulations = 300, seed = 42, planned = NULL) {
   if (nrow(response_nodes_df) == 0) {
     return(data.frame(Response = character(), stringsAsFactors = FALSE))
   }
@@ -83,7 +83,17 @@ build_confidence_matrix <- function(g, p_D, response_nodes_df, n_simulations = 3
   colnames(mat) <- impact_labels
 
   df <- as.data.frame(mat, stringsAsFactors = FALSE)
-  cbind(Response = response_nodes_df$label, df, stringsAsFactors = FALSE)
+  out <- cbind(Response = response_nodes_df$label, df, stringsAsFactors = FALSE)
+  # Revisao 2, item 2.2: the rows above test each response alone at 100%;
+  # this row resamples the scenario actually set (the sliders), i.e. the
+  # confidence of the verdict shown in the sufficiency table.
+  if (!is.null(planned) && any(planned != 0)) {
+    pl <- sufficiency_confidence(g, p_D, planned, n_simulations = n_simulations, seed = seed)
+    row <- as.data.frame(t(pl$neutralized_pct), stringsAsFactors = FALSE)
+    names(row) <- impact_labels
+    out <- rbind(cbind(Response = "Planned scenario (as set)", row, stringsAsFactors = FALSE), out)
+  }
+  out
 }
 
 mod_responses_ui <- function(id) {
@@ -251,14 +261,12 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
     })
 
     # Revisao 1: the "pressure" side of the two pushes - Drivers/Pressures
-    # the user expects to worsen. "Driver"/"Pressure" are literal category
-    # names here, same as "Impact" is already hardcoded in a few places in
-    # this codebase (e.g. R/sufficiency.R, R/metrics.R) rather than
-    # generalized through the schema's role system.
+    # the user expects to worsen. Revisao 2, item 2.6: by role, so renamed
+    # levels keep working.
     pressure_nodes <- reactive({
-      req(nodes())
+      req(nodes(), schema())
       n <- nodes()
-      n[n$dpsir_category %in% c("Driver", "Pressure"), , drop = FALSE]
+      n[roles_of(n$dpsir_category, schema()) %in% c("driver", "pressure"), , drop = FALSE]
     })
 
     output$pressure_controls <- renderUI({
@@ -342,7 +350,7 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
           suff_df <- sufficiency(graph(), p_D, press)
 
           incProgress(0.3, detail = "Confidence (resampling edge strengths)")
-          suff_confidence_matrix <- build_confidence_matrix(graph(), p_D, rn)
+          suff_confidence_matrix <- build_confidence_matrix(graph(), p_D, rn, planned = press)
 
           # Revisao 2, items C4/C5: State triggers (pressure only vs. with the
           # response) and the reach that the closed triggers leave.
@@ -461,14 +469,7 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
       sc <- current_scenario()
       req(sc)
 
-      df <- sc$sufficiency_confidence_matrix
-      numeric_cols <- setdiff(names(df), "Response")
-
-      dt <- datatable(df, rownames = FALSE, options = list(dom = "t", pageLength = 10))
-      if (length(numeric_cols) > 0) {
-        dt <- dt %>% formatRound(columns = numeric_cols, digits = 0)
-      }
-      dt
+      datatable(format_confidence_matrix(sc$sufficiency_confidence_matrix), rownames = FALSE, options = list(dom = "t", pageLength = 20))
     })
 
     # Roadmap Fase 9 item 9.2: "reach" is pure graph traversal from what the
@@ -971,7 +972,7 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
       }
 
       total_impacts <- count_impacts_in_graph(graph())
-      reached_impacts_row <- sc$reach$by_category[sc$reach$by_category$category == "Impact", "count"]
+      reached_impacts_row <- sc$reach$impacts
       reached_impacts <- if (length(reached_impacts_row) == 0) 0 else reached_impacts_row
 
       eff <- sc$reach_effective
@@ -1170,7 +1171,7 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
       total_impacts <- count_impacts_in_graph(graph())
 
       reach_row <- function(scenario_name, reach) {
-        reached_impacts_row <- reach$by_category[reach$by_category$category == "Impact", "count"]
+        reached_impacts_row <- reach$impacts
         reached_impacts <- if (length(reached_impacts_row) == 0) 0L else reached_impacts_row
         data.frame(
           Scenario = scenario_name,

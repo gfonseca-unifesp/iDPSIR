@@ -208,7 +208,11 @@ test_that("format_temporal_table reports the response's benefit shrinking over w
   # early (window 2), only partial mitigation by window 8, and the
   # net/baseline ratio grows from 0 to 0.6 - confirmed against
   # scratchpad/test_temporal.R's full run before writing this, not assumed.
-  expect_equal(tbl$verdict[tbl$window == 2], "Neutralized")
+  # Revisao 2, item 2.1: at window 2 the pressure has not reached I1 yet
+  # (baseline 0) - that is "Not affected", not "Neutralized". Window 0 has
+  # no verdict.
+  expect_equal(tbl$verdict[tbl$window == 2], "Not affected")
+  expect_equal(tbl$verdict[tbl$window == 0], "—")
   expect_equal(tbl$verdict[tbl$window == 8], "Partial")
   ratio_w7 <- tbl$net_impact[tbl$window == 7] / tbl$baseline_impact[tbl$window == 7]
   ratio_w8 <- tbl$net_impact[tbl$window == 8] / tbl$baseline_impact[tbl$window == 8]

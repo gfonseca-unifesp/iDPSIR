@@ -28,7 +28,7 @@ state_thresholds <- function(g) {
   cat <- V(g)$dpsir_category
   level <- suppressWarnings(as.numeric(V(g)$threshold_level))
   if (length(level) == 0) level <- rep(NA_real_, length(ids))
-  keep <- !is.na(level) & cat %in% "State"
+  keep <- !is.na(level) & has_role(g, "state")
   if (!any(keep)) {
     return(data.frame(id = character(), level = numeric(), reference = numeric(), sd = numeric(),
                       z = numeric(), direction = character(), stringsAsFactors = FALSE))
@@ -62,8 +62,7 @@ static_state_deviation <- function(g, Bg, p, state_ids) {
   n <- nrow(Bg)
   levels <- tryCatch(solve(diag(n) - Bg, as.numeric(p)), error = function(e) rep(NA_real_, n))
   names(levels) <- rownames(Bg)
-  cat <- V(g)$dpsir_category[match(rownames(Bg), V(g)$name)]
-  dp <- cat %in% c("Driver", "Pressure")
+  dp <- node_roles(g)[match(rownames(Bg), V(g)$name)] %in% c("driver", "pressure")
   levels[dp] <- pmax(levels[dp], 0)
   vapply(state_ids, function(s) sum(Bg[s, ] * levels), numeric(1))
 }
@@ -121,8 +120,7 @@ temporal_gate_matrix <- function(W, x, th, g, gate_mode = c("state_level", "load
   if (gate_mode == "state_level") {
     value <- x[th$id]
   } else {
-    cat <- V(g)$dpsir_category[match(names(x), V(g)$name)]
-    src <- cat %in% c("Pressure", "Response")
+    src <- node_roles(g)[match(names(x), V(g)$name)] %in% c("pressure", "feedback")
     value <- vapply(th$id, function(s) sum(W[s, src] * x[src]), numeric(1))
   }
   open <- gate_is_open(value, th$z, th$direction)

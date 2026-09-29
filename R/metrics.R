@@ -93,7 +93,8 @@ compute_communities <- function(g) {
     return(NULL)
   }
 
-  cluster_louvain(as_undirected(g))
+  # Revisao 2, item 2.4: Louvain is randomized - fixed seed, reproducible.
+  with_local_seed(42, cluster_louvain(as_undirected(g)))
 }
 
 compute_density <- function(g) {
@@ -213,8 +214,10 @@ compute_dpsir_descriptors <- function(g, schema) {
   }
 
   # ---- impactos sem resposta ----
-  impact_ids <- nodes$id[nodes$dpsir_category == "Impact"]
-  response_ids <- nodes$id[nodes$dpsir_category == "Response"]
+  # Revisao 2, item 2.6: by role, not by category name.
+  node_role <- roles_of(nodes$dpsir_category, schema)
+  impact_ids <- nodes$id[node_role %in% "impact"]
+  response_ids <- nodes$id[node_role %in% "feedback"]
 
   impacts_without_response <- if (length(impact_ids) == 0) {
     character()
@@ -226,7 +229,7 @@ compute_dpsir_descriptors <- function(g, schema) {
   }
 
   # ---- pressoes nao cobertas por respostas ----
-  pressure_ids <- nodes$id[nodes$dpsir_category == "Pressure"]
+  pressure_ids <- nodes$id[node_role %in% "pressure"]
 
   pressures_without_response <- if (length(pressure_ids) == 0) {
     character()

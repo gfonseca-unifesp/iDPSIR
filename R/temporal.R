@@ -293,8 +293,7 @@ simulate_temporal_pair <- function(g, p_D, p_R, windows = 5,
 
   W_baseline <- W
   if (isTRUE(baseline_without_response)) {
-    categories <- V(g)$dpsir_category
-    response_ids <- node_names[!is.null(categories) & categories %in% get_feedback_categories_safe(g)]
+    response_ids <- node_names[has_role(g, "feedback")]
     W_baseline[response_ids, ] <- 0
     W_baseline[cbind(match(response_ids, node_names), match(response_ids, node_names))] <- diag(W)[match(response_ids, node_names)]
   }
@@ -311,8 +310,7 @@ simulate_temporal_pair <- function(g, p_D, p_R, windows = 5,
 
   # Impacts that count for the stop criterion: reached by the active
   # response(s).
-  categories <- V(g)$dpsir_category
-  impact_ids <- node_names[!is.null(categories) & categories == "Impact"]
+  impact_ids <- node_names[has_role(g, "impact")]
   active_responses <- node_names[p_R != 0]
   reached_impacts <- intersect(response_reach(g, active_responses)$reached_ids, impact_ids)
 
@@ -412,13 +410,6 @@ simulate_temporal_pair <- function(g, p_D, p_R, windows = 5,
   )
 }
 
-# Feedback (Response) categories of the graph's own schema when it carries
-# one; the default DPSIR "Response" otherwise.
-get_feedback_categories_safe <- function(g) {
-  sch <- tryCatch(get_default_dpsir_schema(), error = function(e) NULL)
-  if (is.null(sch)) return("Response")
-  tryCatch(get_feedback_categories(sch), error = function(e) "Response")
-}
 
 # Plain-language line about how the run ended (until_neutralized) - shared
 # by the Scenarios tab and the report.
@@ -500,8 +491,7 @@ temporal_stability_note <- function(stability) {
 # baseline that grows faster than the scenario makes that ratio fall even
 # while the Impact keeps getting worse. The absolute rules stay as they were.
 format_temporal_table <- function(g, temporal_result, threshold = 1e-9, tol_rel = 0.05) {
-  categories <- V(g)$dpsir_category
-  is_impact <- !is.null(categories) & categories == "Impact"
+  is_impact <- has_role(g, "impact")
   impact_ids <- V(g)$name[is_impact]
 
   empty <- data.frame(
@@ -527,6 +517,11 @@ format_temporal_table <- function(g, temporal_result, threshold = 1e-9, tol_rel 
     relative_ok <- tol_rel > 0 & s > threshold & abs(s) <= tol_rel * abs(b) & not_growing
 
     verdict <- ifelse(
+      # Revisao 2, item 2.1: window 0 has no verdict; an Impact the pressure
+      # has not reached (and the response has not moved) is "Not affected".
+      rep(t == 0, length(s)), "\u2014",
+      ifelse(abs(b) <= threshold & abs(s) <= threshold, "Not affected",
+      ifelse(
       abs(s) <= threshold, "Neutralized",
       ifelse(
         s < -threshold, "Improved beyond neutral",
@@ -535,7 +530,7 @@ format_temporal_table <- function(g, temporal_result, threshold = 1e-9, tol_rel 
           ifelse(s >= b - threshold, "Failure/worsened", "Partial")
         )
       )
-    )
+    )))
 
     data.frame(
       id = impact_ids, node = impact_labels, window = t,

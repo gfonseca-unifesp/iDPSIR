@@ -2666,6 +2666,15 @@ observado + savepoint) e `data-raw/gnanapragasam2026_figures.R`; 17 nós/20 ares
 0 = 2004, limiar do estoque = B_MSY (B_lim nunca cruza); `tests/testthat/test-growth.R`.
 Lição: um fator com autorregulação s se assenta em β/s no temporal — Estados calibrados por
 equilíbrio precisam de s = 1.
+**Fase 2 concluída (branch `revisao2-fase2`), consistência do método:** papéis por schema
+(`schema_roles()`/`roles_of()`/`categories_with_role()`/`node_roles()`/`has_role()` em
+`R/schema.R`; `build_igraph()` grava `V(g)$dpsir_role`; `normalize_dpsir_nodes(nodes, schema)`)
+— nenhum motor compara mais com "Impact"/"State"/etc. "Not affected" (`sufficiency()$affected`,
+`format_confidence_matrix()` com "—", veredito temporal; janela 0 "—"); linha "Planned
+scenario (as set)" em `build_confidence_matrix(planned =)`; caminhos pela ordem do schema e
+efeito = produto dos β com sinal (`pathway_effect()`, `format_pathways_table()`); `local_seed()`
+e sementes fixas nas comunidades. Bug: dropdowns de "Highlight pathway" vazios (Explore montado
+tarde) — agora um `observe` preenche quando faltam. `tests/testthat/test-fase2.R`.
 
 Fase 5 está completa (Marcos A-D). Todos os 4 itens da lista pós-Fase 5 (1:
 exemplo didático, 2a: passos até neutralizar, 2b: threshold opcional por

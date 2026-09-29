@@ -259,7 +259,7 @@ read_savepoint <- function(path, convert_legacy = TRUE) {
   if (is_legacy_file && nrow(raw_nodes_df) > 0 && !"self_regulation" %in% names(raw_nodes_df)) {
     raw_nodes_df$self_regulation <- 0
   }
-  nodes <- normalize_dpsir_nodes(raw_nodes_df)
+  nodes <- normalize_dpsir_nodes(raw_nodes_df, schema)
 
   # Revisao 2, item 1.5: a savepoint written before the structural mode
   # (no metadata$weight_mode) holds relative weights plus a global reach c.

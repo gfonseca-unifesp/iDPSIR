@@ -246,3 +246,64 @@ build_dpsir_legend <- function(schema) {
     stringsAsFactors = FALSE
   )
 }
+
+# =====================================================
+# ROLES (Revisao 2, item 2.6)
+# =====================================================
+#
+# The engine needs to know which level plays which part (driver, pressure,
+# state, impact, feedback), not what the level is called - renaming
+# "Impact" to "Outcome" on the Model step must not empty the tables. A
+# level's role comes from the schema's `role` column when it holds one of
+# these names; otherwise it is inferred from the order: `feedback` levels
+# keep their role; among the others, the first is the driver, the last the
+# impact, the second the pressure and the second-to-last the state (for the
+# default DPSIR order this gives exactly D, P, S, I, R).
+DPSIR_ROLES <- c("driver", "pressure", "state", "impact", "feedback")
+
+schema_roles <- function(schema = get_default_dpsir_schema()) {
+  s <- schema[order(schema$order), , drop = FALSE]
+  given <- tolower(trimws(as.character(s$role)))
+  given[is.na(given)] <- ""
+  roles <- ifelse(given %in% DPSIR_ROLES, given, NA_character_)
+  chain <- which(is.na(roles) | roles != "feedback")
+  free <- chain[is.na(roles[chain])]
+  n <- length(chain)
+  infer <- rep(NA_character_, n)
+  if (n >= 1) infer[1] <- "driver"
+  if (n >= 2) infer[n] <- "impact"
+  if (n >= 3) infer[2] <- "pressure"
+  if (n >= 4) infer[n - 1] <- "state"
+  for (k in seq_along(chain)) {
+    i <- chain[k]
+    if (i %in% free && !is.na(infer[k]) && !infer[k] %in% roles) roles[i] <- infer[k]
+  }
+  setNames(roles, s$name)
+}
+
+# Role of each category name (NA for a category the schema does not have).
+roles_of <- function(categories, schema = get_default_dpsir_schema()) {
+  unname(schema_roles(schema)[as.character(categories)])
+}
+
+# Category names that play `role` in the schema.
+categories_with_role <- function(role, schema = get_default_dpsir_schema()) {
+  r <- schema_roles(schema)
+  names(r)[!is.na(r) & r %in% role]
+}
+
+# Role of every node of a graph: the vertex attribute set by build_igraph()
+# from the graph's own schema, or - for a graph built without it - the role
+# of its category name in the default schema.
+node_roles <- function(g) {
+  r <- igraph::vertex_attr(g, "dpsir_role")
+  if (!is.null(r)) return(as.character(r))
+  cats <- igraph::vertex_attr(g, "dpsir_category")
+  if (is.null(cats)) return(rep(NA_character_, igraph::vcount(g)))
+  roles_of(cats)
+}
+
+has_role <- function(g, role) {
+  r <- node_roles(g)
+  !is.na(r) & r %in% role
+}

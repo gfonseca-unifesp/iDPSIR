@@ -182,7 +182,7 @@ preflight_import_nodes <- function(nodes_raw, schema = get_default_dpsir_schema(
       }
       has_value <- !blank & !is.na(numeric_vals)
       is_state <- if ("dpsir_category" %in% present) {
-        trimws(as.character(nodes_raw$dpsir_category)) == "State"
+        roles_of(trimws(as.character(nodes_raw$dpsir_category)), schema) %in% "state"
       } else {
         rep(TRUE, nrow(nodes_raw))
       }
@@ -253,7 +253,7 @@ preflight_import_nodes <- function(nodes_raw, schema = get_default_dpsir_schema(
       if (length(bad) > 0) {
         blocking <- c(blocking, sprintf("Nodes file, row %d: threshold_level '%s' is not a number.", bad + 1, trimws(as.character(raw))[bad]))
       }
-      is_state <- if ("dpsir_category" %in% present) trimws(as.character(nodes_raw$dpsir_category)) == "State" else rep(TRUE, nrow(nodes_raw))
+      is_state <- if ("dpsir_category" %in% present) roles_of(trimws(as.character(nodes_raw$dpsir_category)), schema) %in% "state" else rep(TRUE, nrow(nodes_raw))
       not_state <- which(filled & !is_state)
       if (length(not_state) > 0) {
         blocking <- c(blocking, sprintf("Nodes file, row %d: threshold_level is only for State factors.", not_state + 1))
@@ -271,7 +271,7 @@ preflight_import_nodes <- function(nodes_raw, schema = get_default_dpsir_schema(
 
   # Revisao 2, item B1: endpoint_class / value_v - Impact nodes only.
   if (nrow(nodes_raw) > 0 && "dpsir_category" %in% present) {
-    is_impact <- trimws(as.character(nodes_raw$dpsir_category)) == "Impact"
+    is_impact <- roles_of(trimws(as.character(nodes_raw$dpsir_category)), schema) %in% "impact"
     if ("endpoint_class" %in% present) {
       raw <- nodes_raw$endpoint_class
       vals <- tolower(trimws(as.character(raw)))
@@ -491,7 +491,7 @@ preflight_import <- function(nodes_raw, edges_raw = NULL, schema = get_default_d
   )
 }
 
-normalize_dpsir_nodes <- function(nodes) {
+normalize_dpsir_nodes <- function(nodes, schema = get_default_dpsir_schema()) {
   nodes <- as.data.frame(nodes, stringsAsFactors = FALSE)
   nodes$id <- trimws(as.character(nodes$id))
   nodes$label <- as.character(nodes$label)
@@ -649,7 +649,8 @@ normalize_dpsir_nodes <- function(nodes) {
   # Revisao 2, item B1 (specification V1): an Impact is an ecological,
   # service or welfare endpoint, with a social value v in [0, 1] (forced to
   # 1 for ecological endpoints). Blank for every other category.
-  is_impact <- nodes$dpsir_category == "Impact"
+  # Revisao 2, item 2.6: by role, so a renamed impact level still counts.
+  is_impact <- roles_of(nodes$dpsir_category, schema) %in% "impact"
   ec <- if ("endpoint_class" %in% names(nodes)) tolower(trimws(as.character(nodes$endpoint_class))) else rep(NA_character_, nrow(nodes))
   ec[is.na(ec) | ec == ""] <- NA_character_
   ec[is_impact & is.na(ec)] <- "ecological"
@@ -766,7 +767,7 @@ validate_dpsir_nodes <- function(nodes, schema = get_default_dpsir_schema()) {
     "Nodes table"
   )
 
-  nodes <- normalize_dpsir_nodes(nodes)
+  nodes <- normalize_dpsir_nodes(nodes, schema)
 
   validate_unique_node_ids(nodes)
   validate_dpsir_categories(nodes, schema)
@@ -851,7 +852,7 @@ validate_dpsir_edges <- function(nodes, edges, schema = get_default_dpsir_schema
     "Edges table"
   )
 
-  nodes <- normalize_dpsir_nodes(nodes)
+  nodes <- normalize_dpsir_nodes(nodes, schema)
   edges <- normalize_dpsir_edges(edges)
 
   if (nrow(edges) == 0) {

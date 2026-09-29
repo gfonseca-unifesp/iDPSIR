@@ -156,7 +156,7 @@ check_effect_matrix <- function(g) {
 explained_variance_warnings <- function(nodes, edges) {
   if (nrow(edges) == 0) return(character())
   from_cat <- nodes$dpsir_category[match(edges$from, nodes$id)]
-  edges <- edges[!from_cat %in% "Response", , drop = FALSE]
+  edges <- edges[!roles_of(from_cat) %in% "feedback", , drop = FALSE]
   if (nrow(edges) == 0) return(character())
   s <- tapply(as.numeric(edges$weight)^2, edges$to, sum)
   over <- s[s > 1 + 1e-9]
@@ -217,7 +217,7 @@ self_regulation_warnings <- function(nodes) {
     out <- c(out, "Nothing in this network recovers on its own (self-regulation 0 everywhere): in the temporal simulation every effect accumulates window after window.")
   }
   th <- if ("threshold_level" %in% names(nodes)) suppressWarnings(as.numeric(nodes$threshold_level)) else rep(NA_real_, nrow(nodes))
-  stuck <- !is.na(th) & !is.na(sr) & sr == 0 & nodes$dpsir_category == "State"
+  stuck <- !is.na(th) & !is.na(sr) & sr == 0 & roles_of(nodes$dpsir_category) %in% "state"
   if (any(stuck)) {
     out <- c(out, sprintf(
       "'%s' has an activation threshold and self-regulation 0: its accumulated deviation never fades on its own, so once its trigger opens it only closes if a response pushes it back.",
@@ -267,8 +267,8 @@ threshold_warnings <- function(g) {
     ))
   }
   # Largest static deviation reachable with every Driver/Pressure at 100%.
-  cat <- V(g)$dpsir_category
-  p_all <- setNames(as.numeric(cat %in% c("Driver", "Pressure")), V(g)$name)
+  role <- node_roles(g)
+  p_all <- setNames(as.numeric(role %in% c("driver", "pressure")), V(g)$name)
   B <- effect_matrix(g)
   dev <- tryCatch(static_state_deviation(g, B, p_all, th$id), error = function(e) rep(NA_real_, nrow(th)))
   never <- !is.na(dev) & !gate_is_open(dev, th$z, th$direction) & abs(dev) < abs(th$z)
@@ -280,7 +280,7 @@ threshold_warnings <- function(g) {
   }
   incoming_p <- vapply(th$id, function(s) {
     src <- igraph::neighbors(g, s, mode = "in")$name
-    any(cat[match(src, V(g)$name)] %in% "Pressure")
+    any(role[match(src, V(g)$name)] %in% "pressure")
   }, logical(1))
   if (any(!incoming_p)) {
     out <- c(out, sprintf("'%s' has a threshold but no Pressure edge arriving at it.", labels[!incoming_p]))
