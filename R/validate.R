@@ -29,7 +29,7 @@ get_known_dpsir_node_fields <- function() {
   c(
     "id", "label", "dpsir_category", "subsystem", "uncertainty", "controllability",
     "self_regulation", "growth_rate", "reference_value", "activation_threshold", "descriptor",
-    "endpoint_class", "value_v"
+    "endpoint_class", "value_v", "sd", "threshold_level", "threshold_direction"
   )
 }
 
@@ -88,8 +88,8 @@ preflight_import_nodes <- function(nodes_raw, schema = get_default_dpsir_schema(
 
   optional_defaults <- c(
     uncertainty = "0.5", controllability = "0.5",
-    self_regulation = "0.5 (half of a deviation fades each window)", growth_rate = "0", reference_value = "1",
-    activation_threshold = "blank (no threshold)", descriptor = "blank"
+    self_regulation = "0.5 (half of a deviation fades each window)", growth_rate = "0",
+    reference_value = "blank (results in the model's own units)", descriptor = "blank"
   )
   # Revisao 2, item B1: Impact-only fields - a missing column is normal (not
   # warned about), every Impact then defaults to ecological / value 1.
@@ -199,6 +199,44 @@ preflight_import_nodes <- function(nodes_raw, schema = get_default_dpsir_schema(
           "Nodes file, row %d: activation_threshold %s is outside the valid range [0, 1].",
           bad_range + 1, numeric_vals[bad_range]
         ))
+      }
+    }
+  }
+
+  # Revisao 2, item C0: measurement layer.
+  if (nrow(nodes_raw) > 0) {
+    for (field in c("reference_value", "sd")) {
+      if (field %in% present) {
+        raw <- nodes_raw[[field]]
+        vals <- suppressWarnings(as.numeric(raw))
+        bad <- which(!.pf_is_blank(raw) & (is.na(vals) | vals <= 0))
+        if (length(bad) > 0) {
+          blocking <- c(blocking, sprintf(
+            "Nodes file, row %d: %s '%s' must be a number greater than 0.", bad + 1, field, trimws(as.character(raw))[bad]
+          ))
+        }
+      }
+    }
+    if ("threshold_level" %in% present) {
+      raw <- nodes_raw$threshold_level
+      vals <- suppressWarnings(as.numeric(raw))
+      filled <- !.pf_is_blank(raw)
+      bad <- which(filled & is.na(vals))
+      if (length(bad) > 0) {
+        blocking <- c(blocking, sprintf("Nodes file, row %d: threshold_level '%s' is not a number.", bad + 1, trimws(as.character(raw))[bad]))
+      }
+      is_state <- if ("dpsir_category" %in% present) trimws(as.character(nodes_raw$dpsir_category)) == "State" else rep(TRUE, nrow(nodes_raw))
+      not_state <- which(filled & !is_state)
+      if (length(not_state) > 0) {
+        blocking <- c(blocking, sprintf("Nodes file, row %d: threshold_level is only for State factors.", not_state + 1))
+      }
+    }
+    if ("threshold_direction" %in% present) {
+      raw <- nodes_raw$threshold_direction
+      vals <- tolower(trimws(as.character(raw)))
+      bad <- which(!.pf_is_blank(raw) & !vals %in% c("auto", "both"))
+      if (length(bad) > 0) {
+        blocking <- c(blocking, sprintf("Nodes file, row %d: threshold_direction '%s' must be auto or both.", bad + 1, vals[bad]))
       }
     }
   }
@@ -492,15 +530,22 @@ normalize_dpsir_nodes <- function(nodes) {
     nodes$growth_rate[is.na(nodes$growth_rate)] <- 0
   }
 
-  # Revisao 1, Fase 5: escala de referencia do no, usada so pra tornar
-  # `threshold` (aresta) relativo em vez de absoluto - ver R/temporal.R.
-  # Opcional, default 1 (threshold se comporta como magnitude absoluta,
-  # igual a antes desta coluna existir).
+  # Revisao 2, item C0 (D23): the measurement layer. reference_value is the
+  # factor's initial level (> 0) and sd its typical variation, both in the
+  # factor's own units. Blank stays NA (the engine then uses 1, i.e. the
+  # model's own units) - no longer silently turned into 1, so the app can
+  # tell "not given" from "1".
   if (!"reference_value" %in% names(nodes)) {
-    nodes$reference_value <- 1
+    nodes$reference_value <- NA_real_
   } else {
     nodes$reference_value <- suppressWarnings(as.numeric(nodes$reference_value))
-    nodes$reference_value[is.na(nodes$reference_value) | nodes$reference_value == 0] <- 1
+    nodes$reference_value[!is.na(nodes$reference_value) & nodes$reference_value <= 0] <- NA_real_
+  }
+  if (!"sd" %in% names(nodes)) {
+    nodes$sd <- NA_real_
+  } else {
+    nodes$sd <- suppressWarnings(as.numeric(nodes$sd))
+    nodes$sd[!is.na(nodes$sd) & nodes$sd <= 0] <- NA_real_
   }
 
   # Descricao livre e opcional do no (uma frase explicando o que o fator
@@ -523,11 +568,27 @@ normalize_dpsir_nodes <- function(nodes) {
   # de sempre: ausente/NA e o caso normal ("sempre ligado", comportamento
   # de hoje), so significativo pra um no de categoria State - validado no
   # formulario (mod_data.R), nao aqui.
-  if (!"activation_threshold" %in% names(nodes)) {
-    nodes$activation_threshold <- NA_real_
-  } else {
-    nodes$activation_threshold <- suppressWarnings(as.numeric(nodes$activation_threshold))
+  # Revisao 2, item C0 (D23): the State's threshold is a LEVEL in the
+  # factor's own units (threshold_level), with a direction: "auto" (from the
+  # sign of level - reference: below it = a falling State, above = a rising
+  # one) or "both" (either way). The older activation_threshold (a fraction
+  # f of reference_value, direction-free, |x| / ref >= f) is converted to
+  # level = ref * (1 - f) with direction "both", which reproduces the older
+  # criterion exactly (engine unit sd = 1: |x| >= f * ref), then dropped.
+  level <- if ("threshold_level" %in% names(nodes)) suppressWarnings(as.numeric(nodes$threshold_level)) else rep(NA_real_, nrow(nodes))
+  direction <- if ("threshold_direction" %in% names(nodes)) tolower(trimws(as.character(nodes$threshold_direction))) else rep(NA_character_, nrow(nodes))
+  if ("activation_threshold" %in% names(nodes)) {
+    f <- suppressWarnings(as.numeric(nodes$activation_threshold))
+    legacy <- !is.na(f) & is.na(level)
+    ref_eff <- ifelse(is.na(nodes$reference_value), 1, nodes$reference_value)
+    level[legacy] <- ref_eff[legacy] * (1 - f[legacy])
+    direction[legacy] <- "both"
   }
+  direction[is.na(direction) | direction == ""] <- "auto"
+  direction[is.na(level)] <- NA_character_
+  nodes$threshold_level <- level
+  nodes$threshold_direction <- direction
+  nodes$activation_threshold <- NULL
 
   # `temporal_scale` foi aposentado (ver R/schema.R) - removida aqui, nao
   # so ignorada, se um savepoint/CSV antigo ainda trouxer a coluna.

@@ -74,21 +74,27 @@ test_that("normalize_dpsir_edges preserves reference when present and drops a le
   expect_null(normalized$threshold)
 })
 
-test_that("normalize_dpsir_nodes defaults activation_threshold to NA when the column is absent", {
+# Revisao 2, item C0: the threshold is a level (threshold_level) with a
+# direction; the older activation_threshold (fraction f of the reference
+# value) is converted to level = ref * (1 - f), direction "both".
+test_that("normalize_dpsir_nodes leaves threshold_level NA when no threshold is given", {
   nodes <- data.frame(id = "S1", label = "S1", dpsir_category = "State", stringsAsFactors = FALSE)
   normalized <- normalize_dpsir_nodes(nodes)
 
-  expect_true(is.na(normalized$activation_threshold))
+  expect_true(is.na(normalized$threshold_level))
+  expect_null(normalized$activation_threshold)
 })
 
-test_that("normalize_dpsir_nodes preserves activation_threshold when present", {
+test_that("normalize_dpsir_nodes converts an older activation_threshold to a level with direction 'both'", {
   nodes <- data.frame(
-    id = "S1", label = "S1", dpsir_category = "State",
-    activation_threshold = 0.15, stringsAsFactors = FALSE
+    id = c("S1", "S2"), label = c("S1", "S2"), dpsir_category = "State",
+    reference_value = c(100, NA), activation_threshold = c(0.15, 0.4), stringsAsFactors = FALSE
   )
   normalized <- normalize_dpsir_nodes(nodes)
 
-  expect_equal(normalized$activation_threshold, 0.15)
+  expect_equal(normalized$threshold_level, c(85, 0.6))
+  expect_equal(normalized$threshold_direction, c("both", "both"))
+  expect_null(normalized$activation_threshold)
 })
 
 test_that("normalize_dpsir_edges coerces weight/confidence to numeric and trims from/to", {
@@ -121,7 +127,8 @@ test_that("normalize_dpsir_nodes defaults self_regulation/growth_rate/reference_
 
   expect_equal(normalized$self_regulation, 0.5) # Revisao 2, item A8: default 0.5
   expect_equal(normalized$growth_rate, 0)
-  expect_equal(normalized$reference_value, 1)
+  # Revisao 2, item C0: blank stays NA ("not given"); the engine uses 1.
+  expect_true(is.na(normalized$reference_value))
 })
 
 test_that("normalize_dpsir_nodes reads self_regulation/growth_rate/reference_value numbers straight through when present", {
@@ -148,14 +155,15 @@ test_that("normalize_dpsir_nodes maps a legacy categorical self_regulation (none
   expect_equal(normalized$self_regulation, c(0, 0.2, 0.4, 0.6))
 })
 
-test_that("normalize_dpsir_nodes treats reference_value = 0 the same as missing (falls back to 1, avoids a division by zero downstream)", {
+test_that("normalize_dpsir_nodes treats reference_value = 0 as not given (NA; the engine then uses 1)", {
   nodes <- data.frame(
     id = "A", label = "A", dpsir_category = "Driver", reference_value = 0,
     stringsAsFactors = FALSE
   )
   normalized <- normalize_dpsir_nodes(nodes)
 
-  expect_equal(normalized$reference_value, 1)
+  expect_true(is.na(normalized$reference_value))
+  expect_equal(unname(build_reference_values(build_igraph(normalized, NULL, get_default_dpsir_schema()))), 1)
 })
 
 test_that("normalize_dpsir_nodes defaults uncertainty/controllability to 0.5 when the columns are entirely absent", {

@@ -106,7 +106,8 @@ build_savepoint <- function(schema, nodes, edges, positions = NULL, metadata = l
       temporal_max_windows = scenario_state$temporal_max_windows,
       temporal_windows = scenario_state$temporal_windows,
       temporal_tol_rel = scenario_state$temporal_tol_rel,
-      baseline_without_response = scenario_state$baseline_without_response
+      baseline_without_response = scenario_state$baseline_without_response,
+      temporal_gate_mode = scenario_state$temporal_gate_mode
     )
   }
   if (!is.null(scenario_state_json)) scenario_state_json <- Filter(Negate(is.null), scenario_state_json)
@@ -320,7 +321,8 @@ read_savepoint <- function(path, convert_legacy = TRUE) {
       temporal_max_windows = ss_val(ss$temporal_max_windows) %||% 50,
       temporal_windows = ss_val(ss$temporal_windows) %||% 5,
       temporal_tol_rel = ss_val(ss$temporal_tol_rel) %||% 5,
-      baseline_without_response = isTRUE(ss$baseline_without_response)
+      baseline_without_response = isTRUE(ss$baseline_without_response),
+      temporal_gate_mode = ss_val(ss$temporal_gate_mode) %||% "state_level"
     )
   }
 

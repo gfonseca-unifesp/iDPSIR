@@ -230,6 +230,10 @@ tooltip_text <- function(x, empty = "-") {
 build_node_tooltip <- function(nodes) {
   descriptor <- tooltip_text(nodes$descriptor, empty = "")
   descriptor_line <- ifelse(descriptor == "", "", paste0("<i>", descriptor, "</i><br>"))
+  # Revisao 2, item C0: the State threshold is a level in the factor's units.
+  level <- if ("threshold_level" %in% names(nodes)) suppressWarnings(as.numeric(nodes$threshold_level)) else rep(NA_real_, nrow(nodes))
+  dirn <- if ("threshold_direction" %in% names(nodes)) as.character(nodes$threshold_direction) else rep("auto", nrow(nodes))
+  threshold_text <- ifelse(is.na(level), "-", paste0(signif(level, 4), ifelse(dirn %in% "both", " (either direction)", "")))
 
   glue::glue(
     "<b>{tooltip_text(nodes$label)}</b><br>",
@@ -238,7 +242,7 @@ build_node_tooltip <- function(nodes) {
     "Subsystem: {tooltip_text(nodes$subsystem)}<br>",
     "Uncertainty: {ifelse(is.na(nodes$uncertainty), '-', round(as.numeric(nodes$uncertainty), 2))}<br>",
     "Controllability: {ifelse(is.na(nodes$controllability), '-', round(as.numeric(nodes$controllability), 2))}<br>",
-    "Activation threshold: {tooltip_text(nodes$activation_threshold)}"
+    "Threshold: {threshold_text}"
   )
 }
 
@@ -338,6 +342,11 @@ border_by_uncertainty <- function(nodes) {
   # edited since the low/medium/high days looks visually identical.
   nodes$borderWidth <- 1 + 3 * as.numeric(nodes$uncertainty)
   nodes$borderWidth[is.na(nodes$borderWidth)] <- 2.5
+  # Revisao 2, item C4: a State with a threshold gets a heavy border.
+  if ("threshold_level" %in% names(nodes)) {
+    has_th <- !is.na(suppressWarnings(as.numeric(nodes$threshold_level)))
+    nodes$borderWidth[has_th] <- 6
+  }
   nodes
 }
 

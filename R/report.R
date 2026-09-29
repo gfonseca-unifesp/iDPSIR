@@ -223,6 +223,17 @@ build_full_report_html <- function(
             scenario_name
           )
         ),
+        # Revisao 2, item C4: State triggers.
+        if (!is.null(sc$gates_pressure) && nrow(sc$gates_pressure) > 0) {
+          tagList(
+            tags$h5("State triggers"),
+            report_html_table(format_triggers_table(graph, sc$gates_pressure, sc$gates_net)),
+            caption_tag("Table", next_table_n(), sprintf(
+              "For \"%s\": each State with a threshold - its deviation (in standard deviations) under the pressure scenario alone and with the response, and whether its trigger is open (it passes its effect on) before and after the response.",
+              scenario_name
+            ))
+          )
+        },
         # Revisao 2, item B7: Impact prioritization.
         if (!is.null(sc$prioritization) && nrow(sc$prioritization) > 0) {
           tagList(
@@ -317,7 +328,8 @@ build_full_report_html <- function(
           # Revisao 2, item A5.
           stop_rule = sc$temporal_stop_rule %||% "until_neutralized",
           max_windows = max(1, sc$temporal_max_windows %||% 50),
-          baseline_without_response = isTRUE(sc$baseline_without_response)
+          baseline_without_response = isTRUE(sc$baseline_without_response),
+          gate_mode = if (identical(sc$temporal_gate_mode, "load")) "load" else "state_level"
         )
 
         stability_note <- temporal_stability_note(tr$stability)
@@ -351,14 +363,34 @@ build_full_report_html <- function(
         }
 
         img_uri <- plot_to_data_uri(
-          function() plot_temporal_storyboard(raw_df, reinforcing_warning = isTRUE(tr$stability$unbounded)),
+          function() plot_temporal_storyboard(raw_df, reinforcing_warning = isTRUE(tr$stability$unbounded), neutralized_at = tr$neutralized_at),
           width = 900, height = 700
         )
+
+        # Revisao 2, items A2/C0/C3: how the run ended, the trigger criterion
+        # and the levels in the factors' own units.
+        stop_tag <- if (!is.null(temporal_stop_note(tr))) tags$p(temporal_stop_note(tr)) else NULL
+        gate_tag <- if (nrow(tr$thresholds) > 0) {
+          tags$p(sprintf("Trigger criterion: %s.", if (identical(tr$gate_mode, "load")) "load arriving at the State in each window" else "accumulated State level"))
+        } else NULL
+        level_df <- temporal_level_table(graph, tr)
+        level_tag <- if (nrow(level_df) > 0) {
+          tagList(
+            report_html_table(level_df),
+            caption_tag("Table", next_table_n(), sprintf(
+              "For \"%s\": level of each factor with an initial value, in its own units, at the last window (initial level + typical variation x deviation), without and with the response.",
+              scenario_name
+            ))
+          )
+        } else NULL
 
         tagList(
           tags$h4(scenario_name),
           note_tag,
+          stop_tag,
+          gate_tag,
           table_tag,
+          level_tag,
           tags$img(class = "report-graph-image", src = img_uri),
           caption_tag(
             "Figure", next_figure_n(),

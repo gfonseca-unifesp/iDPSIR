@@ -55,7 +55,7 @@
       "controllability": 0.2,
       "self_regulation": 0,
       "growth_rate": 0,
-      "reference_value": 1,
+      "reference_value": null,
       "descriptor": "",
       "activation_threshold": null
     },
@@ -68,7 +68,7 @@
       "controllability": 0.5,
       "self_regulation": 0,
       "growth_rate": 0,
-      "reference_value": 1,
+      "reference_value": null,
       "descriptor": "",
       "activation_threshold": null
     },
@@ -81,7 +81,7 @@
       "controllability": 0.2,
       "self_regulation": 0,
       "growth_rate": 0,
-      "reference_value": 1,
+      "reference_value": null,
       "descriptor": "",
       "activation_threshold": null
     },
@@ -94,7 +94,7 @@
       "controllability": 0.2,
       "self_regulation": 0,
       "growth_rate": 0,
-      "reference_value": 1,
+      "reference_value": null,
       "descriptor": "",
       "activation_threshold": null
     },
@@ -107,7 +107,7 @@
       "controllability": 0.8,
       "self_regulation": 0,
       "growth_rate": 0,
-      "reference_value": 1,
+      "reference_value": null,
       "descriptor": "",
       "activation_threshold": null
     }

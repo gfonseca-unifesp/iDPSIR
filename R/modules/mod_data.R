@@ -21,7 +21,9 @@ create_empty_nodes_table <- function() {
     self_regulation = numeric(),
     growth_rate = numeric(),
     reference_value = numeric(),
-    activation_threshold = numeric(),
+    sd = numeric(),
+    threshold_level = numeric(),
+    threshold_direction = character(),
     descriptor = character(),
     endpoint_class = character(),
     value_v = numeric(),
@@ -526,11 +528,13 @@ mod_data_server <- function(id, seed = NULL) {
       d <- defaults %||% list(
         id = "", label = "", dpsir_category = schema_categories(rv$schema)[1],
         subsystem = "", uncertainty = 0.5, controllability = 0.5,
-        self_regulation = DEFAULT_SELF_REGULATION, growth_rate = 0, reference_value = 1,
-        activation_threshold = NA_real_, descriptor = "",
+        self_regulation = DEFAULT_SELF_REGULATION, growth_rate = 0, reference_value = NA_real_,
+        sd = NA_real_, threshold_level = NA_real_, threshold_direction = "auto", descriptor = "",
         endpoint_class = "ecological", value_v = 1
       )
       impact_panel <- sprintf("input['%s'] == 'Impact'", ns("nm_category"))
+      state_panel <- sprintf("input['%s'] == 'State'", ns("nm_category"))
+      num_or_na <- function(x) if (is.null(x) || length(x) == 0 || is.na(x)) NA else x
       value_panel <- sprintf("input['%s'] == 'Impact' && input['%s'] != 'ecological'", ns("nm_category"), ns("nm_endpoint_class"))
 
       modalDialog(
@@ -578,25 +582,32 @@ mod_data_server <- function(id, seed = NULL) {
           "simulation: a factor's own trend over time, independent of the network's links",
           "(e.g. population growth, a rising consumption trend)."
         ),
-        numericInput(
-          ns("nm_reference_value"), "Reference value (optional)",
-          value = d$reference_value %||% 1, step = 0.5
+        # Revisao 2, item C0 (D23): measurement layer, in the factor's own units.
+        tags$h6("Measurement (optional)", style = "margin-top: 10px;"),
+        fluidRow(
+          column(6, numericInput(ns("nm_reference_value"), "Initial level (reference value)", value = num_or_na(d$reference_value), min = 0, step = 0.5)),
+          column(6, numericInput(ns("nm_sd"), "Typical variation (SD)", value = num_or_na(d$sd), min = 0, step = 0.1))
         ),
+        numericInput(ns("nm_cv"), "...or typical variation as CV (% of the initial level)", value = NA, min = 0, step = 1),
         tags$p(
           class = "text-muted", style = "font-size: 12px;",
-          "Leave at 1 for most factors. Only relevant for a State factor with an activation",
-          "threshold set below - the scale that threshold is a fraction of."
+          "Leave blank unless you want results in this factor's own units or a threshold on it. The model works in",
+          "standard deviations: the typical variation converts real units into the model's units and back."
         ),
-        numericInput(
-          ns("nm_activation_threshold"), "Activation threshold (optional, 0-1, State factors only)",
-          value = d$activation_threshold, min = 0, max = 1, step = 0.05
-        ),
-        tags$p(
-          class = "text-muted", style = "font-size: 12px;",
-          "Leave blank for most factors. Only allowed for a State factor - the fraction of",
-          "its reference value it has to move (in a given scenario) before ALL of its",
-          "outgoing links switch on together, instead of always contributing proportionally",
-          "from the start (e.g. a fish stock collapse point)."
+        conditionalPanel(
+          condition = state_panel,
+          fluidRow(
+            column(6, numericInput(ns("nm_threshold_level"), "Threshold level (State only)", value = num_or_na(d$threshold_level), step = 0.5)),
+            column(6, selectInput(ns("nm_threshold_direction"), "Direction",
+                                  choices = c("From the level (below = falling, above = rising)" = "auto", "Either direction" = "both"),
+                                  selected = if (is.null(d$threshold_direction) || is.na(d$threshold_direction)) "auto" else d$threshold_direction))
+          ),
+          tags$p(
+            class = "text-muted", style = "font-size: 12px;",
+            "Activation threshold, in this factor's own units: the State only passes its effect on (all its outgoing",
+            "links together) once it crosses this level - e.g. a fish stock collapse point below the initial level, or a",
+            "legal limit for a contaminant above it. Needs the initial level and, ideally, the typical variation."
+          )
         ),
         # Revisao 2, item B1: only for Impact factors (specification V1).
         conditionalPanel(
@@ -736,26 +747,30 @@ mod_data_server <- function(id, seed = NULL) {
       }
       if (identical(input$nm_endpoint_class, "ecological")) value_v <- 1
 
-      reference_value <- input$nm_reference_value
-      if (is.na(reference_value) || reference_value == 0) {
-        showNotification("Reference value cannot be zero.", type = "error")
+      # Revisao 2, item C0: measurement layer.
+      num <- function(x) if (is.null(x) || length(x) == 0) NA_real_ else suppressWarnings(as.numeric(x))
+      reference_value <- num(input$nm_reference_value)
+      if (!is.na(reference_value) && reference_value <= 0) {
+        showNotification("The initial level must be greater than 0 (or left blank).", type = "error")
         return()
       }
-
-      activation_threshold <- input$nm_activation_threshold
-      if (!is.null(activation_threshold) && !is.na(activation_threshold)) {
-        if (activation_threshold < 0 || activation_threshold > 1) {
-          showNotification("Activation threshold, if set, must be between 0 and 1.", type = "error")
+      sd_value <- num(input$nm_sd)
+      cv <- num(input$nm_cv)
+      if (is.na(sd_value) && !is.na(cv)) {
+        if (is.na(reference_value)) {
+          showNotification("A CV needs the initial level (reference value) to be converted.", type = "error")
           return()
         }
-
-        # Segunda rodada da Revisao 1: mesma restricao que existia do lado
-        # da aresta (so faz sentido pra uma variavel de estado ecologica),
-        # so que validada aqui contra a categoria do proprio no.
-        if (!identical(input$nm_category, "State")) {
-          showNotification("Activation threshold can only be set for a State factor.", type = "error")
-          return()
-        }
+        sd_value <- cv / 100 * reference_value
+      }
+      if (!is.na(sd_value) && sd_value <= 0) {
+        showNotification("The typical variation must be greater than 0 (or left blank).", type = "error")
+        return()
+      }
+      threshold_level <- if (identical(input$nm_category, "State")) num(input$nm_threshold_level) else NA_real_
+      if (!is.na(threshold_level) && is.na(reference_value)) {
+        showNotification("A threshold level needs the initial level (reference value).", type = "error")
+        return()
       }
 
       new_row <- data.frame(
@@ -768,7 +783,9 @@ mod_data_server <- function(id, seed = NULL) {
         self_regulation = self_regulation,
         growth_rate = input$nm_growth_rate %||% 0,
         reference_value = reference_value,
-        activation_threshold = if (is.null(activation_threshold)) NA_real_ else activation_threshold,
+        sd = sd_value,
+        threshold_level = threshold_level,
+        threshold_direction = if (is.na(threshold_level)) NA_character_ else (input$nm_threshold_direction %||% "auto"),
         descriptor = trimws(input$nm_descriptor %||% ""),
         endpoint_class = if (identical(input$nm_category, "Impact")) input$nm_endpoint_class %||% "ecological" else NA_character_,
         value_v = if (identical(input$nm_category, "Impact")) value_v else NA_real_,
@@ -1081,6 +1098,12 @@ mod_data_server <- function(id, seed = NULL) {
         notes <- c(notes, explained_variance_warnings(normalize_dpsir_nodes(rv$nodes), e))
       }
       if (length(messages) == 0) notes <- c(notes, self_regulation_warnings(normalize_dpsir_nodes(rv$nodes)))
+      if (length(messages) == 0) {
+        notes <- c(notes, tryCatch(
+          threshold_warnings(build_igraph(rv$nodes, rv$edges, rv$schema)),
+          error = function(e) character()
+        ))
+      }
 
       tagList(
         if (length(messages) == 0) {

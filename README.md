@@ -117,11 +117,13 @@ default 0.5 — the share of a factor's deviation that fades by itself each time
 only used by the optional temporal simulation, see [Self-regulation](#self-regulation)
 below), `growth_rate` (optional, default 0 — a
 factor's own exogenous trend per time window, e.g. population growth, independent of
-any edge), `reference_value` (optional, default 1 — the scale a factor's simulated
-change is measured against when it has an `activation_threshold` set),
-`activation_threshold` (optional, blank for most factors; a fraction 0-1 of the
-factor's own `reference_value` it has to move before ALL of its outgoing edges switch
-on together — only allowed when the factor is State), `descriptor` (optional
+any edge), `reference_value` (optional — the factor's initial level in its own units),
+`sd` (optional — its typical variation, a standard deviation in the same units; the
+node form also accepts a coefficient of variation), `threshold_level` (optional, State
+only, blank for most — the level in the factor's own units at which ALL of its outgoing
+edges switch on together; see [State triggers](#state-triggers)),
+`threshold_direction` (optional: `auto`, the default, reads the direction from the
+initial level; `both` counts a move of that size either way), `descriptor` (optional
 free-text description of what the factor represents — documentation only, not read by
 any calculation), `endpoint_class` (Impact only, optional: `ecological` — the default —,
 `service` or `welfare`) and `value_v` (Impact only, optional, 0–1: the social value of a
@@ -211,6 +213,30 @@ a small per-window pressure can still cross a threshold through accumulation.
 | 0.30 | 1.9 windows | 3× | short-cycle fish stock |
 | 0.50 (default) | 1 window | 2× | water quality that renews quickly |
 | 1 | — | 1× | monthly income, catch in the window |
+
+### State triggers
+
+A State with a threshold passes its effect on only once it crosses that level — a
+collapse point, for example a fish stock falling below 85 t. The model works in
+standard deviations: the threshold becomes *z = (threshold level − initial level) /
+typical variation* (1 for either when blank), and the trigger is open when the State's
+deviation has crossed *z* in its direction. It is used by both readings:
+
+- **Sufficiency (static)** — the State's deviation under the scenario decides the gate,
+  and the Scenarios tab shows a *State triggers* table: open or closed under the
+  pressure alone and with the response, and whether the response closes it. An Impact
+  held back by a closed trigger is reported as neutralized by the trigger, and *Reach*
+  also reports what the scenario actually reaches, not crossing closed triggers.
+- **Temporal simulation** — checked every window, by the *accumulated* State level
+  (default) or by the *load* arriving in each window (or both, to compare). A weak but
+  steady pressure may never trigger by load and still trigger by accumulation — so the
+  two readings can disagree, as in the Gnanapragasam example, where the stock's trigger
+  stays closed in a single instant and opens at window 7.
+
+Pushes are shares of one standard deviation (100% = 1 SD, up to 500%); a factor with a
+typical variation also takes its push in its own units. Older files with an
+`activation_threshold` fraction *f* are converted on load to a threshold level
+*reference × (1 − f)* in either direction, which reproduces the old rule |x| ≥ f·reference.
 
 ## Example networks
 

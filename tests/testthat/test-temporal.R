@@ -72,13 +72,12 @@ test_that("temporal_step matches a hand-computed single window", {
   g <- build_test_network()
   W <- build_interaction_matrix(g)
   growth_rate <- build_growth_rate_vector(g)
-  reference_values <- build_reference_values(g)
-  Th <- build_threshold_matrix(g)
+  th <- state_thresholds(g)
 
   x0 <- zero_press(g)
   p <- build_press_vector(g, active_ids = "D1", strengths = c(D1 = 1))
 
-  x1 <- temporal_step(x0, W, growth_rate, Th, reference_values, p)
+  x1 <- setNames(temporal_step(x0, W, growth_rate, th, g, "state_level", p)$x, names(x0))
 
   # x=0 everywhere, so W %*% x contributes nothing on the first step - only
   # the direct external push on D1 shows up.
@@ -294,8 +293,10 @@ test_that("threshold gating (relative to reference_value) blocks an edge until t
   # S1 -> I1 gets an activation threshold on S1 itself (second round of
   # Revisao 1: threshold moved from edge to node): only contributes once
   # |S1| >= 2 (reference_value defaults to 1 pre-Fase-5, so this is an
-  # absolute magnitude for now).
-  V(g)[V(g)$name == "S1"]$activation_threshold <- 2
+  # absolute magnitude for now). Revisao 2, item C0: expressed as a level
+  # (reference 1 - 2 = -1, i.e. a fall of 2) with direction "both".
+  V(g)[V(g)$name == "S1"]$threshold_level <- -1
+  V(g)[V(g)$name == "S1"]$threshold_direction <- "both"
 
   p_D <- build_press_vector(g, active_ids = "D1", strengths = c(D1 = 1))
   zero_p <- zero_press(g)

@@ -2633,6 +2633,25 @@ padrão 0,5 em [0, 1] (`DEFAULT_SELF_REGULATION`); configurações temporais no
 aliases de sinal (B6); seção "Impact prioritization" na aba Scenarios e no relatório
 (`draw_prioritization_plot()`). Teste de referência: exemplo da seção 4 do PDF com β
 padronizado dá D = 1,00 / 0,86 (= Levins).
+**Fase C concluída (branch `revisao2-faseC`), gatilhos de Estado:** camada de medida em nós
+(`reference_value` = nível inicial em unidades próprias, NA quando vazio; `sd` = variação
+típica, formulário aceita CV; `threshold_level`/`threshold_direction` auto|both, só State;
+`activation_threshold` antigo vira nível ref·(1 − f), direção both — reproduz |x| ≥ f·ref com
+DP = 1, não DP = ref como dizia o roadmap). `R/triggers.R` novo: z = (nível − ref)/sd (1 quando
+vazio); leitura estática decide o gatilho pelo desvio estático do Estado (D/P recortados ≥ 0,
+iterado até 20 vezes, oscilação → todos abertos + `unstable`); `sufficiency()` com gatilhos
+calcula net com as duas perturbações juntas, força por bissecção, `neutralized_by`
+trigger/mitigation; `sufficiency_confidence` e relevância usam a matriz com gatilhos.
+Temporal: `gate_mode` state_level (padrão, P1) ou load, UI com "Compare both", tabela de
+gatilhos por janela e "Change relative to initial values" (`temporal_level_table()`; esconde
+ref = 1 sem sd e sem limiar — placeholder de arquivos antigos; os CSVs/savepoints de exemplo
+tiveram esse 1 apagado). Tabela "State triggers", alcance efetivo (`effective_response_reach`),
+força até 500% ou em unidades (quando há sd), borda grossa no Estado com limiar, avisos de
+limiar no Review. **Mudança no exemplo Gnanapragasam:** a leitura temporal fica igual, mas na
+estática S1 desvia −1,5 contra z = −15, o gatilho fecha e a renda deixa de piorar (Catch decline
+2,344 → 0,844, Conflict 1,313 → 0,563, confiança 100%/100%); o tutorial foi reescrito como
+ilustração de estático vs. acumulação (abre na janela 7; 6 por carga) — decisão pendente com o
+usuário (manter / dar sd a S1 / tirar o limiar).
 
 Fase 5 está completa (Marcos A-D). Todos os 4 itens da lista pós-Fase 5 (1:
 exemplo didático, 2a: passos até neutralizar, 2b: threshold opcional por

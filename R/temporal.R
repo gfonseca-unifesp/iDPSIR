@@ -136,9 +136,12 @@ apply_threshold_gate <- function(W, x, threshold_matrix, reference_values) {
 # Um passo discreto da equacao no topo do arquivo. `W` aqui e o interaction
 # matrix JA CONTRAIDO (ver `contraction_c` em simulate_temporal_pair() logo
 # abaixo) - nao o W bruto de build_interaction_matrix().
-temporal_step <- function(x, W, growth_rate, threshold_matrix, reference_values, p) {
-  gated_W <- apply_threshold_gate(W, x, threshold_matrix, reference_values)
-  x + growth_rate * x + as.numeric(gated_W %*% x) + p
+# Revisao 2, item C3: the State gates come from R/triggers.R (threshold as a
+# level with a direction, D23; criterion "state_level" or "load", D11).
+# Returns the new state and which gates were open in this window.
+temporal_step <- function(x, W, growth_rate, th, g, gate_mode, p) {
+  gated <- temporal_gate_matrix(W, x, th, g, gate_mode)
+  list(x = x + growth_rate * x + as.numeric(gated$W %*% x) + p, open = gated$open)
 }
 
 # Runs two rounds side by side - baseline (p_D only) and scenario
@@ -175,15 +178,15 @@ simulate_temporal_pair <- function(g, p_D, p_R, windows = 5,
                                     max_windows = 50,
                                     tol_abs = 1e-9,
                                     baseline_without_response = FALSE,
+                                    gate_mode = c("state_level", "load"),
                                     growth_rate = NULL,
-                                    threshold_matrix = NULL,
-                                    reference_values = NULL,
                                     on_step = NULL) {
   stopifnot(inherits(g, "igraph"))
   if (missing(stop_rule) && !missing(windows)) stop_rule <- "fixed"
   mode_D <- match.arg(mode_D)
   mode_R <- match.arg(mode_R)
   stop_rule <- match.arg(stop_rule)
+  gate_mode <- match.arg(gate_mode)
   n_windows <- if (stop_rule == "fixed") windows else max_windows
   stopifnot(n_windows >= 1)
 
@@ -208,8 +211,7 @@ simulate_temporal_pair <- function(g, p_D, p_R, windows = 5,
   }
 
   if (is.null(growth_rate)) growth_rate <- build_growth_rate_vector(g)
-  if (is.null(reference_values)) reference_values <- build_reference_values(g)
-  if (is.null(threshold_matrix)) threshold_matrix <- build_threshold_matrix(g)
+  th <- state_thresholds(g)
 
   # Revisao 2, item 0.3: align by name (R/sufficiency.R), never by position.
   p_D <- unname(align_press_vector(p_D, node_names, "pressure scenario"))
@@ -229,13 +231,21 @@ simulate_temporal_pair <- function(g, p_D, p_R, windows = 5,
 
   neutralized_at <- NA_integer_
   ran <- n_windows
+  gates_baseline <- matrix(NA, nrow = n_windows, ncol = nrow(th), dimnames = list(NULL, th$id))
+  gates_scenario <- gates_baseline
 
   for (t in seq_len(n_windows)) {
     p_D_t <- if (mode_D == "impulse" && t > 1) rep(0, n) else p_D
     p_R_t <- if (mode_R == "impulse" && t > 1) rep(0, n) else p_R
 
-    x_baseline <- temporal_step(x_baseline, W_baseline, growth_rate, threshold_matrix, reference_values, p_D_t)
-    x_scenario <- temporal_step(x_scenario, W, growth_rate, threshold_matrix, reference_values, p_D_t + p_R_t)
+    step_b <- temporal_step(x_baseline, W_baseline, growth_rate, th, g, gate_mode, p_D_t)
+    step_s <- temporal_step(x_scenario, W, growth_rate, th, g, gate_mode, p_D_t + p_R_t)
+    x_baseline <- setNames(step_b$x, node_names)
+    x_scenario <- setNames(step_s$x, node_names)
+    if (nrow(th) > 0) {
+      gates_baseline[t, ] <- step_b$open
+      gates_scenario[t, ] <- step_s$open
+    }
 
     hist_baseline[t + 1, ] <- x_baseline
     hist_scenario[t + 1, ] <- x_scenario
@@ -262,6 +272,10 @@ simulate_temporal_pair <- function(g, p_D, p_R, windows = 5,
     max_windows = if (stop_rule == "until_neutralized") max_windows else NA_integer_,
     neutralized_at = neutralized_at,
     reached_impacts = reached_impacts,
+    gate_mode = gate_mode,
+    thresholds = th,
+    gates_baseline = gates_baseline[seq_len(ran), , drop = FALSE],
+    gates_scenario = gates_scenario[seq_len(ran), , drop = FALSE],
     stability = stability
   )
 }

@@ -55,7 +55,7 @@
       "controllability": 0.2,
       "self_regulation": 0,
       "growth_rate": 0.02,
-      "reference_value": 1,
+      "reference_value": null,
       "activation_threshold": null,
       "descriptor": ""
     },
@@ -68,7 +68,7 @@
       "controllability": 0.2,
       "self_regulation": 0,
       "growth_rate": 0.015,
-      "reference_value": 1,
+      "reference_value": null,
       "activation_threshold": null,
       "descriptor": ""
     },
@@ -81,7 +81,7 @@
       "controllability": 0.5,
       "self_regulation": 0.1,
       "growth_rate": 0.03,
-      "reference_value": 1,
+      "reference_value": null,
       "activation_threshold": null,
       "descriptor": ""
     },
@@ -94,7 +94,7 @@
       "controllability": 0.5,
       "self_regulation": 0,
       "growth_rate": 0,
-      "reference_value": 1,
+      "reference_value": null,
       "activation_threshold": null,
       "descriptor": ""
     },
@@ -120,7 +120,7 @@
       "controllability": 0.2,
       "self_regulation": 0.02,
       "growth_rate": 0,
-      "reference_value": 1,
+      "reference_value": null,
       "activation_threshold": null,
       "descriptor": ""
     },
@@ -133,7 +133,7 @@
       "controllability": 0.5,
       "self_regulation": 0,
       "growth_rate": 0,
-      "reference_value": 1,
+      "reference_value": null,
       "activation_threshold": null,
       "descriptor": ""
     },
@@ -146,7 +146,7 @@
       "controllability": 0.5,
       "self_regulation": 0,
       "growth_rate": 0,
-      "reference_value": 1,
+      "reference_value": null,
       "activation_threshold": null,
       "descriptor": ""
     },
@@ -159,7 +159,7 @@
       "controllability": 0.2,
       "self_regulation": 0,
       "growth_rate": 0,
-      "reference_value": 1,
+      "reference_value": null,
       "activation_threshold": null,
       "descriptor": ""
     },
@@ -172,7 +172,7 @@
       "controllability": 0.5,
       "self_regulation": 0,
       "growth_rate": 0,
-      "reference_value": 1,
+      "reference_value": null,
       "activation_threshold": null,
       "descriptor": ""
     },
@@ -185,7 +185,7 @@
       "controllability": 0.2,
       "self_regulation": 0,
       "growth_rate": 0,
-      "reference_value": 1,
+      "reference_value": null,
       "activation_threshold": null,
       "descriptor": ""
     },
@@ -198,7 +198,7 @@
       "controllability": 0.8,
       "self_regulation": 0,
       "growth_rate": 0,
-      "reference_value": 1,
+      "reference_value": null,
       "activation_threshold": null,
       "descriptor": ""
     },
@@ -211,7 +211,7 @@
       "controllability": 0.8,
       "self_regulation": 0,
       "growth_rate": 0,
-      "reference_value": 1,
+      "reference_value": null,
       "activation_threshold": null,
       "descriptor": ""
     }

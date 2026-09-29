@@ -31,7 +31,9 @@ dynamic_importance <- function(g, p_D, threshold = 1e-9) {
     return(data.frame(id = character(), delta = numeric(), D = numeric(), stringsAsFactors = FALSE))
   }
   p_D <- align_press_vector(p_D, node_names, "pressure scenario")
-  delta <- propagate(effect_matrix(g), p_D)[impact_ids]
+  # Revisao 2, Fase C: with State thresholds, the gates of the pressure
+  # scenario apply.
+  delta <- propagate(gated_effect_matrix(g, p_D), p_D)[impact_ids]
   top <- max(abs(delta))
   D <- if (top <= threshold) rep(0, length(delta)) else abs(delta) / top
   out <- data.frame(id = impact_ids, delta = unname(delta), D = unname(D), stringsAsFactors = FALSE)
@@ -51,7 +53,7 @@ prediction_reliability <- function(g, p_D, n_simulations = 300, seed = 42, thres
     return(data.frame(id = character(), rho = numeric(), stringsAsFactors = FALSE))
   }
   p_D <- align_press_vector(p_D, node_names, "pressure scenario")
-  base <- propagate(effect_matrix(g), p_D)[impact_ids]
+  base <- propagate(gated_effect_matrix(g, p_D), p_D)[impact_ids]
   base_sign <- ifelse(abs(base) <= threshold, 0, sign(base))
 
   w <- E(g)$weight
@@ -69,7 +71,7 @@ prediction_reliability <- function(g, p_D, n_simulations = 300, seed = 42, thres
       E(g_sim)$weight <- runif(length(w), low, high)
       B <- effect_matrix(g_sim)
       if (spectral_radius(B) >= 1 - 1e-9) next
-      d <- propagate(B, p_D)[impact_ids]
+      d <- propagate(gated_effect_matrix(g_sim, p_D, B), p_D)[impact_ids]
       s <- ifelse(abs(d) <= threshold, 0, sign(d))
       matches[sim, ] <- as.integer(s == base_sign)
     }

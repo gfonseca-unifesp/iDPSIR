@@ -661,8 +661,10 @@ cd iDPSIR</pre>
                     <tr><td class="key">descriptor</td><td>Optional free-text description of what this factor represents</td></tr>
                     <tr><td class="key">self_regulation</td><td>Optional number in [0, 1], default 0.5 — the share of this factor's deviation that fades by itself each window; only used by the optional temporal simulation (see <a href="#self-regulation">Self-regulation</a>)</td></tr>
                     <tr><td class="key">growth_rate</td><td>Optional number, default 0 — a factor's own exogenous trend per time window, independent of any edge</td></tr>
-                    <tr><td class="key">reference_value</td><td>Optional number, default 1 — the scale a factor's change is measured against by its own activation_threshold, if set</td></tr>
-                    <tr><td class="key">activation_threshold</td><td>Optional number in [0, 1], leave blank for most factors — only allowed for a State factor (see Scenarios below)</td></tr>
+                    <tr><td class="key">reference_value</td><td>Optional — the factor's initial level, in its own units (e.g. 100 t)</td></tr>
+                    <tr><td class="key">sd</td><td>Optional — its typical variation in the same units (standard deviation); with it, thresholds and pushes can be given in real units</td></tr>
+                    <tr><td class="key">threshold_level</td><td>Optional, State only — the level, in the factor's own units, at which it passes its effect on (see Scenarios below)</td></tr>
+                    <tr><td class="key">threshold_direction</td><td>Optional, <code>auto</code> (default: falling if the threshold is below the initial level, rising if above) or <code>both</code></td></tr>
                   </table>
                 </div>
                 <pre>id,label,dpsir_category,subsystem,uncertainty,controllability
@@ -742,9 +744,9 @@ P1,S1,negative,0.55,,monitoring</pre>
                 <tr><td class="key">descriptor</td><td>Optional — a short, plain-language description of what this factor represents. Purely documentation: not read by any calculation, just there so someone reading the network later (including a future you) doesn't have to guess what a node means.</td></tr>
                 <tr><td class="key">self_regulation</td><td>Optional number in [0, 1], default 0.5. The share of this factor's deviation that fades by itself each time window: 0 = accumulates like a stock, 1 = no memory. The form shows a guide (half-life, build-up); see <a href="#self-regulation">Self-regulation</a>. Only used by the Scenarios tab's optional temporal simulation.</td></tr>
                 <tr><td class="key">growth_rate</td><td>Optional number, default 0. This factor's own exogenous trend per time window (e.g. population growth), independent of any edge — also only used by the temporal simulation.</td></tr>
-                <tr><td class="key">reference_value</td><td>Optional number, default 1. The scale this factor's simulated change is measured against when it has an activation threshold set below.</td></tr>
+                <tr><td class="key">Measurement (initial level, typical variation)</td><td>Optional. The factor's initial level in its own units (e.g. 100 t of stock) and its typical variation — a standard deviation, or a coefficient of variation that the form converts. The model works in standard deviations; with these two numbers, results, thresholds and pushes can be read and entered in real units (the Scenarios tab then offers "or, in units" next to each push, and the temporal simulation shows a <strong>Change relative to initial values</strong> table).</td></tr>
                 <tr><td class="key">endpoint_class / value</td><td>Impact factors only. Endpoint class: <em>ecological</em> (default), <em>ecosystem service</em> or <em>human welfare</em>. A service or welfare Impact also gets a social value v (0–1); <strong>Elicit values (swing weights)</strong> on this step helps set it: rate how much it matters to take each one from its worst to its best level (100 for the most important). Used to prioritize Impacts on the Scenarios tab.</td></tr>
-                <tr><td class="key">activation_threshold</td><td>Optional number in [0, 1], leave blank for most factors. Only allowed for a State factor: a fraction of its own reference value it has to move, in a given scenario, before ALL of its outgoing links switch on together — instead of always contributing proportionally from the start. Only affects the Scenarios tab's optional temporal simulation; the sufficiency reading and the graph itself ignore it.</td></tr>
+                <tr><td class="key">Threshold level and direction</td><td>Optional, State factors only, blank for most. The level, in the factor's own units, at which ALL of its outgoing links switch on together (e.g. the stock falling to 85 t) — before that, the State does not pass its effect on. Direction <em>auto</em> reads it from the initial level (below it = the State must fall, above = it must rise); <em>either direction</em> counts any move of that size. Used by both readings: in the sufficiency reading the State's deviation in the scenario decides it (a <strong>State triggers</strong> table shows whether the response closes a trigger the pressure opens), and in the temporal simulation it is checked window by window. Older files with a fraction (activation_threshold) are converted on load. Thresholded States get a thick border on the graph.</td></tr>
               </table>
             </div>
           </div>
@@ -883,7 +885,7 @@ P1,S1,negative,0.55,,monitoring</pre>
           <div class="tabmock-body">
             <div class="control">
               <div class="label">Pressure scenario<span class="widget">checkbox + slider each</span></div>
-              <p>Optional. One row per Driver/Pressure node — turn on any combination you expect to worsen, and how strongly.</p>
+              <p>Optional. One row per Driver/Pressure node — turn on any combination you expect to worsen, and how strongly. A push of 100% is one standard deviation of that factor; the slider goes up to 500%, and a factor with a typical variation (SD) also takes the push in its own units ("or, in units").</p>
             </div>
             <div class="control">
               <div class="label">Response scenario<span class="widget">checkbox + slider each</span></div>
@@ -898,6 +900,10 @@ P1,S1,negative,0.55,,monitoring</pre>
               <p>Every response in the network, evaluated alone at full strength against the same pressure scenario: the percentage of simulations — resampling every edge's strength within its uncertainty range — in which that response alone neutralizes each Impact.</p>
             </div>
             <div class="control">
+              <div class="label">State triggers<span class="widget">table, only with thresholds</span></div>
+              <p>Each State with a threshold: its deviation under the pressure alone and with the response, whether its trigger is open before and after, and whether the response closes it. A closed trigger holds back everything beyond that State — which is why an Impact can be neutralized "by the trigger" rather than by mitigation, and why <strong>Reach</strong> also reports how many factors this scenario actually reaches.</p>
+            </div>
+            <div class="control">
               <div class="label">Impact prioritization<span class="widget">table + chart</span></div>
               <p>Which Impact to act on first. <strong>Relevance</strong> = value v × importance D (how much the pressure scenario moves that Impact, relative to the most affected one) × reliability (how often that prediction keeps its sign when every strength is resampled within its range). <strong>Priority</strong> = relevance × gap (the share of the worsening the response scenario leaves uncovered — 0 when neutralized). An Impact the pressure doesn't worsen reads "Not affected". Downloadable as CSV and included in the report.</p>
             </div>
@@ -907,7 +913,7 @@ P1,S1,negative,0.55,,monitoring</pre>
             </div>
             <div class="control">
               <div class="label">Show temporal simulation across discrete time windows<span class="widget">optional</span></div>
-              <p>Runs the same two scenarios forward window by window instead of reading a single instant — useful when a response might, windows later, become a new pressure itself (see the worked example). Pressure and response each run as <strong>Added every window</strong> (default) or <strong>Applied once and held</strong> (window 1 only; the level it creates fades only through self-regulation). <strong>Simulation length</strong>: <em>until the response neutralizes the Impact</em> (default, up to 50 windows — it stops at the first window in which every Impact the response reaches, and that the pressure has already worsened, is at or below zero; otherwise it says "Not neutralized within N windows") or a <em>fixed number of windows</em>. Optional: a neutralization tolerance (default 5% of the baseline, which only labels the table as "Neutralized (relative)"), and a baseline without any response (ignoring Impact → Response links). A progress indicator shows "Window X of N" while it computes. Shows a table of how each Impact changes window by window, with a <strong>Verdict</strong> per row (see <a href="#conventions">Reading the Verdict</a>), and a chart — one panel per Impact, dashed baseline vs. solid Net, each Net point colored by that window's Verdict, with the neutralized zone (Net ≤ 0) shaded — downloadable as PNG or SVG and included as a figure if this scenario is added to the report.</p>
+              <p>Runs the same two scenarios forward window by window instead of reading a single instant — useful when a response might, windows later, become a new pressure itself (see the worked example). Pressure and response each run as <strong>Added every window</strong> (default) or <strong>Applied once and held</strong> (window 1 only; the level it creates fades only through self-regulation). <strong>Simulation length</strong>: <em>until the response neutralizes the Impact</em> (default, up to 50 windows — it stops at the first window in which every Impact the response reaches, and that the pressure has already worsened, is at or below zero; otherwise it says "Not neutralized within N windows") or a <em>fixed number of windows</em>. Optional: a neutralization tolerance (default 5% of the baseline, which only labels the table as "Neutralized (relative)"), and a baseline without any response (ignoring Impact → Response links). With a thresholded State, a <strong>Trigger criterion</strong>: <em>accumulated State level</em> (default — has the State deviated beyond the critical point, adding up every window?), <em>load arriving at the State</em> (did what arrived in this window pass the limit?), or <em>compare both</em>; a table then shows each trigger open or closed window by window. Factors with an initial level get a <strong>Change relative to initial values</strong> table, in their own units, with the window in which a threshold was crossed. A progress indicator shows "Window X of N" while it computes. Shows a table of how each Impact changes window by window, with a <strong>Verdict</strong> per row (see <a href="#conventions">Reading the Verdict</a>), and a chart — one panel per Impact, dashed baseline vs. solid Net, each Net point colored by that window's Verdict, with the neutralized zone (Net ≤ 0) shaded — downloadable as PNG or SVG and included as a figure if this scenario is added to the report.</p>
             </div>
             <div class="control">
               <div class="label">Save this scenario<span class="widget">button</span></div>
@@ -1272,7 +1278,7 @@ P1,S1,negative,0.55,,monitoring</pre>
           footprint don't overlap anywhere in this network.</p>
         <figure class="figure">
           <img src="example_gnanapragasam_network.png" alt="Network diagram of the Gnanapragasam example: Drivers on the left feeding Fishing effort, which feeds Fish stock and Fleet motorization, which together feed five Impacts; the two Response nodes link only to Fisher income loss.">
-          <figcaption><strong>Figure 1.</strong> The full network, colored by DPSIR category (see legend) and edge color by effect (red = positive, green = negative). Note how both Response nodes (purple, right) have exactly one outgoing edge each, both landing on Fisher income loss — nothing else in the diagram touches purple.</figcaption>
+          <figcaption><strong>Figure 1.</strong> The full network, colored by DPSIR category (see legend) and edge color by effect (green = positive, red = negative). Note how both Response nodes (purple, right) have exactly one outgoing edge each, both landing on Fisher income loss — nothing else in the diagram touches purple.</figcaption>
         </figure>
         <div class="table-wrap">
           <table class="fields">
@@ -1330,24 +1336,28 @@ P1,S1,negative,0.55,,monitoring</pre>
         <div class="table-wrap">
           <table class="fields">
             <tr><th>Impact</th><th>Worsening</th><th>Mitigation</th><th>Net</th><th>Neutralizes?</th></tr>
-            <tr><td class="key">Catch decline</td><td>2.344</td><td>0.000</td><td>2.344</td><td>No</td></tr>
-            <tr><td class="key">Fisher income loss</td><td>1.125</td><td>-2.250</td><td>-1.125</td><td><strong>Yes</strong> (x0.50)</td></tr>
-            <tr><td class="key">Conflict with Indian fishermen</td><td>1.313</td><td>0.000</td><td>1.313</td><td>No</td></tr>
+            <tr><td class="key">Catch decline</td><td>0.844</td><td>0.000</td><td>0.844</td><td>No</td></tr>
+            <tr><td class="key">Fisher income loss</td><td>0.000</td><td>-2.250</td><td>-2.250</td><td><strong>Yes</strong></td></tr>
+            <tr><td class="key">Conflict with Indian fishermen</td><td>0.563</td><td>0.000</td><td>0.563</td><td>No</td></tr>
             <tr><td class="key">Traditional fishing decline</td><td>1.125</td><td>0.000</td><td>1.125</td><td>No</td></tr>
             <tr><td class="key">Loss of traditional culture</td><td>0.844</td><td>0.000</td><td>0.844</td><td>No</td></tr>
           </table>
         </div>
         <p>Only one row has a non-zero Mitigation. <strong>Fisher income loss</strong>
-          is the response's sole target, and at these strengths it more than covers the
-          worsening (Net negative, Neutralizes: Yes, with half the combined strength
-          already enough). Every other Impact reads Mitigation exactly
+          is the response's sole target. Every other Impact reads Mitigation exactly
           <strong>0.000</strong>, not because the response fails against them, but
           because it has no causal path to them at all — worsening carries straight
-          through as Net, untouched. Compare the Worsening column to the earlier design
-          of this same network (Catch decline 1.5, Conflict 0.75): both are noticeably
-          higher now, because Fleet motorization gives the pressure scenario a
-          <em>second</em> route into those two Impacts, on top of the Fish stock route
-          that was already there.</p>
+          through as Net, untouched.</p>
+        <p>Notice also that Fisher income loss has <strong>no worsening at all</strong>
+          in this reading. That is the <strong>Fish stock</strong> trigger at work (see
+          <em>A threshold worth knowing about</em> below): in a single
+          instant, this pressure lowers the stock by 1.5 model units, far short of its
+          collapse point, so the stock does not pass its effect on — and the stock is the
+          only route from the pressure to income. For the same reason, Catch decline and
+          Conflict with Indian fishermen only show what arrives through their second
+          route, Fleet motorization. The <strong>State triggers</strong> table under the
+          results says so explicitly: Fish stock (CPUE), threshold 85 (either way),
+          deviation −1.5, closed before and after the response.</p>
 
         <div class="callout">
           <span class="dot"></span>
@@ -1368,18 +1378,11 @@ P1,S1,negative,0.55,,monitoring</pre>
           or <strong>Loss of traditional culture</strong> in any of 300 simulations
           that resample edge strengths within their uncertainty ranges —
           <strong>0%</strong> for all four, consistent with the response having no path
-          to any of them. <strong>Fisher income loss</strong> is the only Impact either
-          program can touch at all, and they don't agree on how reliably:</p>
-        <div class="table-wrap">
-          <table class="fields">
-            <tr><th>Response (alone, at 100%)</th><th>Neutralizes Fisher income loss</th></tr>
-            <tr><td class="key">Post-tsunami aid</td><td>21.3% of simulations</td></tr>
-            <tr><td class="key">Post-war aid</td><td>68.7% of simulations</td></tr>
-          </table>
-        </div>
-        <p>Post-war aid (the larger, more strongly-weighted program) is a substantially
-          more reliable fix on its own than post-tsunami aid — worth knowing before
-          assuming either program alone is "the" solution.</p>
+          to any of them. Against <strong>Fisher income loss</strong> both reach
+          <strong>100%</strong> — but read that with the previous paragraph in mind: in
+          this instant there is nothing to neutralize, because the Fish stock trigger
+          is closed. Whether the aid really holds income once the stock does collapse is
+          a question for the temporal simulation below.</p>
 
         <h3>Reach</h3>
         <p>This is where the redesigned network reads most starkly: <strong>1 factor
@@ -1463,16 +1466,34 @@ P1,S1,negative,0.55,,monitoring</pre>
         </div>
 
         <h3>A threshold worth knowing about</h3>
-        <p>The <strong>Fish stock</strong> factor has an
-          <code>activation threshold</code> set: 0.15 of its own
-          <code>reference_value</code> (100 in this network). Once the simulated stock
-          loss passes 15 points, <em>all three</em> of its outgoing links — to Catch
-          decline, Fisher income loss, and Conflict with Indian fishermen — switch on
-          together, instead of each scaling from the very first unit of decline. That's
-          a real fisheries phenomenon (a collapse threshold), and setting it on the
-          State factor itself, rather than choosing it separately for each link, keeps
-          all three targets waiting for the same collapse point rather than three
-          independently-picked ones.</p>
+        <p>The <strong>Fish stock</strong> factor has a threshold: an initial level of
+          100 and a <strong>threshold level of 85</strong>, in either direction (this
+          file predates threshold directions; its old setting, 0.15 of the reference,
+          was converted on load). Once the stock has moved 15 units, <em>all three</em>
+          of its outgoing links — to Catch decline, Fisher income loss, and Conflict
+          with Indian fishermen — switch on together, instead of each scaling from the
+          very first unit of decline. That's a real fisheries phenomenon (a collapse
+          threshold), and setting it on the State factor itself keeps all three targets
+          waiting for the same collapse point.</p>
+        <p>The static reading and the temporal simulation disagree here, and on
+          purpose. In a single instant the pressure moves the stock by 1.5 units, so
+          the trigger stays closed and the sufficiency table shows no worsening of
+          income at all. Window after window, though, the deviation <em>accumulates</em>
+          (the stock has little self-regulation), and it crosses the 15 units at
+          <strong>window 7</strong> with the defaults (window 6 in the scenario with
+          the fleet trend) — only then does income loss start to move. This is exactly
+          the case the <strong>Trigger criterion</strong> setting is for: by the
+          default, <em>accumulated State level</em>, a weak but steady pressure can
+          still cross a threshold; by <em>load arriving at the State</em>, only what
+          arrives within one window counts. Choose <em>Compare both</em> to see the
+          windows where the two disagree. The table <strong>Change relative to initial
+          values</strong> shows the stock in its own units (starting at 100) and the
+          window in which the threshold was crossed.</p>
+        <p class="muted" style="font-size:14px">Because the stock has no typical
+          variation (SD) set, its threshold is measured in model units (15 units = 15
+          standard deviations of the model). Give a factor its typical variation in the
+          node form (the SD, or a coefficient of variation) and its threshold, initial
+          level and pushes are all read in real units.</p>
         <p>The threshold's effect shows up unevenly in the table above, though, and
           that's worth understanding rather than mistaking for an inconsistency:
           <strong>Catch decline</strong> and <strong>Conflict with Indian fishermen</strong>

@@ -210,13 +210,48 @@ self_regulation_warnings <- function(nodes) {
   if (all(!is.na(sr) & sr == 0)) {
     out <- c(out, "Nothing in this network recovers on its own (self-regulation 0 everywhere): in the temporal simulation every effect accumulates window after window.")
   }
-  th <- suppressWarnings(as.numeric(nodes$activation_threshold))
+  th <- if ("threshold_level" %in% names(nodes)) suppressWarnings(as.numeric(nodes$threshold_level)) else rep(NA_real_, nrow(nodes))
   stuck <- !is.na(th) & !is.na(sr) & sr == 0 & nodes$dpsir_category == "State"
   if (any(stuck)) {
     out <- c(out, sprintf(
       "'%s' has an activation threshold and self-regulation 0: its accumulated deviation never fades on its own, so once its trigger opens it only closes if a response pushes it back.",
       nodes$label[stuck]
     ))
+  }
+  out
+}
+
+# Revisao 2, item C5: threshold notes for the Review step.
+threshold_warnings <- function(g) {
+  th <- state_thresholds(g)
+  if (nrow(th) == 0) return(character())
+  out <- character()
+  labels <- V(g)$label[match(th$id, V(g)$name)]
+  no_sd <- is.na(th$sd)
+  if (any(no_sd)) {
+    out <- c(out, sprintf(
+      "'%s' has a threshold but no typical variation (SD): it is measured in the model's own units, not in the factor's.",
+      labels[no_sd]
+    ))
+  }
+  # Largest static deviation reachable with every Driver/Pressure at 100%.
+  cat <- V(g)$dpsir_category
+  p_all <- setNames(as.numeric(cat %in% c("Driver", "Pressure")), V(g)$name)
+  B <- effect_matrix(g)
+  dev <- tryCatch(static_state_deviation(g, B, p_all, th$id), error = function(e) rep(NA_real_, nrow(th)))
+  never <- !is.na(dev) & !gate_is_open(dev, th$z, th$direction) & abs(dev) < abs(th$z)
+  if (any(never)) {
+    out <- c(out, sprintf(
+      "'%s': with every pressure at 100%% its deviation in a single instant (%.2f SD) does not reach the threshold (%.2f SD) - the static reading keeps this trigger closed; it can still open over time by accumulation.",
+      labels[never], dev[never], th$z[never]
+    ))
+  }
+  incoming_p <- vapply(th$id, function(s) {
+    src <- igraph::neighbors(g, s, mode = "in")$name
+    any(cat[match(src, V(g)$name)] %in% "Pressure")
+  }, logical(1))
+  if (any(!incoming_p)) {
+    out <- c(out, sprintf("'%s' has a threshold but no Pressure edge arriving at it.", labels[!incoming_p]))
   }
   out
 }

@@ -383,7 +383,7 @@ O exemplo portuário (tipo Santos) da seção 7 do PDF **não** será implementa
 - `reference_value` passa a exigir > 0 (hoje só ≠ 0) e a distinguir "em branco" de "1". Guardar NA; o motor usa 1.
 - `activation_threshold` vira um **nível na unidade do nó**, sem teto em 0–1. Exige `reference_value` e `sd` no Estado. O limiar em DP é **z = (limiar − ref) / DP**.
 - **Direção pelo sinal de z:** z < 0 abre quando x_S ≤ z (ex.: estoque caindo); z > 0 abre quando x_S ≥ z (ex.: contaminante subindo).
-- **Limiar antigo** (fração f de 0–1, sem direção): converter para o modo "ambas as direções", |x_S| ≥ f·ref/DP. Usar DP = ref quando ausente, o que reproduz o critério atual `|x|/ref ≥ f`.
+- **Limiar antigo** (fração f de 0–1, sem direção): converter para o modo "ambas as direções", |x_S| ≥ f·ref/DP. Com DP ausente (DP = 1), o nível convertido ref·(1 − f) dá z = −f·ref e reproduz o critério atual |x| ≥ f·ref. **Correção (Fase C):** usar DP = ref daria z = −f, que NÃO reproduz o critério; o certo é DP = 1.
 - Pressão e resposta aceitam força acima de 100% (slider até 1000% ou entrada numérica), ou em unidade real quando o nó tem ref e DP. O push em DP é o valor informado dividido pelo DP.
 - **Tabela "Change relative to initial values"** (temporal e relatório): nível = ref + DP·x por nó com ref informado, % de mudança sem e com resposta, e janela em que o limiar foi cruzado. A opção "mostrar todos" inclui os nós sem ref.
 - **Aviso de extrapolação:** quando o cenário leva algum nó além de ±3 DP, lembrar que β é linear e que a relação real pode saturar ou ter forma dose-resposta.
@@ -457,7 +457,7 @@ Com a persistência da D20, o Estado acumula (sr < 1). Por isso "o que chega nes
 - Conversão de limiar antigo: f = 0,15 com ref = 100 e sem DP reproduz o critério atual `|x|/ref ≥ 0,15`.
 - Direção: um contaminante com z = +8 não abre com desvio negativo.
 - Regressão: rede sem limiar dá resultado idêntico ao da Fase 1 em `sufficiency()` e `simulate_temporal_pair()`.
-- **Exemplo Gnanapragasam** (`activation_threshold = 0,15` em S1, ref = 100): o critério padrão (desvio acumulado) é o mesmo de hoje, e o limiar antigo convertido na C0 (ambas as direções, DP = ref) reproduz a regra atual. Por isso, os números mudam só pela Fase 1 (β) e pela revisão de classes (1.6). Registrar antes e depois e refazer o tutorial.
+- **Exemplo Gnanapragasam** (`activation_threshold = 0,15` em S1, ref = 100): o critério padrão (desvio acumulado) é o mesmo de hoje, e o limiar antigo convertido na C0 (ambas as direções, DP = 1) reproduz a regra atual. Por isso, os números mudam só pela Fase 1 (β) e pela revisão de classes (1.6). Registrar antes e depois e refazer o tutorial. **Observado na Fase C:** a leitura temporal fica igual, mas a leitura estática muda — na estática o desvio de S1 é −1,5 (< 15), o gatilho fica fechado e a renda deixa de piorar (Catch decline 2,344 → 0,844; Conflict 1,313 → 0,563). O tutorial foi reescrito como ilustração de estático vs. acumulação.
 - Ciclo I→R→P com gatilho oscilante: `unstable = TRUE` e aviso.
 - `strength_to_neutralize` por bisseção no caso de fechamento do gatilho.
 

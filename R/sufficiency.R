@@ -115,6 +115,7 @@ sufficiency <- function(g, p_D, p_R, threshold = 1e-9) {
     id = character(), node = character(),
     worsening = numeric(), mitigation = numeric(), net = numeric(),
     neutralized = logical(), strength_to_neutralize = numeric(),
+    neutralized_by = character(),
     stringsAsFactors = FALSE
   )
   if (length(impact_ids) == 0) {
@@ -122,15 +123,48 @@ sufficiency <- function(g, p_D, p_R, threshold = 1e-9) {
   }
 
   B <- effect_matrix(g)
-  worsening <- propagate(B, p_D)[impact_ids]
-  mitigation <- propagate(B, p_R)[impact_ids]
-  net <- worsening + mitigation
 
-  strength_to_neutralize <- ifelse(
-    mitigation < 0,
-    worsening / (-mitigation),
-    NA_real_ # response doesn't help this Impact at all - no finite strength neutralizes it
-  )
+  if (!has_state_thresholds(g)) {
+    worsening <- propagate(B, p_D)[impact_ids]
+    mitigation <- propagate(B, p_R)[impact_ids]
+    net <- worsening + mitigation
+    strength_to_neutralize <- ifelse(
+      mitigation < 0,
+      worsening / (-mitigation),
+      NA_real_ # response doesn't help this Impact at all - no finite strength neutralizes it
+    )
+    neutralized_by <- ifelse(net <= threshold, "mitigation", NA_character_)
+  } else {
+    # Revisao 2, item C2: a State trigger breaks linearity - the net effect
+    # is computed with both pushes together, each scenario with the gates it
+    # produces. A response can neutralize an Impact by CLOSING a trigger
+    # (bringing the State back under its threshold) even when its linear
+    # mitigation alone would only be partial.
+    p_net <- p_D + p_R
+    worsening <- propagate(gated_effect_matrix(g, p_D, B), p_D)[impact_ids]
+    net <- propagate(gated_effect_matrix(g, p_net, B), p_net)[impact_ids]
+    mitigation <- net - worsening
+    linear_net <- propagate(gated_effect_matrix(g, p_D, B), p_net)[impact_ids]
+    neutralized_by <- ifelse(net <= threshold, ifelse(linear_net > threshold, "trigger", "mitigation"), NA_character_)
+    # Strength to neutralize by bisection on the response's scale s in [0, 10].
+    net_at <- function(s) {
+      p <- p_D + s * p_R
+      propagate(gated_effect_matrix(g, p, B), p)[impact_ids]
+    }
+    strength_to_neutralize <- vapply(seq_along(impact_ids), function(k) {
+      if (all(p_R == 0) || net_at(10)[k] > threshold) return(NA_real_)
+      if (net_at(0)[k] <= threshold) return(0)
+      lo <- 0; hi <- 10
+      for (i in 1:40) {
+        mid <- (lo + hi) / 2
+        if (net_at(mid)[k] <= threshold) hi <- mid else lo <- mid
+      }
+      hi
+    }, numeric(1))
+  }
+
+  # No strength is "needed" for an Impact the pressure does not worsen.
+  strength_to_neutralize[worsening <= threshold] <- NA_real_
 
   data.frame(
     id = impact_ids,
@@ -140,6 +174,7 @@ sufficiency <- function(g, p_D, p_R, threshold = 1e-9) {
     net = unname(net),
     neutralized = unname(net) <= threshold,
     strength_to_neutralize = unname(strength_to_neutralize),
+    neutralized_by = unname(neutralized_by),
     stringsAsFactors = FALSE
   )
 }
@@ -189,12 +224,19 @@ sufficiency_confidence <- function(g, p_D, p_R, n_simulations = 300, seed = 42, 
   matches <- matrix(NA_integer_, nrow = n_simulations, ncol = length(impact_ids), dimnames = list(NULL, impact_ids))
   g_sim <- g
 
+  gated <- has_state_thresholds(g)
+  p_net <- p_D + p_R
   with_local_seed(seed, {
     for (sim in seq_len(n_simulations)) {
       E(g_sim)$weight <- runif(length(base_weight), low, high)
       B_sim <- effect_matrix(g_sim)
       if (spectral_radius(B_sim) >= 1 - 1e-9) next
-      net_sim <- propagate(B_sim, p_D)[impact_ids] + propagate(B_sim, p_R)[impact_ids]
+      # Revisao 2, item C2: the gates are re-evaluated in every draw.
+      net_sim <- if (gated) {
+        propagate(gated_effect_matrix(g_sim, p_net, B_sim), p_net)[impact_ids]
+      } else {
+        propagate(B_sim, p_D)[impact_ids] + propagate(B_sim, p_R)[impact_ids]
+      }
       matches[sim, ] <- as.integer(net_sim <= threshold)
     }
   })
@@ -245,7 +287,11 @@ format_sufficiency_table <- function(suff_df, active_ids, strengths_pct) {
     `Worsening (pressure)` = round(suff_df$worsening, 3),
     `Mitigation (response)` = round(suff_df$mitigation, 3),
     Net = round(suff_df$net, 3),
-    `Neutralizes?` = ifelse(suff_df$neutralized, "Yes", "No"),
+    `Neutralizes?` = ifelse(
+      suff_df$neutralized,
+      ifelse(!is.null(suff_df$neutralized_by) & suff_df$neutralized_by %in% "trigger", "Yes (below threshold)", "Yes"),
+      "No"
+    ),
     `Strength needed` = strength_display,
     check.names = FALSE,
     stringsAsFactors = FALSE

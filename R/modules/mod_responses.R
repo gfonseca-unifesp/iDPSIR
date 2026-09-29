@@ -179,6 +179,32 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
       if (is.na(val)) 50 else val
     }
 
+    # Revisao 2, item C0 (group F of Anexo X6): a push is a share of one
+    # standard deviation (100% = 1 SD); it may go above 100%, or be given in
+    # the factor's own units when it has a typical variation (SD).
+    strength_control <- function(active_id, strength_id, units_id, label, active, value, sd) {
+      has_sd <- !is.null(sd) && !is.na(sd)
+      fluidRow(
+        column(width = 6, checkboxInput(ns(active_id), label, value = active)),
+        column(width = if (has_sd) 4 else 6, sliderInput(ns(strength_id), NULL, min = 0, max = 500, step = 5, post = "%", value = value)),
+        if (has_sd) column(width = 2, numericInput(ns(units_id), "or, in units", value = NA, step = sd / 10))
+      )
+    }
+    # The strength used: the units field (converted with the SD) when filled,
+    # else the slider.
+    effective_strength <- function(strength_id, units_id, sd) {
+      units <- input[[units_id]]
+      if (!is.null(units) && length(units) == 1 && !is.na(units) && !is.null(sd) && !is.na(sd)) {
+        return(100 * units / sd)
+      }
+      input[[strength_id]] %||% 50
+    }
+    node_sd <- function(id) {
+      n <- nodes()
+      if (!"sd" %in% names(n)) return(NA_real_)
+      suppressWarnings(as.numeric(n$sd[match(id, n$id)]))
+    }
+
     response_nodes <- reactive({
       req(nodes(), schema())
       feedback_categories <- get_feedback_categories(schema())
@@ -213,12 +239,11 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
       rows <- lapply(seq_len(nrow(rn)), function(i) {
         node_id <- rn$id[i]
         is_active <- !is.null(rs) && node_id %in% rs$response_active
-        fluidRow(
-          column(width = 6, checkboxInput(ns(paste0("active_", node_id)), rn$label[i], value = is_active)),
-          column(width = 6, sliderInput(
-            ns(paste0("strength_", node_id)), NULL, min = 0, max = 100, step = 5, post = "%",
-            value = if (is.null(rs)) 50 else restored_strength(rs$response_strengths, node_id)
-          ))
+        strength_control(
+          paste0("active_", node_id), paste0("strength_", node_id), paste0("units_", node_id),
+          rn$label[i], is_active,
+          if (is.null(rs)) 50 else restored_strength(rs$response_strengths, node_id),
+          node_sd(node_id)
         )
       })
 
@@ -252,12 +277,11 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
       rows <- lapply(seq_len(nrow(pn)), function(i) {
         node_id <- pn$id[i]
         is_active <- !is.null(rs) && node_id %in% rs$pressure_active
-        fluidRow(
-          column(width = 6, checkboxInput(ns(paste0("pressure_active_", node_id)), pn$label[i], value = is_active)),
-          column(width = 6, sliderInput(
-            ns(paste0("pressure_strength_", node_id)), NULL, min = 0, max = 100, step = 5, post = "%",
-            value = if (is.null(rs)) 50 else restored_strength(rs$pressure_strengths, node_id)
-          ))
+        strength_control(
+          paste0("pressure_active_", node_id), paste0("pressure_strength_", node_id), paste0("pressure_units_", node_id),
+          pn$label[i], is_active,
+          if (is.null(rs)) 50 else restored_strength(rs$pressure_strengths, node_id),
+          node_sd(node_id)
         )
       })
 
@@ -283,7 +307,7 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
 
       strengths <- setNames(numeric(length(active_ids)), active_ids)
       for (node_id in active_ids) {
-        strengths[[node_id]] <- input[[paste0("strength_", node_id)]]
+        strengths[[node_id]] <- effective_strength(paste0("strength_", node_id), paste0("units_", node_id), node_sd(node_id))
       }
 
       press <- build_press_vector(graph(), active_ids, strengths / 100)
@@ -297,7 +321,7 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
       pressure_active_ids <- pn$id[vapply(pn$id, function(node_id) isTRUE(input[[paste0("pressure_active_", node_id)]]), logical(1))]
       pressure_strengths <- setNames(numeric(length(pressure_active_ids)), pressure_active_ids)
       for (node_id in pressure_active_ids) {
-        pressure_strengths[[node_id]] <- input[[paste0("pressure_strength_", node_id)]]
+        pressure_strengths[[node_id]] <- effective_strength(paste0("pressure_strength_", node_id), paste0("pressure_units_", node_id), node_sd(node_id))
       }
       p_D <- build_press_vector(graph(), pressure_active_ids, pressure_strengths / 100)
 
@@ -319,6 +343,12 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
 
           incProgress(0.3, detail = "Confidence (resampling edge strengths)")
           suff_confidence_matrix <- build_confidence_matrix(graph(), p_D, rn)
+
+          # Revisao 2, items C4/C5: State triggers (pressure only vs. with the
+          # response) and the reach that the closed triggers leave.
+          gates_pressure <- state_gates(graph(), p_D)
+          gates_net <- state_gates(graph(), p_D + press)
+          reach_effective <- effective_response_reach(graph(), active_ids, gates_net$id[!gates_net$open])
 
           # Revisao 2, item B7: relevance and priority of each Impact.
           incProgress(0.1, detail = "Impact prioritization")
@@ -343,7 +373,10 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
         p_D = p_D,
         sufficiency_df = suff_df,
         sufficiency_confidence_matrix = suff_confidence_matrix,
-        prioritization = prioritization
+        prioritization = prioritization,
+        gates_pressure = gates_pressure,
+        gates_net = gates_net,
+        reach_effective = reach_effective
       ))
     })
 
@@ -370,6 +403,7 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
           "which that response alone neutralizes each Impact."
         ),
         DTOutput(ns("confidence_matrix_table")),
+        uiOutput(ns("triggers_section")),
         # Revisao 2, item B7.
         h5("Impact prioritization"),
         p(
@@ -461,7 +495,8 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
     temporal_defaults <- list(
       temporal_mode_pressure = "permanent", temporal_mode_response = "permanent",
       temporal_stop_rule = "until_neutralized", temporal_max_windows = 50,
-      temporal_windows = 5, temporal_tol_rel = 5, baseline_without_response = FALSE
+      temporal_windows = 5, temporal_tol_rel = 5, baseline_without_response = FALSE,
+      temporal_gate_mode = "state_level"
     )
     present <- function(v) !is.null(v) && length(v) == 1 && !is.na(v)
     temporal_setting <- function(name, state = NULL) {
@@ -532,8 +567,27 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
               checkboxInput(ns("baseline_without_response"), "Baseline without any response (ignore Impact -> Response links)", value = isTRUE(ts$baseline_without_response))
             )
           ),
+          # Revisao 2, item C3 (D11, P1): only shown when some State has a threshold.
+          if (has_state_thresholds(graph())) {
+            tagList(
+              selectInput(
+                ns("temporal_gate_mode"), "Trigger criterion",
+                choices = c("Accumulated State level (default)" = "state_level",
+                            "Load arriving at the State" = "load",
+                            "Compare both" = "compare"),
+                selected = ts$temporal_gate_mode
+              ),
+              helpText(
+                "Load = did what arrives in this window pass the limit? Accumulated = has the State already deviated",
+                "beyond the critical point, adding up every window? A weak but steady pressure may never trigger by load,",
+                "and still trigger by accumulation."
+              )
+            )
+          },
           uiOutput(ns("temporal_stop_note")),
           uiOutput(ns("temporal_stability_note")),
+          uiOutput(ns("temporal_gates_section")),
+          uiOutput(ns("temporal_levels_section")),
           h5("How each Impact changes, window by window"),
           DTOutput(ns("temporal_table")),
           h5("How each Impact changes over time"),
@@ -590,6 +644,7 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
             stop_rule = ts$temporal_stop_rule,
             max_windows = max(1, ts$temporal_max_windows %||% 50),
             baseline_without_response = isTRUE(ts$baseline_without_response),
+            gate_mode = if (identical(ts$temporal_gate_mode, "load")) "load" else "state_level",
             on_step = function(t, total) {
               incProgress(1 / total, detail = sprintf("Window %d of %d", t, total))
             }
@@ -600,6 +655,88 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
           req(FALSE)
         }
       )
+    })
+
+    # Revisao 2, item C3: the same run with the other criterion, for
+    # "Compare both".
+    temporal_result_load <- reactive({
+      sc <- current_scenario()
+      req(sc, isTRUE(input$show_temporal), identical(input$temporal_gate_mode, "compare"))
+      ts <- temporal_settings()
+      simulate_temporal_pair(
+        graph(), sc$p_D, sc$press,
+        windows = max(1, ts$temporal_windows %||% 5),
+        mode_D = ts$temporal_mode_pressure, mode_R = ts$temporal_mode_response,
+        stop_rule = ts$temporal_stop_rule, max_windows = max(1, ts$temporal_max_windows %||% 50),
+        baseline_without_response = isTRUE(ts$baseline_without_response), gate_mode = "load"
+      )
+    })
+
+    output$temporal_gates_section <- renderUI({
+      tr <- temporal_result()
+      req(tr, nrow(tr$thresholds) > 0)
+      compare <- identical(input$temporal_gate_mode, "compare")
+      tagList(
+        h5("State triggers, window by window"),
+        p(class = "text-muted", if (compare) {
+          "Open/closed in the scenario run, by accumulated level and by load; windows where they disagree are marked."
+        } else {
+          "Open/closed in the scenario run (pressure and response together)."
+        }),
+        DTOutput(ns("temporal_gates_table")),
+        if (compare) uiOutput(ns("temporal_compare_note"))
+      )
+    })
+
+    output$temporal_gates_table <- renderDT({
+      tr <- temporal_result()
+      req(tr, nrow(tr$thresholds) > 0)
+      labs <- V(graph())$label[match(tr$thresholds$id, V(graph())$name)]
+      df <- data.frame(Window = seq_len(nrow(tr$gates_scenario)), check.names = FALSE)
+      for (k in seq_along(labs)) df[[labs[k]]] <- ifelse(tr$gates_scenario[, k], "open", "closed")
+      if (identical(input$temporal_gate_mode, "compare")) {
+        trl <- temporal_result_load()
+        n <- min(nrow(df), nrow(trl$gates_scenario))
+        for (k in seq_along(labs)) {
+          col <- paste0(labs[k], " (load)")
+          df[[col]] <- NA_character_
+          df[[col]][seq_len(n)] <- ifelse(trl$gates_scenario[seq_len(n), k], "open", "closed")
+        }
+      }
+      datatable(df, rownames = FALSE, options = list(dom = "tp", pageLength = 10))
+    })
+
+    output$temporal_compare_note <- renderUI({
+      tr <- temporal_result(); trl <- temporal_result_load()
+      n <- min(nrow(tr$gates_scenario), nrow(trl$gates_scenario))
+      differ <- which(rowSums(tr$gates_scenario[seq_len(n), , drop = FALSE] != trl$gates_scenario[seq_len(n), , drop = FALSE]) > 0)
+      tags$p(
+        if (length(differ) == 0) "The two criteria agree in every window." else sprintf("The criteria disagree in window(s) %s.", paste(differ, collapse = ", ")),
+        tags$br(),
+        sprintf("By load: %s", temporal_stop_note(trl) %||% "")
+      )
+    })
+
+    # Revisao 2, item C0: levels in the factor's own units for factors with
+    # an initial level (reference value).
+    output$temporal_levels_section <- renderUI({
+      tr <- temporal_result()
+      req(tr)
+      df <- temporal_level_table(graph(), tr)
+      req(nrow(df) > 0)
+      warn <- temporal_extrapolation_note(graph(), tr)
+      tagList(
+        h5("Change relative to initial values"),
+        p(class = "text-muted", "Level = initial level + typical variation x deviation, at the last window shown."),
+        DTOutput(ns("temporal_levels_table")),
+        if (!is.null(warn)) div(class = "alert alert-warning", warn)
+      )
+    })
+
+    output$temporal_levels_table <- renderDT({
+      tr <- temporal_result()
+      req(tr)
+      datatable(temporal_level_table(graph(), tr), rownames = FALSE, options = list(dom = "t", pageLength = 20))
     })
 
     output$temporal_stop_note <- renderUI({
@@ -717,10 +854,45 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
       reached_impacts_row <- sc$reach$by_category[sc$reach$by_category$category == "Impact", "count"]
       reached_impacts <- if (length(reached_impacts_row) == 0) 0 else reached_impacts_row
 
-      tags$p(
-        tags$strong(sprintf("%d factor%s reached", sc$reach$total, if (sc$reach$total == 1) "" else "s")),
-        sprintf(", including %d of %d Impact%s.", reached_impacts, total_impacts, if (total_impacts == 1) "" else "s")
+      eff <- sc$reach_effective
+      tagList(
+        tags$p(
+          tags$strong(sprintf("%d factor%s reachable in the network", sc$reach$total, if (sc$reach$total == 1) "" else "s")),
+          sprintf(", including %d of %d Impact%s.", reached_impacts, total_impacts, if (total_impacts == 1) "" else "s")
+        ),
+        # Revisao 2, item C5 (D12): what this scenario actually reaches, not
+        # crossing States whose trigger is closed.
+        if (!is.null(eff) && length(eff$closed) > 0 && eff$total < sc$reach$total) {
+          tags$p(sprintf(
+            "In this scenario: %d reached - the trigger of %s is closed, so nothing passes beyond it.",
+            eff$total, paste(eff$closed_labels, collapse = ", ")
+          ))
+        }
       )
+    })
+
+    # Revisao 2, item C4: State triggers table.
+    output$triggers_section <- renderUI({
+      sc <- current_scenario()
+      req(sc, !is.null(sc$gates_pressure), nrow(sc$gates_pressure) > 0)
+      tagList(
+        h5("State triggers"),
+        p(
+          class = "text-muted",
+          "A State with a threshold passes its effect on only once its deviation crosses the threshold. Deviations",
+          "are in standard deviations (the model's units); the threshold is shown in the factor's own units and in SD."
+        ),
+        DTOutput(ns("triggers_table")),
+        if (isTRUE(attr(sc$gates_net, "unstable")) || isTRUE(attr(sc$gates_pressure, "unstable"))) {
+          div(class = "alert alert-warning", "A trigger switches on and off with the feedback loop and never settles - it was treated as open.")
+        }
+      )
+    })
+
+    output$triggers_table <- renderDT({
+      sc <- current_scenario()
+      req(sc, nrow(sc$gates_pressure) > 0)
+      datatable(format_triggers_table(graph(), sc$gates_pressure, sc$gates_net), rownames = FALSE, options = list(dom = "t"))
     })
 
     output$reach_table <- renderDT({
