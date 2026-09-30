@@ -42,10 +42,10 @@ shiny::runGitHub("iDPSIR", "gfonseca-unifesp", "main")
 
 ## Testing
 
-The scientific core (`R/loop_analysis.R`, `R/sufficiency.R`, `R/temporal.R`,
+The scientific core (`R/structural.R`, `R/sufficiency.R`, `R/temporal.R`, `R/triggers.R`, `R/relevance.R`, `R/pathways.R`,
 `R/reach.R`, `R/metrics.R`, `R/io.R`, `R/validate.R`) has an automated `testthat`
-suite, checked against hand-verified numeric examples (a classic stable
-trophic-chain matrix, the real Mangi et al. 2007 fisheries network, the reference
+suite, checked against hand-verified numeric examples (the roadmap's reference cases for
+growth and State triggers, the real Mangi et al. 2007 and Gnanapragasam et al. 2026 networks, the reference
 values of a small Pressure -> State -> Impact chain for the temporal simulation, and
 older-format savepoints kept in `tests/testthat/fixtures/` to check that files from
 earlier versions still load with the same results). Run it from the project root:
@@ -64,6 +64,12 @@ Requires the `testthat` package (not a runtime dependency of the app itself, so 
 not auto-installed by `global.R` — install it with `install.packages("testthat")` if
 missing).
 
+The suite runs on every push and pull request (GitHub Actions); the online demo is
+rebuilt from `main` only after it passes. `DESCRIPTION` lists the app's dependencies and
+`renv.lock` pins the versions used in development and CI (`renv::restore()` recreates
+them); running the app never requires renv — `global.R` still installs whatever is
+missing.
+
 ## Structure
 
 ```
@@ -76,21 +82,19 @@ iDPSIR/
 │   ├── graph.R                # igraph builder, layered layout, network/community visuals
 │   ├── metrics.R              # centralities, general metrics, DPSIR descriptors
 │   ├── pathways.R             # causal pathways that follow the DPSIR order; effect = product of signed strengths (with band)
-│   ├── loop_analysis.R        # loop analysis (Levins 1974): interaction matrix (incl. optional per-node self-regulation, reused by the temporal engine below) and the older equilibrium reading (press perturbation, stability check, trajectory, robustness, edge/self-regulation sensitivity) - kept defined and tested, but no longer called from the UI/report, superseded by sufficiency.R and temporal.R
+│   ├── loop_analysis.R        # interaction matrix (signed strengths, self-regulation on the diagonal) and the push vector, used by the temporal engine
 │   ├── structural.R           # edge strengths as standardized path coefficients (beta): Weak/Moderate/Strong classes, uncertainty bands, r-squared shortcuts, the rho(B) < 1 check, conversion of older files
 │   ├── sufficiency.R          # primary Scenarios reading: the path-analysis total effect of each push (product of betas along each causal path) - worsening (pressure) vs. mitigation (response) vs. net, per Impact, plus a confidence check (every beta resampled within its uncertainty band)
 │   ├── temporal.R             # optional discrete-time-window simulation: runs the pressure/response scenario forward window by window, until the response neutralizes the Impact or for a fixed number of windows
-│   ├── responses.R            # get_feedback_categories/find_response_targets (still used); apply_response and the older scenario-comparison helpers are kept but no longer called, superseded by sufficiency.R/temporal.R
+│   ├── responses.R            # get_feedback_categories(): the Response levels of a schema
 │   ├── reach.R                # response_reach(): how far a response's influence travels through the network - pure graph traversal, independent of both readings above
-│   ├── scenario_plots.R       # shared trajectory/edge-sensitivity/per-Impact temporal line chart drawing, reused on screen, in PNG/SVG downloads, and in the report
+│   ├── scenario_plots.R       # per-Impact temporal line chart and prioritization chart, shared by the screen, PNG/SVG downloads and the report
 │   ├── report.R               # self-contained HTML report builder
 │   ├── io.R                   # CSV matrix import, .idpsir.json savepoint read/write, merge_savepoints()
 │   ├── core/                  # shared UI components
-│   ├── dpsir/                 # earlier, non-schema-aware versions kept for reference (not sourced)
 │   ├── modules/                # Shiny modules
 │   │   ├── mod_data.R          # wizard steps: Start/Model/Nodes/Edges/Review (form-based editor)
 │   │   ├── mod_graph.R         # Graph tab: filters, display options, pathway highlighting, category/community coloring, save snapshots for the report
-│   │   ├── mod_communities.R   # earlier standalone Communities tab, kept for reference (not sourced; superseded by mod_graph.R's "Color nodes by")
 │   │   ├── mod_responses.R     # Scenarios tab: build a pressure scenario and a response scenario, apply the sufficiency reading (with an optional temporal-simulation disclosure), reach, save/compare scenarios
 │   │   ├── mod_report.R        # Report tab: pick metrics sections + saved graph snapshots + saved scenarios (+ optional temporal simulation), download the HTML report (numbered figure/table captions, parametrization described)
 │   │   ├── mod_metrics.R       # Metrics tab: general / centralities / DPSIR descriptors
@@ -100,9 +104,12 @@ iDPSIR/
 ├── data/                      # example data (sample_nodes.csv, sample_edges.csv, mangi2007_*.csv, gnanapragasam2026_*.csv incl. parameters and observed effort)
 ├── data-raw/                  # scripts that build the Sri Lanka example (tables, savepoint, figures)
 ├── docs/                      # getting-started tutorial (tutorial.html) and three example savepoints (example_fisheries/mangi/gnanapragasam.idpsir.json, see Example networks below)
+├── legacy/                    # code no longer used by the app (equilibrium engine, older scenario/plot code), kept for reference - not sourced
 ├── tests/
 │   ├── testthat.R             # test runner: Rscript tests/testthat.R
-│   └── testthat/               # tests for the scientific core (loop_analysis, sufficiency, temporal, reach, metrics, io, validate, graph); fixtures/ holds older-format savepoints
+│   └── testthat/               # tests for the scientific core (sufficiency, temporal, triggers, growth, relevance, pathways, reach, metrics, io, validate, graph, report); fixtures/ holds older-format savepoints
+├── DESCRIPTION / renv.lock    # dependencies (project, not a package) and pinned versions for development/CI
+├── LICENSE, CITATION.cff
 └── README.md
 ```
 
@@ -463,10 +470,9 @@ has four tabs:
   selectable (100/300/1000). The older equilibrium-based reading
   (loop analysis / Levins 1974 — stability check, immediate vs. equilibrium effect,
   step-by-step trajectory, robustness and self-regulation-sensitivity checks, edge
-  ranking) is no longer shown in the UI or report — see `R/loop_analysis.R`'s header
-  for why (it required a stability condition no network built by this app's schema
-  can ever meet, and could silently invert a prediction's sign) — but its functions
-  stay defined and tested for reference.
+  ranking) was removed: it required a stability condition no network built by this
+  app's schema can ever meet, and could silently invert a prediction's sign. Its code
+  is kept in `legacy/` for reference.
 - **Metrics** — general network metrics, centralities, and DPSIR descriptors (gaps
   such as Impacts without a Response, or Pressures not covered by one).
 - **Report** — pick which sections (saved graph snapshots, metrics, centralities,
@@ -484,3 +490,8 @@ has four tabs:
 
 A savepoint (`.idpsir.json`) can be downloaded from any step and reloaded later to
 resume a project.
+
+## License and citation
+
+MIT (see [`LICENSE`](LICENSE)). To cite iDPSIR, use [`CITATION.cff`](CITATION.cff)
+(GitHub shows it under "Cite this repository").

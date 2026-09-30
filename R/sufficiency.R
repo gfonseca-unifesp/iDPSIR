@@ -30,7 +30,6 @@
 # computed separately and summed.
 
 # Kept as an alias while callers move to effect_matrix() (Fase 4 removes it).
-build_signed_matrix <- function(g) effect_matrix(g)
 
 # Spectral radius = max modulus of the eigenvalues, NOT max real part -
 # eigenvalues of a network with cycles are routinely complex (documented

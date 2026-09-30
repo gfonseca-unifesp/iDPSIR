@@ -148,7 +148,16 @@ build_full_report_html <- function(
       class = "meta",
       "See \"Reproducibility\" at the end of this report for the R/package versions and the random seed/",
       "simulation count behind every resampling-based number above."
-    )
+    ),
+    # Revisao 2, Fase 4 (checklist, D18): how many strengths are not data.
+    {
+      src <- igraph::E(graph)$weight_source
+      if (is.null(src)) NULL else tags$p(class = "meta", sprintf(
+        "Edge strengths: %d of %d from a class or the default (qualitative), %d converted from an older file, %d given.",
+        sum(src %in% c("class", "default")), length(src), sum(src %in% "converted"),
+        sum(!src %in% c("class", "default", "converted"))
+      ))
+    }
   ))
 
   # C.2 Interpretation legend - always shown, once, right after the header.
@@ -374,6 +383,28 @@ build_full_report_html <- function(
         # Revisao 2, items A2/C0/C3: how the run ended, the trigger criterion
         # and the levels in the factors' own units.
         stop_tag <- if (!is.null(temporal_stop_note(tr))) tags$p(temporal_stop_note(tr)) else NULL
+        # Revisao 2, Fase 4 (checklist): the settings behind the run.
+        mode_text <- function(m) switch(m %||% "permanent",
+          permanent = "added every window", impulse = "applied once and held", window = "for a set number of windows", m)
+        sched <- sc$temporal_schedule
+        if (is.data.frame(sched) && nrow(sched) > 0) {
+          windowed <- c(if (identical(sc$temporal_mode_pressure, "window")) sc$pressure_active,
+                        if (identical(sc$temporal_mode_response, "window")) sc$active)
+          sched <- sched[sched$id %in% windowed, , drop = FALSE]
+        }
+        sched_text <- if (is.data.frame(sched) && nrow(sched) > 0) {
+          labs <- V(graph)$label[match(sched$id, V(graph)$name)]
+          paste0(" Periods: ", paste(sprintf("%s windows %d-%d", labs, as.integer(sched$start), as.integer(sched$start + sched$duration - 1)), collapse = "; "), ".")
+        } else ""
+        settings_tag <- tags$p(sprintf(
+          "Settings: pressure %s; response %s; %s; neutralization tolerance %s%% of the baseline (labels only); growth trends %s.%s",
+          mode_text(sc$temporal_mode_pressure), mode_text(sc$temporal_mode_response),
+          if (identical(sc$temporal_stop_rule, "fixed")) sprintf("%d windows", as.integer(sc$temporal_windows %||% 5))
+          else sprintf("until neutralized (up to %d windows)", as.integer(sc$temporal_max_windows %||% 50)),
+          sc$temporal_tol_rel %||% 5,
+          if (isFALSE(sc$temporal_trends_outside)) "only for factors in the scenario" else "applied to every factor",
+          sched_text
+        ))
         gate_tag <- if (nrow(tr$thresholds) > 0) {
           tags$p(sprintf("Trigger criterion: %s.", if (identical(tr$gate_mode, "load")) "load arriving at the State in each window" else "accumulated State level"))
         } else NULL
@@ -403,6 +434,7 @@ build_full_report_html <- function(
         tagList(
           tags$h4(scenario_name),
           note_tag,
+          settings_tag,
           stop_tag,
           gate_tag,
           table_tag,

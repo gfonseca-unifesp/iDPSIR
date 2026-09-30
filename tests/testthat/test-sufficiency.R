@@ -33,15 +33,15 @@ zero_press <- function(g) {
 
 test_that("build_signed_matrix always has a zero diagonal, even with a legacy self_regulation attribute", {
   g <- mangi_graph()
-  A <- build_signed_matrix(g)
+  A <- effect_matrix(g)
   expect_true(all(diag(A) == 0))
 
   # A savepoint from before this revision could still carry self_regulation
-  # on the graph - build_signed_matrix() must ignore it silently, with no
+  # on the graph - effect_matrix() must ignore it silently, with no
   # special-case code, by zeroing the diagonal regardless of what
   # build_interaction_matrix() filled in.
   V(g)$self_regulation <- "high"
-  A2 <- build_signed_matrix(g)
+  A2 <- effect_matrix(g)
   expect_true(all(diag(A2) == 0))
 })
 
@@ -49,7 +49,7 @@ test_that("spectral_radius returns 0 for a graph with no edges, not NaN or an er
   nodes <- data.frame(id = c("A", "B"), stringsAsFactors = FALSE)
   edges <- data.frame(from = character(), to = character(), stringsAsFactors = FALSE)
   g <- graph_from_data_frame(edges, vertices = nodes, directed = TRUE)
-  W <- build_signed_matrix(g)
+  W <- effect_matrix(g)
 
   expect_equal(spectral_radius(W), 0)
 })
@@ -69,7 +69,7 @@ test_that("propagate() gives a non-zero effect on a purely acyclic network, not 
   )
   g <- graph_from_data_frame(edges, vertices = nodes, directed = TRUE)
 
-  W <- build_signed_matrix(g)
+  W <- effect_matrix(g)
   expect_equal(spectral_radius(W), 0) # nilpotent, not edge-less
   expect_false(all(W == 0)) # confirms it's the nilpotent case, not the truly empty one
 
@@ -91,7 +91,7 @@ test_that("propagate never fails - not even on the network already known to be s
   edges <- normalize_dpsir_edges(edges)
   g <- build_igraph(nodes, edges, get_default_dpsir_schema())
 
-  W <- build_signed_matrix(g)
+  W <- effect_matrix(g)
   press <- build_press_vector(g, active_ids = V(g)$name[1], strengths = setNames(1, V(g)$name[1]))
   result <- propagate(W, press)
 

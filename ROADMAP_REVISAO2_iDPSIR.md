@@ -601,6 +601,10 @@ Com a persistência da D20, o Estado acumula (sr < 1). Por isso "o que chega nes
 
 ---
 
+**Executada (branch `revisao2-fase4`, 30/09):** `LICENSE` (MIT), `CITATION.cff` e `DESCRIPTION` (só o autor principal — **falta a lista de coautores**); `renv.lock` gerado pelo `DESCRIPTION`, sem `.Rprofile` (o auto-install do `global.R` continua para `runGitHub()`); CI com job de testes em todo push/PR, export shinylive e deploy só a partir de `main`, R 4.5.1 e shinylive 0.5.0 fixos; código morto em `legacy/` (motor de equilíbrio, `responses.R` exceto `get_feedback_categories`, gráficos antigos, `build_signed_matrix`, `R/dpsir/`, `mod_communities.R`, `mod_data_ui`) — `build_threshold_matrix` também foi, porque não era mais chamado (o temporal usa os gatilhos da Fase C); sem `withr` (as sementes locais em R base já cumprem a 2.4); testes novos (`test-robustness.R`: relatório com escape, `import_matrices`, rede vazia, sinal/peso vazios, savepoint fora de faixa, desalinhamento p–W; os de caminhos já estavam em `test-fase2.R`); `CLAUDE.md` enxuto e o histórico em `docs/CHANGELOG.md` (fora do bundle da demo). Relatório passou a informar os modos, a tolerância, os períodos por fator e quantas arestas vêm de classe/padrão ou de conversão.
+
+---
+
 ## Ordem sugerida e dependências
 
 1. **Fase 0** (0.1–0.8): cerca de 1–2 dias. O 0.6 depende de 1.1 para os novos campos de aresta, então pode ser feito junto com 1.1.
@@ -613,14 +617,14 @@ Com a persistência da D20, o Estado acumula (sr < 1). Por isso "o que chega nes
 
 ## Checklist final
 
-- [ ] `testthat::test_dir("tests/testthat")` passa.
-- [ ] App sobe localmente e na demo shinylive.
-- [ ] Os três exemplos, no modo estrutural (β por classe revisada), carregam sem aviso no app local e na demo shinylive.
-- [ ] Um savepoint antigo convertido reproduz os números da leitura estática antiga.
+- [x] `testthat::test_dir("tests/testthat")` passa.
+- [ ] App sobe localmente e na demo shinylive. (Local: sim. Demo: conferida pelo CI ao mesclar em `main`.)
+- [x] Os três exemplos, no modo estrutural (β por classe revisada), carregam sem aviso no app local (a demo é conferida pelo CI ao mesclar em `main`).
+- [x] Um savepoint antigo convertido reproduz os números da leitura estática antiga (teste em `test-io.R`).
 - [ ] PDF de relevância atualizado (seção 4 e 7.4: equivalência entre Levins e β padronizado; V5 com eficácia = cobertura).
 - [ ] Tutorial e README batem número a número com o app (β e classes, modos de pressão e resposta, critério "até neutralizar", priorização, gatilho em unidade real, crescimento).
-- [ ] Decisões D1–D23 registradas no `CLAUDE.md`.
-- [ ] Relatório informa o modo da resposta, a tolerância, o critério do gatilho, as arestas com valor por classe ou convertido, e as sementes usadas.
+- [x] Decisões D1–D24 registradas no `CLAUDE.md`.
+- [x] Relatório informa o modo da resposta, a tolerância, o critério do gatilho, as arestas com valor por classe ou convertido, e as sementes usadas.
 
 ---
 

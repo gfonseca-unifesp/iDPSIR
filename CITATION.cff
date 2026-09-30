@@ -1,0 +1,21 @@
+cff-version: 1.2.0
+message: "If you use iDPSIR, please cite it as below."
+title: "iDPSIR: build and analyse DPSIR causal networks for environmental management"
+type: software
+version: 0.9.0
+date-released: 2026-09-30
+license: MIT
+repository-code: "https://github.com/gfonseca-unifesp/iDPSIR"
+url: "https://gfonseca-unifesp.github.io/iDPSIR/"
+authors:
+  - family-names: Fonseca
+    given-names: Gustavo
+    email: gfonseca@unifesp.br
+    affiliation: "Universidade Federal de São Paulo (UNIFESP)"
+keywords:
+  - DPSIR
+  - environmental management
+  - causal networks
+  - path analysis
+  - R
+  - Shiny
