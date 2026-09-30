@@ -166,36 +166,18 @@ test_that("normalize_dpsir_nodes treats reference_value = 0 as not given (NA; th
   expect_equal(unname(build_reference_values(build_igraph(normalized, NULL, get_default_dpsir_schema()))), 1)
 })
 
-test_that("normalize_dpsir_nodes defaults uncertainty/controllability to 0.5 when the columns are entirely absent", {
-  nodes <- data.frame(id = "A", label = "A", dpsir_category = "Driver", stringsAsFactors = FALSE)
-  normalized <- normalize_dpsir_nodes(nodes)
-
-  expect_equal(normalized$uncertainty, 0.5)
-  expect_equal(normalized$controllability, 0.5)
-})
-
-test_that("normalize_dpsir_nodes reads uncertainty/controllability numbers straight through when present", {
+test_that("uncertainty/controllability (removed 30/09, never used in any calculation) are dropped from older files and reported as ignored", {
   nodes <- data.frame(
     id = c("A", "B"), label = c("A", "B"), dpsir_category = "Driver",
-    uncertainty = c(0.1, 0.9), controllability = c(0.3, 0.7),
+    uncertainty = c("low", 0.9), controllability = c(0.3, "high"),
     stringsAsFactors = FALSE
   )
   normalized <- normalize_dpsir_nodes(nodes)
-
-  expect_equal(normalized$uncertainty, c(0.1, 0.9))
-  expect_equal(normalized$controllability, c(0.3, 0.7))
-})
-
-test_that("normalize_dpsir_nodes maps a legacy categorical uncertainty/controllability (low/medium/high) to a numeric equivalent, for backward compatibility with a pre-Revisao-1 savepoint", {
-  nodes <- data.frame(
-    id = c("A", "B", "C"), label = "x", dpsir_category = "Driver",
-    uncertainty = c("low", "medium", "high"), controllability = c("high", "low", "medium"),
-    stringsAsFactors = FALSE
-  )
-  normalized <- normalize_dpsir_nodes(nodes)
-
-  expect_equal(normalized$uncertainty, c(0.2, 0.5, 0.8))
-  expect_equal(normalized$controllability, c(0.8, 0.2, 0.5))
+  expect_false(any(c("uncertainty", "controllability") %in% names(normalized)))
+  result <- preflight_import_nodes(nodes)
+  expect_length(result$blocking, 0)
+  expect_true(any(grepl("'uncertainty' is not a recognized field", result$warnings, fixed = TRUE)))
+  expect_true(any(grepl("'controllability' is not a recognized field", result$warnings, fixed = TRUE)))
 })
 
 test_that("normalize_dpsir_nodes drops a retired temporal_scale column from an old savepoint/CSV, not just ignores it", {
@@ -227,7 +209,6 @@ test_that("preflight_import_nodes finds nothing wrong with a well-formed table, 
   nodes <- data.frame(
     id = c("D1", "S1"), label = c("Driver 1", "State 1"),
     dpsir_category = c("Driver", "State"), subsystem = c("", ""),
-    uncertainty = c("low", "medium"), controllability = c("high", "low"),
     self_regulation = c(0, 0.3), growth_rate = c(0, 0),
     reference_value = c(1, 1), activation_threshold = c(NA, 0.15),
     descriptor = c("", ""), stringsAsFactors = FALSE
@@ -247,33 +228,16 @@ test_that("preflight_import_nodes blocks on a missing required column", {
   expect_true(any(grepl("missing required column 'dpsir_category'", result$blocking, fixed = TRUE)))
 })
 
-test_that("preflight_import_nodes blocks on out-of-vocabulary dpsir_category and a non-numeric uncertainty, with the right row number", {
+test_that("preflight_import_nodes blocks on out-of-vocabulary dpsir_category, with the right row number", {
   nodes <- data.frame(
     id = c("D1", "X1"), label = c("D1", "X1"),
-    dpsir_category = c("Driver", "Pressures"), uncertainty = c("low", "very high"),
+    dpsir_category = c("Driver", "Pressures"),
     stringsAsFactors = FALSE
   )
 
   result <- preflight_import_nodes(nodes)
 
   expect_true(any(grepl("row 3: dpsir_category 'Pressures'", result$blocking, fixed = TRUE)))
-  expect_true(any(grepl("row 3: uncertainty 'very high' is not a number", result$blocking, fixed = TRUE)))
-})
-
-test_that("preflight_import_nodes blocks uncertainty/controllability outside [0,1] and non-numeric values separately, but accepts the legacy low/medium/high vocabulary", {
-  nodes <- data.frame(
-    id = c("A", "B", "C"), label = "x", dpsir_category = "Driver",
-    uncertainty = c("1.5", "abc", "medium"), controllability = c("medium", "-0.2", "high"),
-    stringsAsFactors = FALSE
-  )
-
-  result <- preflight_import_nodes(nodes)
-
-  expect_true(any(grepl("row 2: uncertainty 1.5 is outside", result$blocking, fixed = TRUE)))
-  expect_true(any(grepl("row 3: uncertainty 'abc' is not a number", result$blocking, fixed = TRUE)))
-  expect_true(any(grepl("row 3: controllability -0.2 is outside", result$blocking, fixed = TRUE)))
-  # row 4 (legacy strings "medium"/"high") never mentioned - not blocked.
-  expect_false(any(grepl("row 4:", result$blocking, fixed = TRUE)))
 })
 
 test_that("preflight_import_nodes blocks activation_threshold set on a non-State node", {

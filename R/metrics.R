@@ -240,25 +240,11 @@ compute_dpsir_descriptors <- function(g, schema) {
     setdiff(pressure_ids, covered)
   }
 
-  # ---- medias de incerteza/controlabilidade por categoria ----
-  # uncertainty/controllability sao numericos em [0,1] desde a Revisao 1 -
-  # media direta, sem precisar mapear vocabulario categorico pra escore.
-  averages_by_category <- do.call(rbind, lapply(categories, function(cat) {
-    subset_nodes <- nodes[nodes$dpsir_category == cat, ]
-    data.frame(
-      dpsir_category = cat,
-      avg_uncertainty = mean(as.numeric(subset_nodes$uncertainty), na.rm = TRUE),
-      avg_controllability = mean(as.numeric(subset_nodes$controllability), na.rm = TRUE),
-      stringsAsFactors = FALSE
-    )
-  }))
-
   list(
     count_by_category = count_by_category,
     transitions = transitions,
     transition_matrix = transition_matrix,
     impacts_without_response = impacts_without_response,
-    pressures_without_response = pressures_without_response,
-    averages_by_category = averages_by_category
+    pressures_without_response = pressures_without_response
   )
 }

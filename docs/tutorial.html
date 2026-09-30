@@ -656,8 +656,6 @@ cd iDPSIR</pre>
                     <tr><td class="key">label</td><td>Human-readable name</td></tr>
                     <tr><td class="key">dpsir_category</td><td>Driver / Pressure / State / Impact / Response</td></tr>
                     <tr><td class="key">subsystem</td><td>Optional grouping</td></tr>
-                    <tr><td class="key">uncertainty</td><td>Optional number in [0, 1], default 0.5</td></tr>
-                    <tr><td class="key">controllability</td><td>Optional number in [0, 1], default 0.5</td></tr>
                     <tr><td class="key">descriptor</td><td>Optional free-text description of what this factor represents</td></tr>
                     <tr><td class="key">self_regulation</td><td>Optional number in [0, 1], default 0.5 — the share of this factor's deviation that fades by itself each window; only used by the optional temporal simulation (see <a href="#self-regulation">Self-regulation</a>)</td></tr>
                     <tr><td class="key">growth_rate</td><td>Optional number, default 0 — how the factor's base level moves by itself per time window (greater than −1)</td></tr>
@@ -668,10 +666,10 @@ cd iDPSIR</pre>
                     <tr><td class="key">threshold_direction</td><td>Optional, <code>auto</code> (default: falling if the threshold is below the initial level, rising if above) or <code>both</code></td></tr>
                   </table>
                 </div>
-                <pre>id,label,dpsir_category,subsystem,uncertainty,controllability
-D1,Urban growth,Driver,Water,0.5,0.2
-P1,Wastewater discharge,Pressure,Water,0.5,0.2
-S1,Water quality,State,Water,0.5,0.2</pre>
+                <pre>id,label,dpsir_category,subsystem
+D1,Urban growth,Driver,Water
+P1,Wastewater discharge,Pressure,Water
+S1,Water quality,State,Water</pre>
               </div>
               <div class="code-card">
                 <h4>Edges CSV (optional)</h4>
@@ -740,8 +738,6 @@ P1,S1,negative,0.55,,monitoring</pre>
                 <tr><td class="key">label</td><td>The human-readable name shown on the graph and in tables.</td></tr>
                 <tr><td class="key">dpsir_category</td><td>Driver, Pressure, State, Impact or Response — sets the shape, color and position on the graph.</td></tr>
                 <tr><td class="key">subsystem</td><td>Optional grouping (e.g. "Fisheries", "Water") — lets you filter the Graph tab down to one part of the network.</td></tr>
-                <tr><td class="key">uncertainty</td><td>Optional number in [0, 1], default 0.5 — how confident you are this node is described correctly (0 = very confident, 1 = very uncertain). Thickens the node's border on the graph. Not read by any calculation, purely a visual/documentation aid.</td></tr>
-                <tr><td class="key">controllability</td><td>Optional number in [0, 1], default 0.5 — how much a manager can influence this factor directly (0 = not at all, 1 = fully). Not read by any calculation.</td></tr>
                 <tr><td class="key">descriptor</td><td>Optional — a short, plain-language description of what this factor represents. Purely documentation: not read by any calculation, just there so someone reading the network later (including a future you) doesn't have to guess what a node means.</td></tr>
                 <tr><td class="key">self_regulation</td><td>Optional number in [0, 1], default 0.5. The share of this factor's deviation that fades by itself each time window: 0 = accumulates like a stock, 1 = no memory. The form shows a guide (half-life, build-up); see <a href="#self-regulation">Self-regulation</a>. Only used by the Scenarios tab's optional temporal simulation.</td></tr>
                 <tr><td class="key">Growth rate and ceiling</td><td>Optional, default 0 / blank. How this factor's base level moves by itself each window (e.g. +0.8% for population growth), independent of any edge, and optionally the level where it stops (in the factor's own units; needs the initial level). Only used by the temporal simulation, where the trend runs in both the baseline and the scenario, even when the factor is not in the scenario. It is not self-regulation: self-regulation is how a deviation caused by the network fades, growth is how the base level itself moves. Without a typical variation (SD), the trend is measured as a fraction of the initial level.</td></tr>
@@ -935,7 +931,7 @@ P1,S1,negative,0.55,,monitoring</pre>
             <tr><th>Sub-tab</th><th>What's in it</th></tr>
             <tr><td class="key">General</td><td>Node/edge counts, density (how well-connected the network is overall), diameter, transitivity, modularity, and component count.</td></tr>
             <tr><td class="key">Centralities</td><td>Degree, betweenness, closeness, PageRank and eigenvector centrality per node — toggles for directed/undirected, normalized/raw and weighted, plus CSV/Excel export.</td></tr>
-            <tr><td class="key">DPSIR descriptors</td><td>Node counts and edge transitions per category, a category × category matrix, flagged <strong>Impacts without a Response</strong> and <strong>Pressures not covered by a Response</strong>, and average uncertainty/controllability per category.</td></tr>
+            <tr><td class="key">DPSIR descriptors</td><td>Node counts and edge transitions per category, a category × category matrix, flagged <strong>Impacts without a Response</strong> and <strong>Pressures not covered by a Response</strong>, and every Driver-to-Impact pathway with its effect.</td></tr>
           </table>
         </div>
         <p class="muted" style="font-size:14px; margin-top:10px">Centrality scores answer "which factor matters most,

@@ -79,8 +79,6 @@ nodes <- data.frame(
   dpsir_category = c("Driver", "Driver", "Driver", "Driver", "Pressure", "Pressure", "State", "State",
                      "Impact", "Impact", "Impact", "Impact", "Impact", "Response", "Response", "Response", "Response"),
   subsystem = "Sri Lanka small-scale fisheries",
-  uncertainty = c(0.3, 0.4, 0.3, 0.7, 0.2, 0.8, 0.4, 0.5, 0.3, 0.5, 0.7, 0.5, 0.7, 0.3, 0.3, 0.5, 0.7),
-  controllability = c(0.1, 0.3, 0.6, 0.3, 0.7, 0.4, 0.2, 0.3, 0.3, 0.4, 0.3, 0.4, 0.3, 0.8, 0.8, 0.8, 0.5),
   self_regulation = c(0.5, 1, 0.02, 1, 1, 1, 1, 1, 1, 1, 0.5, 0.5, 0.3, 1, 1, 1, 1),
   growth_rate = c(0.008, 0.023, 0.01, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
   growth_cap = c(NA, 31, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA),

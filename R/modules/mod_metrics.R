@@ -35,8 +35,6 @@ mod_metrics_ui <- function(id) {
         h4("Category x category matrix"),
         DTOutput(ns("matrix_table")),
         uiOutput(ns("gaps_summary")),
-        h4("Average uncertainty/controllability by category (0 = low, 1 = high)"),
-        DTOutput(ns("averages_table")),
         h4("All Driver-to-Impact pathways"),
         p(
           class = "text-muted",
@@ -107,15 +105,6 @@ mod_metrics_server <- function(id, schema, graph) {
 
     output$matrix_table <- renderDT({
       datatable(as.data.frame.matrix(descriptors()$transition_matrix), options = list(dom = "t"))
-    })
-
-    output$averages_table <- renderDT({
-      datatable(
-        descriptors()$averages_by_category,
-        rownames = FALSE,
-        options = list(dom = "t")
-      ) %>%
-        formatRound(columns = c("avg_uncertainty", "avg_controllability"), digits = 2)
     })
 
     driver_impact_pathways <- reactive({

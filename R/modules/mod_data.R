@@ -16,8 +16,6 @@ create_empty_nodes_table <- function() {
     label = character(),
     dpsir_category = character(),
     subsystem = character(),
-    uncertainty = numeric(),
-    controllability = numeric(),
     self_regulation = numeric(),
     growth_rate = numeric(),
     growth_cap = numeric(),
@@ -528,7 +526,7 @@ mod_data_server <- function(id, seed = NULL) {
     node_modal <- function(defaults = NULL) {
       d <- defaults %||% list(
         id = "", label = "", dpsir_category = schema_categories(rv$schema)[1],
-        subsystem = "", uncertainty = 0.5, controllability = 0.5,
+        subsystem = "",
         self_regulation = DEFAULT_SELF_REGULATION, growth_rate = 0, growth_cap = NA_real_, reference_value = NA_real_,
         sd = NA_real_, threshold_level = NA_real_, threshold_direction = "auto", descriptor = "",
         endpoint_class = "ecological", value_v = 1
@@ -550,14 +548,6 @@ mod_data_server <- function(id, seed = NULL) {
         textInput(ns("nm_label"), "Label", value = d$label),
         selectInput(ns("nm_category"), "DPSIR category", choices = schema_categories(rv$schema), selected = d$dpsir_category),
         textInput(ns("nm_subsystem"), "Subsystem", value = d$subsystem),
-        numericInput(
-          ns("nm_uncertainty"), "Uncertainty (0-1)",
-          value = d$uncertainty %||% 0.5, min = 0, max = 1, step = 0.1
-        ),
-        numericInput(
-          ns("nm_controllability"), "Controllability (0-1)",
-          value = d$controllability %||% 0.5, min = 0, max = 1, step = 0.1
-        ),
         numericInput(
           ns("nm_self_regulation"), "Self-regulation (0-1)",
           value = d$self_regulation %||% DEFAULT_SELF_REGULATION, min = 0, max = 1, step = 0.05
@@ -809,8 +799,6 @@ mod_data_server <- function(id, seed = NULL) {
         label = input$nm_label,
         dpsir_category = input$nm_category,
         subsystem = input$nm_subsystem,
-        uncertainty = input$nm_uncertainty,
-        controllability = input$nm_controllability,
         self_regulation = self_regulation,
         growth_rate = growth_rate,
         growth_cap = growth_cap,

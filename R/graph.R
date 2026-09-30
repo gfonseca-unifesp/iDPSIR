@@ -249,8 +249,6 @@ build_node_tooltip <- function(nodes) {
     "{descriptor_line}",
     "Category: {tooltip_text(nodes$dpsir_category)}<br>",
     "Subsystem: {tooltip_text(nodes$subsystem)}<br>",
-    "Uncertainty: {ifelse(is.na(nodes$uncertainty), '-', round(as.numeric(nodes$uncertainty), 2))}<br>",
-    "Controllability: {ifelse(is.na(nodes$controllability), '-', round(as.numeric(nodes$controllability), 2))}<br>",
     "Growth: {growth_text}<br>",
     "Threshold: {threshold_text}"
   )
@@ -345,13 +343,10 @@ size_nodes_by_degree <- function(nodes, graph, node_size_mode = "all", node_size
   nodes
 }
 
-border_by_uncertainty <- function(nodes) {
-  # Linear interpolation between the old categorical vocabulary's three
-  # discrete widths (low=1, medium=2.5, high=4) - uncertainty=0.5 (the
-  # "medium"-equivalent default) lands on exactly 2.5, so a network never
-  # edited since the low/medium/high days looks visually identical.
-  nodes$borderWidth <- 1 + 3 * as.numeric(nodes$uncertainty)
-  nodes$borderWidth[is.na(nodes$borderWidth)] <- 2.5
+border_by_threshold <- function(nodes) {
+  # Revisao 2 (30/09): the border used to show a node's "uncertainty",
+  # removed; now it only marks thresholded States.
+  nodes$borderWidth <- rep(1.5, nrow(nodes))
   # Revisao 2, item C4: a State with a threshold gets a heavy border.
   if ("threshold_level" %in% names(nodes)) {
     has_th <- !is.na(suppressWarnings(as.numeric(nodes$threshold_level)))
@@ -502,7 +497,7 @@ build_network_visual <- function(
   # UNCERTAINTY -> BORDER WIDTH
   # ===================================================
 
-  nodes <- border_by_uncertainty(nodes)
+  nodes <- border_by_threshold(nodes)
 
   # ===================================================
   # NODE TOOLTIP AND LABEL FONT SIZE
@@ -674,7 +669,7 @@ build_community_visual <- function(
   nodes$physics <- !(identical(layout_mode, "circular") | nodes$id %in% manually_placed)
 
   nodes <- size_nodes_by_degree(nodes, graph, node_size_mode, node_size_weighted)
-  nodes <- border_by_uncertainty(nodes)
+  nodes <- border_by_threshold(nodes)
 
   nodes$title <- build_node_tooltip(nodes)
   nodes$`font.size` <- node_font_size

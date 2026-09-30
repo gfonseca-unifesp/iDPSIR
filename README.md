@@ -109,11 +109,8 @@ iDPSIR/
 ## Data format
 
 **Nodes** (`data/sample_nodes.csv`): `id`, `label`, `dpsir_category` (Driver, Pressure,
-State, Impact, Response), `subsystem`, `uncertainty` (optional, a number in [0, 1],
-default 0.5 — how confident you are this node is described correctly; thickens the
-node's border on the graph, not read by any calculation), `controllability` (optional,
-a number in [0, 1], default 0.5 — how much a manager can influence this factor
-directly, not read by any calculation), `self_regulation` (optional, a number in [0, 1],
+State, Impact, Response), `subsystem` (optional grouping, used to filter the graph),
+`self_regulation` (optional, a number in [0, 1],
 default 0.5 — the share of a factor's deviation that fades by itself each time window;
 only used by the optional temporal simulation, see [Self-regulation](#self-regulation)
 below), `growth_rate` (optional, default 0, greater than −1 — how the factor's
@@ -133,6 +130,10 @@ service/welfare Impact, set by hand or with "Elicit values (swing weights)" on t
 step; always 1 for an ecological Impact). `interaction_type` also accepts the vocabulary
 of the relevance specification (increases/triggers/improves/sustains → positive,
 reduces/mitigates/decreases → negative).
+
+Older files may carry `uncertainty` and `controllability` columns: they were removed
+because they never entered any calculation (the uncertainty that matters is each edge's
+strength band), and are ignored on load with a note.
 
 **Edges** (`data/sample_edges.csv`): `from`, `to`, `interaction_type` (positive/negative
 — required: the sign has no default), `weight` (the edge's **strength** as a
