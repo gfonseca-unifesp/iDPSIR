@@ -35,3 +35,9 @@ desktop.ini
 # ...exceto os exemplos didaticos versionados para o tutorial (docs/)
 !docs/*.idpsir.json
 !tests/testthat/fixtures/*.idpsir.json
+
+# Manuscrito e material de trabalho local (nao versionados)
+manuscrito*/
+MANUSCRIPT_*.docx
+/*.pdf
+/revisao_*.xlsx
