@@ -151,4 +151,13 @@ network × draw × condition × Impact to `out/results.csv.gz` and the network p
 
 ## Deviations
 
-*(none yet)*
+**2026-09-30, before any run of the conditions (clarifications of points the plan left open):**
+1. The number of simulations for the reliability ρ (prioritization) and for C4 is 300, the
+   app's default. Timing on 3 networks: 43 s per network in one process, i.e. about 40 min
+   for N = 1000 on 20 parallel processes - well under the 24 h limit, so N stays at 1000.
+2. Parallelism uses base R `parallel` (PSOCK cluster, each worker loading the app's engine)
+   instead of `future.apply`; seeds are per network, so results do not depend on the
+   number of workers.
+3. Priority and rank exist only in the static conditions (C0, C1, C2): the temporal reading
+   has no prioritization. H5 and the top-priority outcome compare C0 with C1, as planned.
+4. The timing run (50 networks) writes to `out_timing/`, not `out/`, and is not analysed.
