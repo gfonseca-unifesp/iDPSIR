@@ -44,6 +44,12 @@
 # from this file (and R/report.R) are removed, the same "superseded code
 # stays on disk, just stops being called" pattern already used throughout
 # this project (e.g. R/responses.R's apply_response()).
+# Revisao 3: the app computes in a single process, so the confidence
+# readings are capped at 300 simulations (the simulated-network experiment
+# of the manuscript uses more, in parallel, outside the app).
+APP_MAX_SIMULATIONS <- 300L
+APP_SIMULATION_CHOICES <- c(100L, 300L)
+
 plot_download_row <- function(ns, prefix) {
   fluidRow(
     column(6, downloadButton(ns(paste0("download_", prefix, "_png")), "Download PNG", class = "btn-sm")),
@@ -173,9 +179,10 @@ mod_responses_ui <- function(id) {
         # Revisao 2, item 3.4: fewer simulations = faster (e.g. in the
         # browser-only demo), more = steadier percentages.
         column(width = 4,
-          selectInput(ns("n_simulations"), "Simulations (confidence)", choices = c(100, 300, 1000), selected = 300),
+          selectInput(ns("n_simulations"), "Simulations (confidence)", choices = APP_SIMULATION_CHOICES, selected = APP_MAX_SIMULATIONS),
           # Revisao 3, E3.1.
-          checkboxInput(ns("structural_uncertainty"), "Include structural uncertainty (links with weaker evidence may be absent)", value = FALSE)
+          checkboxInput(ns("structural_uncertainty"), "Include structural uncertainty (links with weaker evidence may be absent)", value = FALSE),
+          uiOutput(ns("apply_time_note"))
         ),
         column(width = 4, br(), actionButton(ns("apply_scenario"), "Apply scenario", icon = icon("play"), class = "btn-success", width = "100%"))
       )
@@ -380,8 +387,54 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
 
     current_scenario <- reactiveVal(NULL)
 
+    # Revisao 3: how long "Apply scenario" will take, measured on this
+    # network and this computer (the browser-only demo is much slower than
+    # a local R). One resample = new strengths, effect matrix, spectral
+    # radius and total effect; Apply runs n_simulations of them for the
+    # scenario as set, for each response alone and for the reliability of
+    # the prioritization.
+    resample_seconds <- reactive({
+      g <- graph()
+      req(g)
+      ids <- V(g)$name
+      p <- setNames(as.numeric(has_role(g, "driver") | has_role(g, "pressure")), ids)
+      w <- E(g)$weight
+      n <- 20
+      t <- system.time(for (k in seq_len(n)) {
+        gg <- g
+        E(gg)$weight <- w * stats::runif(length(w), 0.9, 1.1)
+        B <- effect_matrix(gg)
+        if (spectral_radius(B) < 1) propagate(B, p)
+      })[["elapsed"]]
+      max(t / n, 1e-4)
+    })
+    apply_seconds <- reactive({
+      n_sim <- as.integer(input$n_simulations %||% APP_MAX_SIMULATIONS)
+      n_resp <- nrow(response_nodes())
+      # x1.3 for the triggers, the prioritization and the display.
+      n_sim * (n_resp + 2) * resample_seconds() * 1.3
+    })
+    fmt_seconds <- function(s) if (s < 60) sprintf("%.0f s", max(1, s)) else sprintf("%.1f min", s / 60)
+    output$apply_time_note <- renderUI({
+      s <- apply_seconds()
+      n_sim <- as.integer(input$n_simulations %||% APP_MAX_SIMULATIONS)
+      txt <- sprintf("Apply scenario resamples the network %s times (%d simulations x %d readings): about %s on this computer.",
+                     format(n_sim * (nrow(response_nodes()) + 2), big.mark = ","), n_sim, nrow(response_nodes()) + 2, fmt_seconds(s))
+      if (s > 10) {
+        div(class = "alert alert-warning", style = "padding:6px 10px; font-size:13px;",
+            txt, if (n_sim > 100) " 100 simulations is about three times faster; 300 gives steadier percentages.")
+      } else {
+        helpText(txt)
+      }
+    })
+
     observeEvent(input$apply_scenario, {
       req(graph())
+      est <- tryCatch(isolate(apply_seconds()), error = function(e) 0)
+      if (est > 5) {
+        showNotification(sprintf("Computing the scenario - about %s with these settings. The progress bar shows how far it is.", fmt_seconds(est)),
+                         type = "message", duration = min(30, ceiling(est)))
+      }
 
       rn <- response_nodes()
       active_ids <- rn$id[vapply(rn$id, function(node_id) isTRUE(input[[paste0("active_", input_key(node_id))]]), logical(1))]
@@ -1499,7 +1552,7 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
           incProgress(1 / length(defs), detail = d$name)
           sc <- tryCatch(
             compute_scenario(graph(), rn, d$name, d$active, d$strengths, d$pressure_active, d$pressure_strengths,
-                             n_simulations = as.integer(d$n_simulations %||% 300),
+                             n_simulations = min(as.integer(d$n_simulations %||% 300), APP_MAX_SIMULATIONS),
                              structural = isTRUE(d$structural_uncertainty)),
             error = function(e) NULL
           )
@@ -1631,8 +1684,9 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
     observe({
       rs <- restored()
       n <- rs$n_simulations
-      if (!is.null(n) && as.character(n) %in% c("100", "300", "1000")) {
-        updateSelectInput(session, "n_simulations", selected = as.character(n))
+      if (!is.null(n) && !is.na(suppressWarnings(as.integer(n)))) {
+        # An older savepoint may say 1000; the app now caps at 300.
+        updateSelectInput(session, "n_simulations", selected = as.character(min(as.integer(n), APP_MAX_SIMULATIONS)))
       }
       if (!is.null(rs$structural_uncertainty)) updateCheckboxInput(session, "structural_uncertainty", value = isTRUE(rs$structural_uncertainty))
     })

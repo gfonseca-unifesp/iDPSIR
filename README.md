@@ -520,7 +520,9 @@ has four tabs:
   multiple saved scenarios' reach side by side; saved scenarios are kept in the savepoint
   (their settings) and recomputed when it is loaded. The temporal simulation runs on
   **Run simulation**, and the number of resamples behind the confidence readings is
-  selectable (100/300/1000). The older equilibrium-based reading
+  selectable (100 or 300, the maximum, since the app computes in a single process; an
+  estimate of how long "Apply scenario" will take, measured on the network and the
+  computer, is shown next to it). The older equilibrium-based reading
   (loop analysis / Levins 1974 — stability check, immediate vs. equilibrium effect,
   step-by-step trajectory, robustness and self-regulation-sensitivity checks, edge
   ranking) was removed: it required a stability condition no network built by this
