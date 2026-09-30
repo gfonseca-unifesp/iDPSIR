@@ -586,6 +586,10 @@ Com a persistência da D20, o Estado acumula (sr < 1). Por isso "o que chega nes
 
 ---
 
+**Executada (branch `revisao2-fase3`, 30/09):** 3.1 (passos num `tabsetPanel(type = "hidden")` trocado pelo servidor), 3.2 (arrasto fixa o nó pelo proxy sem redesenhar; `isolate(positions())`; sliders com `debounce` de 400 ms), 3.3 (simulação temporal no botão "Run simulation"), 3.4 (100/300/1000 simulações, no relatório também), 3.5 (conferido: os sliders mantêm o valor após editar e reconstruir — já resolvido pela 0.4), 3.6/3.7 (mensagens do Start num `uiOutput` próprio; erros em vermelho, rede desatualizada em amarelo), 3.8 (falha do snapshot vira notificação), 3.9 (confirmação ao remover nó, com o número de arestas, e ao sobrescrever cenário), 3.10 (auto-laço, aresta duplicada, sinal, faixa invertida, rótulo vazio), 3.11 (Okabe-Ito como padrão; o Graph usa a paleta do modelo, a menos que se escolha outra), 3.12 (`input_key()`: id em hex), 3.13 (cenários salvos no savepoint como definição e recalculados ao carregar, com `compute_scenario()`). **Também (pedido do usuário):** `uncertainty` e `controllability` dos nós removidos — não entravam em cálculo. Bugs achados ao vivo: `debounce` devolvia `NULL` no primeiro render e quebrava o layout; `compute_layered_layout()` agora aceita 0 nós e categoria fora do schema.
+
+---
+
 ## Fase 4 — Publicação e manutenção
 
 - **6.1 do roadmap anterior:** `LICENSE` (MIT), `CITATION.cff`, `DESCRIPTION` com todas as dependências de `global.R`, incluindo `withr` e `htmltools`.

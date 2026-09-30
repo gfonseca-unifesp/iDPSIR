@@ -251,3 +251,28 @@ test_that("scenario_state round-trips the temporal settings, with defaults for o
   write_savepoint(build_savepoint(schema, nodes, edges, scenario_state = st_old), tmp)
   expect_equal(read_savepoint(tmp)$scenario_state$temporal_stop_rule, "fixed")
 })
+
+test_that("Revisao 2, item 3.13: saved scenarios (definitions) round-trip through the savepoint", {
+  sp_in <- read_savepoint("../../docs/example_gnanapragasam.idpsir.json")
+  saved <- list(
+    "Aid only" = list(name = "Aid only", active = c("R1", "R2"), strengths = c(R1 = 100, R2 = 100),
+                      pressure_active = "D4", pressure_strengths = c(D4 = 100), n_simulations = 100L,
+                      temporal_mode_response = "window",
+                      temporal_schedule = data.frame(id = c("R1", "R2"), start = c(1, 6), duration = c(5, 3))),
+    "Quota" = list(name = "Quota", active = "R3", strengths = c(R3 = 85),
+                   pressure_active = character(), pressure_strengths = setNames(numeric(), character()), n_simulations = 300L)
+  )
+  sp <- build_savepoint(sp_in$schema, sp_in$nodes, sp_in$edges, saved_scenarios = saved)
+  f <- tempfile(fileext = ".idpsir.json")
+  write_savepoint(sp, f)
+  back <- read_savepoint(f)$saved_scenarios
+  expect_length(back, 2)
+  expect_equal(back[[1]]$name, "Aid only")
+  expect_equal(back[[1]]$strengths, c(R1 = 100, R2 = 100))
+  expect_equal(back[[1]]$pressure_strengths, c(D4 = 100))
+  expect_equal(back[[1]]$temporal_mode_response, "window")
+  expect_equal(back[[1]]$temporal_schedule$start, c(1, 6))
+  expect_equal(back[[2]]$strengths, c(R3 = 85))
+  expect_length(back[[2]]$pressure_active, 0)
+  expect_null(read_savepoint("../../docs/example_mangi.idpsir.json")$saved_scenarios)
+})

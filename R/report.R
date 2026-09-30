@@ -580,7 +580,12 @@ build_full_report_html <- function(
       tags$h3("Analysis parameters"),
       tags$p(
         "\"How confident is that, response by response?\" resamples every edge's strength (beta) ",
-        tags$code("n_simulations = 300"), " times, uniformly within its uncertainty range, ",
+        tags$code(sprintf("n_simulations = %s", {
+          sims <- unique(vapply(saved_scenarios[intersect(selected_scenario_names, names(saved_scenarios))],
+                                function(sc) as.character(sc$n_simulations %||% 300), character(1)))
+          if (length(sims) == 0) "300" else paste(sims, collapse = "/")
+        })),
+        " times (as set when each scenario was applied), uniformly within its uncertainty range, ",
         "using a fixed random seed (", tags$code("seed = 42"), ") so that",
         " regenerating this report from the same savepoint reproduces the exact same numbers."
       )

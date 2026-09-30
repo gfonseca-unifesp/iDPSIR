@@ -53,7 +53,9 @@ mod_graph_ui <- function(id) {
           ns("layout_mode"), "Layout",
           choices = c("Layered by category" = "layered", "Circular" = "circular")
         ),
-        selectInput(ns("palette"), "Color palette", choices = get_dpsir_palette_choices()),
+        # Revisao 2, item 3.11: one source of colors - the model's own palette
+        # (Model step) unless another is picked here for this view.
+        selectInput(ns("palette"), "Color palette", choices = c("As set in the model" = "model", get_dpsir_palette_choices()), selected = "model"),
         checkboxInput(ns("use_shapes"), "Use DPSIR shapes", value = TRUE),
         selectInput(ns("subsystem_filter"), "Subsystem", choices = "All"),
         checkboxInput(ns("show_node_legend"), "Show category/community legend", value = TRUE),
@@ -278,11 +280,27 @@ mod_graph_server <- function(id, schema, nodes, edges, graph, positions, set_pos
       membership(community_result())
     })
 
+    # Revisao 2, item 3.2: sliders are debounced (no redraw per tick), and
+    # dragging a node no longer redraws the whole widget - the position is
+    # stored and the node pinned through the proxy (see node_drag below).
+    # `redraw_counter` forces a redraw only when positions must be re-applied
+    # from the server (reset).
+    # The defaults cover the first render, before the sliders are bound
+    # (a NULL spacing broke the layer layout).
+    d_x_spacing <- debounce(reactive(input$x_spacing %||% 200), 400)
+    d_y_spacing <- debounce(reactive(input$y_spacing %||% 80), 400)
+    d_node_font <- debounce(reactive(input$node_font_size %||% 14), 400)
+    d_legend_font <- debounce(reactive(input$legend_font_size %||% 14), 400)
+    d_conf_threshold <- debounce(reactive(input$confidence_threshold %||% 0.5), 400)
+    redraw_counter <- reactiveVal(0)
+
     output$network <- renderVisNetwork({
       req(graph())
       req(filtered_graph())
+      redraw_counter()
+      manual_positions <- isolate(positions())
 
-      display_schema <- apply_schema_palette(schema(), input$palette)
+      display_schema <- if (is.null(input$palette) || identical(input$palette, "model")) schema() else apply_schema_palette(schema(), input$palette)
 
       widget <- if (identical(input$color_by, "community")) {
         build_community_visual(
@@ -294,14 +312,14 @@ mod_graph_server <- function(id, schema, nodes, edges, graph, positions, set_pos
           node_size_mode = input$node_size_mode,
           node_size_weighted = input$node_size_weighted,
           edge_width_by = input$edge_width_by,
-          confidence_threshold = input$confidence_threshold,
-          x_spacing = input$x_spacing,
-          y_spacing = input$y_spacing,
+          confidence_threshold = d_conf_threshold(),
+          x_spacing = d_x_spacing(),
+          y_spacing = d_y_spacing(),
           avoid_overlap = input$avoid_overlap,
-          node_font_size = input$node_font_size,
-          legend_font_size = input$legend_font_size,
+          node_font_size = d_node_font(),
+          legend_font_size = d_legend_font(),
           layout_mode = input$layout_mode,
-          manual_positions = positions(),
+          manual_positions = manual_positions,
           show_node_legend = input$show_node_legend,
           show_edge_legend = input$show_edge_legend
         )
@@ -315,15 +333,15 @@ mod_graph_server <- function(id, schema, nodes, edges, graph, positions, set_pos
           node_size_mode = input$node_size_mode,
           node_size_weighted = input$node_size_weighted,
           edge_width_by = input$edge_width_by,
-          confidence_threshold = input$confidence_threshold,
-          x_spacing = input$x_spacing,
-          y_spacing = input$y_spacing,
+          confidence_threshold = d_conf_threshold(),
+          x_spacing = d_x_spacing(),
+          y_spacing = d_y_spacing(),
           avoid_overlap = input$avoid_overlap,
-          node_font_size = input$node_font_size,
-          legend_font_size = input$legend_font_size,
+          node_font_size = d_node_font(),
+          legend_font_size = d_legend_font(),
           highlighted_nodes = highlighted_nodes(),
           layout_mode = input$layout_mode,
-          manual_positions = positions(),
+          manual_positions = manual_positions,
           show_node_legend = input$show_node_legend,
           show_edge_legend = input$show_edge_legend
         )
@@ -401,10 +419,16 @@ mod_graph_server <- function(id, schema, nodes, edges, graph, positions, set_pos
 
       current <- current[!current$id %in% dragged$id, ]
       set_positions(rbind(current, dragged))
+      # Pin the dragged node(s) in the live widget instead of redrawing it:
+      # physics off keeps it where it was dropped (fixed.* stays FALSE so the
+      # next drag is still respected - see graph.R).
+      visNetworkProxy(session$ns("network")) %>%
+        visUpdateNodes(data.frame(id = dragged$id, x = dragged$x, y = dragged$y, physics = FALSE, stringsAsFactors = FALSE))
     })
 
     observeEvent(input$reset_positions, {
       set_positions(NULL)
+      redraw_counter(redraw_counter() + 1)
     })
 
     # =================================================
@@ -501,7 +525,7 @@ mod_graph_server <- function(id, schema, nodes, edges, graph, positions, set_pos
       color_desc <- if (identical(input$color_by, "community")) {
         paste0("nodes colored by community (", input$community_algorithm, " algorithm)")
       } else {
-        paste0("nodes colored by DPSIR category (", input$palette, " palette)")
+        paste0("nodes colored by DPSIR category (", if (identical(input$palette, "model")) "model" else input$palette, " palette)")
       }
 
       filters <- character()
@@ -549,6 +573,10 @@ mod_graph_server <- function(id, schema, nodes, edges, graph, positions, set_pos
         "idpsir_capture_element",
         list(elementId = session$ns("network"), inputId = session$ns("snapshot_capture_result"))
       )
+    })
+
+    observeEvent(input$snapshot_capture_result_error, {
+      showNotification(paste("Could not save the view:", input$snapshot_capture_result_error), type = "error", duration = NULL)
     })
 
     observeEvent(input$snapshot_capture_result, {

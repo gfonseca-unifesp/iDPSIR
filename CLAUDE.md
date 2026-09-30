@@ -2675,6 +2675,18 @@ scenario (as set)" em `build_confidence_matrix(planned =)`; caminhos pela ordem 
 efeito = produto dos β com sinal (`pathway_effect()`, `format_pathways_table()`); `local_seed()`
 e sementes fixas nas comunidades. Bug: dropdowns de "Highlight pathway" vazios (Explore montado
 tarde) — agora um `observe` preenche quando faltam. `tests/testthat/test-fase2.R`.
+**Fase 3 concluída (branch `revisao2-fase3`), robustez e UX:** wizard em `tabsetPanel(type =
+"hidden")` com `current_step` no servidor (`go_to_step()`); grafo: arrasto via
+`visNetworkProxy`/`visUpdateNodes(physics = FALSE)` sem redesenho, `redraw_counter` só no reset,
+sliders `debounce` com default (sem default, `NULL` no 1º render quebrava o layout); temporal em
+`bindEvent(input$run_temporal, …)`; `n_simulations` selecionável; mensagens do Start em
+`output$start_messages` (`rv$start_error`); snapshot reporta erro via `<inputId>_error`;
+modais de confirmação (remover nó, sobrescrever cenário); validação do modal de aresta;
+paleta Okabe-Ito padrão e opção "As set in the model" no Graph; `input_key()` (hex) nos inputs
+por nó; `compute_scenario()` compartilhado e `saved_scenarios` no savepoint
+(`saved_scenarios_to_json/from_json` em `io.R`, restaurados após o `graph_version`).
+`uncertainty`/`controllability` removidos dos nós (não entravam em cálculo; colunas antigas
+descartadas com aviso).
 
 Fase 5 está completa (Marcos A-D). Todos os 4 itens da lista pós-Fase 5 (1:
 exemplo didático, 2a: passos até neutralizar, 2b: threshold opcional por

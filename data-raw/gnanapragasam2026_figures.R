@@ -22,7 +22,7 @@ years <- 2004 + seq_len(nrow(tr$scenario)) - 1
 # 1. Network --------------------------------------------------------------
 cat_order <- c("Driver", "Pressure", "State", "Impact", "Response")
 cats <- V(g)$dpsir_category
-cols <- c(Driver = "#8c564b", Pressure = "#d62728", State = "#1f77b4", Impact = "#ff7f0e", Response = "#2ca02c")
+cols <- setNames(sp$schema$color, sp$schema$name)
 x <- match(cats, cat_order)
 y <- ave(seq_along(cats), cats, FUN = function(i) seq_along(i) - (length(i) + 1) / 2)
 lay <- cbind(x * 3, -y * 1.4)

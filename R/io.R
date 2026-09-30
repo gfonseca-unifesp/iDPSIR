@@ -58,7 +58,49 @@ legacy_conversion_notes <- function(conversion) {
 # CONSTRUIR SAVEPOINT
 # =====================================================
 
-build_savepoint <- function(schema, nodes, edges, positions = NULL, metadata = list(), scenario_state = NULL) {
+# Revisao 2, item 3.13: the definitions of saved scenarios (not their
+# results, which are recomputed on load) - rows for the strengths, like
+# scenario_state, so jsonlite never unboxes a single-entry named vector.
+saved_scenarios_to_json <- function(saved) {
+  if (is.null(saved) || length(saved) == 0) return(NULL)
+  temporal_keys <- c("temporal_mode_pressure", "temporal_mode_response", "temporal_stop_rule", "temporal_max_windows",
+                     "temporal_windows", "temporal_tol_rel", "baseline_without_response", "temporal_gate_mode",
+                     "temporal_trends_outside", "temporal_continue_after")
+  unname(lapply(saved, function(sc) {
+    out <- list(
+      name = sc$name,
+      response = data.frame(id = as.character(sc$active), strength = unname(as.numeric(sc$strengths[sc$active])), stringsAsFactors = FALSE),
+      pressure = data.frame(id = as.character(sc$pressure_active), strength = unname(as.numeric(sc$pressure_strengths[sc$pressure_active])), stringsAsFactors = FALSE),
+      n_simulations = sc$n_simulations %||% 300
+    )
+    for (k in temporal_keys) if (!is.null(sc[[k]])) out[[k]] <- sc[[k]]
+    if (is.data.frame(sc$temporal_schedule) && nrow(sc$temporal_schedule) > 0) out$temporal_schedule <- sc$temporal_schedule
+    out
+  }))
+}
+
+saved_scenarios_from_json <- function(raw) {
+  if (is.null(raw) || length(raw) == 0) return(NULL)
+  items <- if (is.data.frame(raw)) lapply(seq_len(nrow(raw)), function(i) lapply(raw, `[[`, i)) else raw
+  lapply(items, function(it) {
+    rows <- function(x) {
+      if (is.null(x) || length(x) == 0) return(data.frame(id = character(), strength = numeric()))
+      as.data.frame(x, stringsAsFactors = FALSE)
+    }
+    r <- rows(it$response); p <- rows(it$pressure)
+    out <- list(
+      name = as.character(it$name),
+      active = as.character(r$id), strengths = setNames(as.numeric(r$strength), r$id),
+      pressure_active = as.character(p$id), pressure_strengths = setNames(as.numeric(p$strength), p$id),
+      n_simulations = as.integer(it$n_simulations %||% 300)
+    )
+    for (k in setdiff(names(it), c("name", "response", "pressure", "n_simulations", "temporal_schedule"))) out[[k]] <- it[[k]]
+    if (!is.null(it$temporal_schedule) && length(it$temporal_schedule) > 0) out$temporal_schedule <- as.data.frame(it$temporal_schedule, stringsAsFactors = FALSE)
+    out
+  })
+}
+
+build_savepoint <- function(schema, nodes, edges, positions = NULL, metadata = list(), scenario_state = NULL, saved_scenarios = NULL) {
   validate_schema(schema)
 
   now <- as.character(Sys.time())
@@ -126,7 +168,8 @@ build_savepoint <- function(schema, nodes, edges, positions = NULL, metadata = l
     # Same optional-key-added-to-an-existing-format pattern as `positions`
     # (Fase 5 fast-follow) - an old savepoint simply has no "scenario_state"
     # key, read back as NULL below, no version bump or migration needed.
-    scenario_state = scenario_state_json
+    scenario_state = scenario_state_json,
+    saved_scenarios = saved_scenarios_to_json(saved_scenarios)
   )
 }
 
@@ -342,6 +385,7 @@ read_savepoint <- function(path, convert_legacy = TRUE) {
     edges = edges,
     positions = positions,
     scenario_state = scenario_state,
+    saved_scenarios = saved_scenarios_from_json(raw$saved_scenarios),
     warnings = c(
       sub("^Edges file", "Savepoint edges", sub("^Nodes file", "Savepoint nodes",
         # An older file's weights above 1 are expected - they are converted.

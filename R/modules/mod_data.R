@@ -102,6 +102,7 @@ mod_data_server <- function(id, seed = NULL) {
       edges = if (is.null(seed)) create_empty_edges_table() else seed$edges,
       positions = NULL,
       scenario_state = NULL,
+      saved_scenarios = NULL,
       # Revisao 1 (guia externo sobre o relatorio como material
       # suplementar): provenance header do relatorio precisa do nome/autor/
       # notas do savepoint carregado e do nome do arquivo em si - nenhum dos
@@ -115,6 +116,7 @@ mod_data_server <- function(id, seed = NULL) {
       loaded = !is.null(seed),
       start_message = "",
       start_blocking = character(),
+      start_error = FALSE,
       start_warnings = character(),
       graph = NULL,
       graph_message = "",
@@ -206,9 +208,32 @@ mod_data_server <- function(id, seed = NULL) {
           )
         ),
 
+        # Revisao 2, item 3.6: messages live in their own output, so showing
+        # one no longer redraws the file inputs (which left the browser
+        # showing an empty input while the server kept the old upload).
+        uiOutput(ns("start_messages"))
+      )
+      }, error = render_step_error)
+    })
+    # Step 1 is the only step that is ALREADY visible the instant the page
+    # connects - it never transitions from hidden to shown the way steps
+    # 2-6 do on a real "Next" click. Shiny's suspendWhenHidden (default
+    # TRUE) only computes an output once the client reports a hidden ->
+    # visible transition for it; an output that starts visible has no such
+    # transition to report, and on some client/timing combinations the
+    # very first visibility report race-loses against the server's first
+    # reactive flush, leaving the output suspended forever with no error -
+    # matches a live debug session where every module server finished
+    # initializing (logged) but "start_step: render begin" never printed
+    # at all. Forcing it to always compute sidesteps that race entirely.
+    outputOptions(output, "start_step", suspendWhenHidden = FALSE)
+
+    output$start_messages <- renderUI({
+      tagList(
         if (nzchar(rv$start_message)) {
           tags$div(
-            class = if (length(rv$start_blocking) > 0) "alert alert-danger" else "alert alert-info",
+            # Revisao 2, item 3.7: errors in red.
+            class = if (length(rv$start_blocking) > 0 || isTRUE(rv$start_error)) "alert alert-danger" else "alert alert-info",
             style = "margin-top: 10px;",
             rv$start_message
           )
@@ -228,20 +253,8 @@ mod_data_server <- function(id, seed = NULL) {
           )
         }
       )
-      }, error = render_step_error)
     })
-    # Step 1 is the only step that is ALREADY visible the instant the page
-    # connects - it never transitions from hidden to shown the way steps
-    # 2-6 do on a real "Next" click. Shiny's suspendWhenHidden (default
-    # TRUE) only computes an output once the client reports a hidden ->
-    # visible transition for it; an output that starts visible has no such
-    # transition to report, and on some client/timing combinations the
-    # very first visibility report race-loses against the server's first
-    # reactive flush, leaving the output suspended forever with no error -
-    # matches a live debug session where every module server finished
-    # initializing (logged) but "start_step: render begin" never printed
-    # at all. Forcing it to always compute sidesteps that race entirely.
-    outputOptions(output, "start_step", suspendWhenHidden = FALSE)
+    outputOptions(output, "start_messages", suspendWhenHidden = FALSE)
 
     observeEvent(input$start_new, {
       rv$schema <- get_default_dpsir_schema()
@@ -249,10 +262,12 @@ mod_data_server <- function(id, seed = NULL) {
       rv$edges <- create_empty_edges_table()
       rv$positions <- NULL
       rv$scenario_state <- NULL
+      rv$saved_scenarios <- NULL
       rv$metadata <- NULL
       rv$savepoint_filename <- NULL
       rv$graph <- NULL
       rv$start_blocking <- character()
+      rv$start_error <- FALSE
       rv$start_warnings <- character()
       rv$loaded <- TRUE
       rv$epoch <- rv$epoch + 1
@@ -263,6 +278,7 @@ mod_data_server <- function(id, seed = NULL) {
       req(input$import_nodes_file)
 
       rv$start_blocking <- character()
+      rv$start_error <- FALSE
       rv$start_warnings <- character()
 
       tryCatch(
@@ -283,6 +299,7 @@ mod_data_server <- function(id, seed = NULL) {
           if (length(preflight$blocking) > 0) {
             rv$start_blocking <- preflight$blocking
             rv$start_message <- "Import blocked: the file(s) don't match the expected format."
+          rv$start_error <- TRUE
             return(invisible(NULL))
           }
 
@@ -298,6 +315,7 @@ mod_data_server <- function(id, seed = NULL) {
           rv$edges <- imported$edges
           rv$positions <- NULL
           rv$scenario_state <- NULL
+          rv$saved_scenarios <- NULL
           rv$metadata <- NULL
           rv$savepoint_filename <- NULL
           rv$graph <- NULL
@@ -314,6 +332,7 @@ mod_data_server <- function(id, seed = NULL) {
         },
         error = function(e) {
           rv$start_message <- paste("Import error:", conditionMessage(e))
+          rv$start_error <- TRUE
         }
       )
     })
@@ -322,6 +341,7 @@ mod_data_server <- function(id, seed = NULL) {
       req(input$savepoint_file)
 
       rv$start_blocking <- character()
+      rv$start_error <- FALSE
       rv$start_warnings <- character()
 
       tryCatch(
@@ -333,6 +353,7 @@ mod_data_server <- function(id, seed = NULL) {
           rv$edges <- restored$edges
           rv$positions <- restored$positions
           rv$scenario_state <- restored$scenario_state
+          rv$saved_scenarios <- restored$saved_scenarios
           rv$metadata <- restored$metadata
           rv$savepoint_filename <- input$savepoint_file$name
           rv$start_warnings <- restored$warnings
@@ -346,6 +367,7 @@ mod_data_server <- function(id, seed = NULL) {
         },
         error = function(e) {
           rv$start_message <- paste("Error loading savepoint:", conditionMessage(e))
+          rv$start_error <- TRUE
         }
       )
     })
@@ -354,10 +376,12 @@ mod_data_server <- function(id, seed = NULL) {
       files <- input$merge_files
 
       rv$start_blocking <- character()
+      rv$start_error <- FALSE
       rv$start_warnings <- character()
 
       if (is.null(files) || nrow(files) < 2) {
         rv$start_message <- "Select at least two savepoint files to combine."
+          rv$start_error <- TRUE
         return()
       }
 
@@ -372,6 +396,7 @@ mod_data_server <- function(id, seed = NULL) {
           rv$edges <- merged$edges
           rv$positions <- NULL
           rv$scenario_state <- NULL
+          rv$saved_scenarios <- NULL
           rv$metadata <- NULL
           rv$savepoint_filename <- NULL
           rv$graph <- NULL
@@ -391,6 +416,7 @@ mod_data_server <- function(id, seed = NULL) {
         },
         error = function(e) {
           rv$start_message <- paste("Error combining savepoints:", conditionMessage(e))
+          rv$start_error <- TRUE
         }
       )
     })
@@ -718,9 +744,26 @@ mod_data_server <- function(id, seed = NULL) {
         return()
       }
 
+      # Revisao 2, item 3.9: confirm first, saying how many edges go too.
       removed_id <- rv$nodes$id[sel]
-      rv$nodes <- rv$nodes[-sel, ]
-      rv$edges <- rv$edges[rv$edges$from != removed_id & rv$edges$to != removed_id, ]
+      n_edges <- sum(rv$edges$from == removed_id | rv$edges$to == removed_id)
+      pending_node_removal(removed_id)
+      showModal(modalDialog(
+        title = "Remove node",
+        sprintf("Remove '%s'%s?", rv$nodes$label[sel],
+                if (n_edges > 0) sprintf(" and the %d edge%s connected to it", n_edges, if (n_edges == 1) "" else "s") else ""),
+        footer = tagList(modalButton("Cancel"), actionButton(ns("confirm_remove_node"), "Remove", class = "btn-danger"))
+      ))
+    })
+
+    pending_node_removal <- reactiveVal(NULL)
+    observeEvent(input$confirm_remove_node, {
+      removed_id <- pending_node_removal()
+      req(removed_id)
+      rv$nodes <- rv$nodes[rv$nodes$id != removed_id, , drop = FALSE]
+      rv$edges <- rv$edges[rv$edges$from != removed_id & rv$edges$to != removed_id, , drop = FALSE]
+      pending_node_removal(NULL)
+      removeModal()
     })
 
     observeEvent(input$confirm_node, {
@@ -728,6 +771,10 @@ mod_data_server <- function(id, seed = NULL) {
 
       if (!nzchar(new_id)) {
         showNotification("The node ID cannot be empty.", type = "error")
+        return()
+      }
+      if (!nzchar(trimws(input$nm_label %||% ""))) {
+        showNotification("The node label cannot be empty.", type = "error")
         return()
       }
 
@@ -970,6 +1017,25 @@ mod_data_server <- function(id, seed = NULL) {
     })
 
     observeEvent(input$confirm_edge, {
+      # Revisao 2, item 3.10: self-loop, missing ends and duplicates.
+      if (is.null(input$em_from) || is.null(input$em_to) || !nzchar(input$em_from) || !nzchar(input$em_to)) {
+        showNotification("Choose both ends of the edge.", type = "error")
+        return()
+      }
+      if (identical(input$em_from, input$em_to)) {
+        showNotification("An edge cannot go from a factor to itself - use the node's self-regulation instead.", type = "error")
+        return()
+      }
+      idx_editing <- editing_edge_index()
+      same <- which(rv$edges$from == input$em_from & rv$edges$to == input$em_to)
+      if (length(setdiff(same, idx_editing)) > 0) {
+        showNotification("This edge already exists - edit it instead.", type = "error")
+        return()
+      }
+      if (is.null(input$em_interaction) || !input$em_interaction %in% get_interaction_types()) {
+        showNotification("Choose the sign of the edge (positive or negative).", type = "error")
+        return()
+      }
       mode <- input$em_strength_mode %||% DEFAULT_STRENGTH_CLASS
       num <- function(x) if (is.null(x) || length(x) == 0) NA_real_ else suppressWarnings(as.numeric(x))
 
@@ -1014,7 +1080,7 @@ mod_data_server <- function(id, seed = NULL) {
         } else if (xor(is.na(low), is.na(high))) {
           showNotification("Give both ends of the uncertainty range, or neither.", type = "error")
           return()
-        } else if (!is.na(low) && (low > weight || high < weight || low < 0)) {
+        } else if (!is.na(low) && (low > weight || high < weight || low < 0 || low > high)) {
           showNotification("The uncertainty range must contain the strength.", type = "error")
           return()
         }
@@ -1077,7 +1143,11 @@ mod_data_server <- function(id, seed = NULL) {
         actionButton(ns("build_graph"), "Build/Rebuild graph", icon = icon("play"), class = "btn-success"),
 
         if (nzchar(rv$graph_message)) {
-          tags$div(class = "alert alert-info", style = "margin-top: 10px;", rv$graph_message)
+          # Revisao 2, item 3.7: errors in red, the stale-graph note in yellow.
+          msg_class <- if (startsWith(rv$graph_message, "Error")) "alert alert-danger"
+                       else if (startsWith(rv$graph_message, "The network changed")) "alert alert-warning"
+                       else "alert alert-success"
+          tags$div(class = msg_class, style = "margin-top: 10px;", rv$graph_message)
         }
       )
       }, error = render_step_error)
@@ -1184,6 +1254,7 @@ mod_data_server <- function(id, seed = NULL) {
       positions = reactive(rv$positions),
       set_positions = function(pos) { rv$positions <- pos },
       scenario_state = reactive(rv$scenario_state),
+      saved_scenarios = reactive(rv$saved_scenarios),
       metadata = reactive(rv$metadata),
       savepoint_filename = reactive(rv$savepoint_filename),
       graph = reactive(rv$graph),

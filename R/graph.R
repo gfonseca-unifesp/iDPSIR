@@ -131,7 +131,11 @@ compute_layered_layout <- function(nodes, schema, x_spacing = 200, y_spacing = 8
   categories <- schema_categories(schema)
   order_index <- setNames(seq_along(categories), categories)
 
+  if (nrow(nodes) == 0) return(data.frame(id = character(), x = numeric(), y = numeric(), stringsAsFactors = FALSE))
   category_rank <- unname(order_index[nodes$dpsir_category])
+  # A category not in the schema (e.g. for an instant while a new project
+  # loads) goes to an extra column instead of breaking ave() with NA groups.
+  category_rank[is.na(category_rank)] <- length(categories) + 1L
   x <- category_rank * x_spacing
 
   y <- ave(seq_len(nrow(nodes)), category_rank, FUN = function(idx) {

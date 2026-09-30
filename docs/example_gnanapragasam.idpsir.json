@@ -3,44 +3,44 @@
   "metadata": {
     "project_name": "Example: Sri Lanka small-scale fisheries (Gnanapragasam et al. 2026)",
     "author": "iDPSIR examples",
-    "created_at": "2026-09-30 07:19:45.922775",
+    "created_at": "2026-09-30 07:31:03.741265",
     "notes": "Window = 1 year, window 0 = 2004. Parameters and sources: data/gnanapragasam2026_parameters.csv.",
-    "updated_at": "2026-09-30 07:19:45.922775",
+    "updated_at": "2026-09-30 07:31:03.741265",
     "weight_mode": "structural"
   },
   "schema": [
     {
       "name": "Driver",
       "order": 1,
-      "color": "#1f77b4",
+      "color": "#0072B2",
       "shape": "square",
       "role": null
     },
     {
       "name": "Pressure",
       "order": 2,
-      "color": "#d62728",
+      "color": "#D55E00",
       "shape": "triangle",
       "role": null
     },
     {
       "name": "State",
       "order": 3,
-      "color": "#2ca02c",
+      "color": "#009E73",
       "shape": "dot",
       "role": null
     },
     {
       "name": "Impact",
       "order": 4,
-      "color": "#ff7f0e",
+      "color": "#E69F00",
       "shape": "diamond",
       "role": null
     },
     {
       "name": "Response",
       "order": 5,
-      "color": "#9467bd",
+      "color": "#CC79A7",
       "shape": "star",
       "role": "feedback"
     }
@@ -639,5 +639,6 @@
         "duration": 13
       }
     ]
-  }
+  },
+  "saved_scenarios": {}
 }

@@ -83,8 +83,14 @@ mod_report_ui <- function(id) {
       "if (!window.idpsirCaptureHandlerRegistered) {
         window.idpsirCaptureHandlerRegistered = true;
         Shiny.addCustomMessageHandler('idpsir_capture_element', function(msg) {
+          // Revisao 2, item 3.8: every failure is reported back instead of
+          // silently doing nothing.
+          var fail = function(why) {
+            Shiny.setInputValue(msg.inputId + '_error', why, {priority: 'event'});
+          };
           var el = document.getElementById(msg.elementId);
-          if (!el || typeof html2canvas === 'undefined') return;
+          if (!el) { fail('the graph is not on screen'); return; }
+          if (typeof html2canvas === 'undefined') { fail('the image library (html2canvas) is not loaded'); return; }
 
           var widget = (typeof HTMLWidgets !== 'undefined') ? HTMLWidgets.find('#' + msg.elementId) : null;
           var upscale = 2.5;
@@ -174,12 +180,15 @@ mod_report_ui <- function(id) {
               if (canvas.width > 0 && canvas.height > 0) {
                 var finalCanvas = cropToContent(canvas, 40);
                 Shiny.setInputValue(msg.inputId, finalCanvas.toDataURL('image/png'), {priority: 'event'});
+              } else {
+                fail('the captured image was empty (is the Graph tab visible?)');
               }
               restoreHidden();
               resizeTo(origRect.width, origRect.height);
               el.style.width = origWidth;
               el.style.height = origHeight;
-            }).catch(function() {
+            }).catch(function(err) {
+              fail(String((err && err.message) || err));
               restoreHidden();
               resizeTo(origRect.width, origRect.height);
               el.style.width = origWidth;

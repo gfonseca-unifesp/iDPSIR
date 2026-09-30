@@ -63,6 +63,43 @@ plot_download_row <- function(ns, prefix) {
 # verified in tests/testthat/test-sufficiency.R (also computed at 100%).
 # Pure function (no Shiny reactives), so it's independently testable and
 # reusable from R/report.R later (Fase 3).
+# Revisao 2, item 3.13: everything "Apply scenario" computes, as one
+# function - also used to rebuild the saved scenarios of a savepoint.
+# Strengths are in % (as on the sliders).
+compute_scenario <- function(g, response_nodes_df, name, active_ids, strengths,
+                             pressure_active_ids, pressure_strengths, n_simulations = 300,
+                             progress = function(amount, detail) invisible(NULL)) {
+  press <- build_press_vector(g, active_ids, strengths / 100)
+  p_D <- build_press_vector(g, pressure_active_ids, pressure_strengths / 100)
+  progress(0.1, "Reach")
+  reach <- response_reach(g, active_ids)
+  progress(0.2, "Sufficiency")
+  suff_df <- sufficiency(g, p_D, press)
+  progress(0.3, "Confidence (resampling edge strengths)")
+  conf <- build_confidence_matrix(g, p_D, response_nodes_df, n_simulations = n_simulations, planned = press)
+  # Revisao 2, items C4/C5: State triggers and the reach they leave.
+  gates_pressure <- state_gates(g, p_D)
+  gates_net <- state_gates(g, p_D + press)
+  reach_effective <- effective_response_reach(g, active_ids, gates_net$id[!gates_net$open])
+  # Revisao 2, item B7: relevance and priority of each Impact.
+  progress(0.1, "Impact prioritization")
+  prioritization <- impact_prioritization(g, p_D, suff_df, n_simulations = n_simulations)
+  progress(0.3, "Done")
+  list(
+    name = name, active = active_ids, strengths = strengths, press = press, reach = reach,
+    pressure_active = pressure_active_ids, pressure_strengths = pressure_strengths, p_D = p_D,
+    sufficiency_df = suff_df, sufficiency_confidence_matrix = conf, n_simulations = n_simulations,
+    prioritization = prioritization, gates_pressure = gates_pressure, gates_net = gates_net,
+    reach_effective = reach_effective
+  )
+}
+
+# Revisao 2, item 3.12: a node id may contain spaces or symbols that are not
+# valid in an input id - inputs use this safe, stable key (the id in hex).
+input_key <- function(id) {
+  vapply(as.character(id), function(x) paste0("k", paste(sprintf("%02x", as.integer(charToRaw(enc2utf8(x)))), collapse = "")), character(1), USE.NAMES = FALSE)
+}
+
 build_confidence_matrix <- function(g, p_D, response_nodes_df, n_simulations = 300, seed = 42, planned = NULL) {
   if (nrow(response_nodes_df) == 0) {
     return(data.frame(Response = character(), stringsAsFactors = FALSE))
@@ -123,8 +160,11 @@ mod_responses_ui <- function(id) {
       uiOutput(ns("response_controls")),
       tags$hr(),
       fluidRow(
-        column(width = 6, textInput(ns("scenario_name"), "Scenario name", value = "Scenario 1")),
-        column(width = 6, br(), actionButton(ns("apply_scenario"), "Apply scenario", icon = icon("play"), class = "btn-success", width = "100%"))
+        column(width = 4, textInput(ns("scenario_name"), "Scenario name", value = "Scenario 1")),
+        # Revisao 2, item 3.4: fewer simulations = faster (e.g. in the
+        # browser-only demo), more = steadier percentages.
+        column(width = 4, selectInput(ns("n_simulations"), "Simulations (confidence)", choices = c(100, 300, 1000), selected = 300)),
+        column(width = 4, br(), actionButton(ns("apply_scenario"), "Apply scenario", icon = icon("play"), class = "btn-success", width = "100%"))
       )
     ),
 
@@ -155,7 +195,7 @@ mod_responses_ui <- function(id) {
 }
 
 mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state = NULL,
-                                 epoch = NULL, graph_version = NULL) {
+                                 epoch = NULL, graph_version = NULL, restore_saved = NULL) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
@@ -250,7 +290,7 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
         node_id <- rn$id[i]
         is_active <- !is.null(rs) && node_id %in% rs$response_active
         strength_control(
-          paste0("active_", node_id), paste0("strength_", node_id), paste0("units_", node_id),
+          paste0("active_", input_key(node_id)), paste0("strength_", input_key(node_id)), paste0("units_", input_key(node_id)),
           rn$label[i], is_active,
           if (is.null(rs)) 50 else restored_strength(rs$response_strengths, node_id),
           node_sd(node_id)
@@ -286,7 +326,7 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
         node_id <- pn$id[i]
         is_active <- !is.null(rs) && node_id %in% rs$pressure_active
         strength_control(
-          paste0("pressure_active_", node_id), paste0("pressure_strength_", node_id), paste0("pressure_units_", node_id),
+          paste0("pressure_active_", input_key(node_id)), paste0("pressure_strength_", input_key(node_id)), paste0("pressure_units_", input_key(node_id)),
           pn$label[i], is_active,
           if (is.null(rs)) 50 else restored_strength(rs$pressure_strengths, node_id),
           node_sd(node_id)
@@ -306,7 +346,7 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
       req(graph())
 
       rn <- response_nodes()
-      active_ids <- rn$id[vapply(rn$id, function(node_id) isTRUE(input[[paste0("active_", node_id)]]), logical(1))]
+      active_ids <- rn$id[vapply(rn$id, function(node_id) isTRUE(input[[paste0("active_", input_key(node_id))]]), logical(1))]
 
       if (length(active_ids) == 0) {
         showNotification("Select at least one response to apply.", type = "warning")
@@ -315,10 +355,8 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
 
       strengths <- setNames(numeric(length(active_ids)), active_ids)
       for (node_id in active_ids) {
-        strengths[[node_id]] <- effective_strength(paste0("strength_", node_id), paste0("units_", node_id), node_sd(node_id))
+        strengths[[node_id]] <- effective_strength(paste0("strength_", input_key(node_id)), paste0("units_", input_key(node_id)), node_sd(node_id))
       }
-
-      press <- build_press_vector(graph(), active_ids, strengths / 100)
 
       # Revisao 1, Fase 2: the sufficiency reading. Pressure is optional -
       # an inactive pressure scenario is just an all-zero press vector,
@@ -326,13 +364,11 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
       # everywhere, so "neutralized" trivially holds wherever the response
       # helps at all).
       pn <- pressure_nodes()
-      pressure_active_ids <- pn$id[vapply(pn$id, function(node_id) isTRUE(input[[paste0("pressure_active_", node_id)]]), logical(1))]
+      pressure_active_ids <- pn$id[vapply(pn$id, function(node_id) isTRUE(input[[paste0("pressure_active_", input_key(node_id))]]), logical(1))]
       pressure_strengths <- setNames(numeric(length(pressure_active_ids)), pressure_active_ids)
       for (node_id in pressure_active_ids) {
-        pressure_strengths[[node_id]] <- effective_strength(paste0("pressure_strength_", node_id), paste0("pressure_units_", node_id), node_sd(node_id))
+        pressure_strengths[[node_id]] <- effective_strength(paste0("pressure_strength_", input_key(node_id)), paste0("pressure_units_", input_key(node_id)), node_sd(node_id))
       }
-      p_D <- build_press_vector(graph(), pressure_active_ids, pressure_strengths / 100)
-
       # Segunda rodada da Revisao 1: withProgress em torno do calculo -
       # build_confidence_matrix() sozinho roda 300 simulacoes POR resposta
       # existente na rede (nao so as ativas), perceptivel numa rede maior;
@@ -341,51 +377,22 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
       # Revisao 2, item 0.5: an error in an observer ends the whole Shiny
       # session (the app greys out and every tab stops responding). Catch
       # it here, keep the previous results on screen and tell the user.
-      ok <- tryCatch({
+      sc <- tryCatch({
         withProgress(message = "Computing scenario results", value = 0, {
-          incProgress(0.1, detail = "Reach")
-          reach <- response_reach(graph(), active_ids)
-
-          incProgress(0.2, detail = "Sufficiency")
-          suff_df <- sufficiency(graph(), p_D, press)
-
-          incProgress(0.3, detail = "Confidence (resampling edge strengths)")
-          suff_confidence_matrix <- build_confidence_matrix(graph(), p_D, rn, planned = press)
-
-          # Revisao 2, items C4/C5: State triggers (pressure only vs. with the
-          # response) and the reach that the closed triggers leave.
-          gates_pressure <- state_gates(graph(), p_D)
-          gates_net <- state_gates(graph(), p_D + press)
-          reach_effective <- effective_response_reach(graph(), active_ids, gates_net$id[!gates_net$open])
-
-          # Revisao 2, item B7: relevance and priority of each Impact.
-          incProgress(0.1, detail = "Impact prioritization")
-          prioritization <- impact_prioritization(graph(), p_D, suff_df)
-          incProgress(0.4, detail = "Done")
+          compute_scenario(
+            graph(), rn, input$scenario_name, active_ids, strengths,
+            pressure_active_ids, pressure_strengths,
+            n_simulations = as.integer(input$n_simulations %||% 300),
+            progress = function(amount, detail) incProgress(amount, detail = detail)
+          )
         })
-        TRUE
       }, error = function(e) {
         showNotification(paste("Could not apply the scenario:", conditionMessage(e)), type = "error", duration = NULL)
-        FALSE
+        NULL
       })
-      if (!ok) return()
+      if (is.null(sc)) return()
 
-      current_scenario(list(
-        name = input$scenario_name,
-        active = active_ids,
-        strengths = strengths,
-        press = press,
-        reach = reach,
-        pressure_active = pressure_active_ids,
-        pressure_strengths = pressure_strengths,
-        p_D = p_D,
-        sufficiency_df = suff_df,
-        sufficiency_confidence_matrix = suff_confidence_matrix,
-        prioritization = prioritization,
-        gates_pressure = gates_pressure,
-        gates_net = gates_net,
-        reach_effective = reach_effective
-      ))
+      current_scenario(sc)
     })
 
     # =================================================
@@ -529,8 +536,8 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
       ids <- union(isolate(schedule_ids()), saved$id)
       if (length(ids) == 0) return(saved)
       rows <- lapply(ids, function(id) {
-        s_in <- input[[paste0("sched_start_", id)]]
-        d_in <- input[[paste0("sched_dur_", id)]]
+        s_in <- input[[paste0("sched_start_", input_key(id))]]
+        d_in <- input[[paste0("sched_dur_", input_key(id))]]
         k <- match(id, saved$id)
         data.frame(
           id = id,
@@ -640,6 +647,8 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
               )
             )
           },
+          actionButton(ns("run_temporal"), "Run simulation", icon = icon("play"), class = "btn-primary"),
+          helpText("Change the settings above, then run. The results below keep the last run until you run again."),
           uiOutput(ns("temporal_stop_note")),
           uiOutput(ns("temporal_stability_note")),
           uiOutput(ns("temporal_growth_note")),
@@ -702,8 +711,8 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
           k <- match(ids[i], sched$id)
           fluidRow(
             column(6, tags$p(style = "margin-top: 30px;", labs[i])),
-            column(3, numericInput(ns(paste0("sched_start_", ids[i])), "Start window", value = if (is.na(k)) 1 else sched$start[k], min = 1, step = 1)),
-            column(3, numericInput(ns(paste0("sched_dur_", ids[i])), "Windows", value = if (is.na(k)) 1 else sched$duration[k], min = 1, step = 1))
+            column(3, numericInput(ns(paste0("sched_start_", input_key(ids[i]))), "Start window", value = if (is.na(k)) 1 else sched$start[k], min = 1, step = 1)),
+            column(3, numericInput(ns(paste0("sched_dur_", input_key(ids[i]))), "Windows", value = if (is.na(k)) 1 else sched$duration[k], min = 1, step = 1))
           )
         })
       )
@@ -774,7 +783,11 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
           req(FALSE)
         }
       )
-    })
+    }) %>%
+      # Revisao 2, item 3.3: runs on "Run simulation" (and when the
+      # disclosure is opened or a new scenario is applied), not on every
+      # change of a setting.
+      bindEvent(input$run_temporal, input$show_temporal, current_scenario())
 
     # Revisao 2, item C3: the same run with the other criterion, for
     # "Compare both".
@@ -791,7 +804,8 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
         schedule = ts$temporal_schedule, trends_outside = !isFALSE(ts$temporal_trends_outside),
         continue_after = ts$temporal_continue_after %||% 0
       )
-    })
+    }) %>%
+      bindEvent(input$run_temporal, input$show_temporal, current_scenario(), input$temporal_gate_mode)
 
     output$temporal_gates_section <- renderUI({
       tr <- temporal_result()
@@ -1064,6 +1078,21 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
       # the same simulation.
       sc <- utils::modifyList(sc, isolate(temporal_settings(seed_state())))
 
+      # Revisao 2, item 3.9: ask before overwriting a saved scenario.
+      if (sc$name %in% names(saved_scenarios$list)) {
+        pending_scenario(sc)
+        showModal(modalDialog(
+          title = "Overwrite scenario",
+          sprintf("A scenario named '%s' is already saved. Replace it?", sc$name),
+          footer = tagList(modalButton("Cancel"), actionButton(ns("confirm_overwrite_scenario"), "Replace", class = "btn-danger"))
+        ))
+        return()
+      }
+      store_scenario(sc)
+    })
+
+    pending_scenario <- reactiveVal(NULL)
+    store_scenario <- function(sc) {
       saved <- saved_scenarios$list
       saved[[sc$name]] <- sc
       saved_scenarios$list <- saved
@@ -1071,6 +1100,13 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
       scenario_counter(scenario_counter() + 1)
       updateTextInput(session, "scenario_name", value = paste("Scenario", scenario_counter()))
       showNotification(paste0("Scenario '", sc$name, "' saved."), type = "message")
+    }
+    observeEvent(input$confirm_overwrite_scenario, {
+      sc <- pending_scenario()
+      req(sc)
+      store_scenario(sc)
+      pending_scenario(NULL)
+      removeModal()
     })
 
     output$saved_scenarios_table <- renderDT({
@@ -1121,8 +1157,40 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
       updateTextInput(session, "scenario_name", value = "Scenario 1")
     }
 
+    # Revisao 2, item 3.13: a savepoint's saved scenarios are rebuilt once
+    # the loaded network's graph is built (after the clearing below).
+    pending_saved <- reactiveVal(NULL)
     if (!is.null(epoch)) {
-      observeEvent(epoch(), reset_scenario_state(), ignoreInit = TRUE)
+      observeEvent(epoch(), {
+        reset_scenario_state()
+        pending_saved(if (is.null(restore_saved)) NULL else restore_saved())
+      }, ignoreInit = TRUE)
+    }
+    restore_saved_scenarios <- function() {
+      defs <- pending_saved()
+      if (is.null(defs) || length(defs) == 0 || is.null(graph())) return()
+      pending_saved(NULL)
+      rn <- response_nodes()
+      rebuilt <- list()
+      withProgress(message = "Rebuilding saved scenarios", value = 0, {
+        for (d in defs) {
+          incProgress(1 / length(defs), detail = d$name)
+          sc <- tryCatch(
+            compute_scenario(graph(), rn, d$name, d$active, d$strengths, d$pressure_active, d$pressure_strengths,
+                             n_simulations = as.integer(d$n_simulations %||% 300)),
+            error = function(e) NULL
+          )
+          if (is.null(sc)) next
+          temporal <- d[setdiff(names(d), c("name", "active", "strengths", "pressure_active", "pressure_strengths", "n_simulations"))]
+          rebuilt[[d$name]] <- utils::modifyList(sc, temporal)
+        }
+      })
+      saved_scenarios$list <- rebuilt
+      scenario_counter(length(rebuilt) + 1)
+      updateTextInput(session, "scenario_name", value = paste("Scenario", length(rebuilt) + 1))
+      if (length(rebuilt) > 0) {
+        showNotification(sprintf("%d saved scenario(s) restored from the savepoint.", length(rebuilt)), type = "message")
+      }
     }
 
     # Revisao 2, item 0.3: saved scenarios store press vectors and results
@@ -1143,6 +1211,7 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
           )
         }
       }, ignoreInit = TRUE)
+      observeEvent(graph_version(), restore_saved_scenarios(), ignoreInit = TRUE, priority = -10)
     }
 
     selected_scenario_names <- reactive({
@@ -1199,15 +1268,15 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
       rn <- response_nodes()
       pn <- pressure_nodes()
 
-      response_active <- rn$id[vapply(rn$id, function(id) isTRUE(input[[paste0("active_", id)]]), logical(1))]
+      response_active <- rn$id[vapply(rn$id, function(id) isTRUE(input[[paste0("active_", input_key(id))]]), logical(1))]
       response_strengths <- setNames(
-        vapply(response_active, function(id) input[[paste0("strength_", id)]] %||% 50, numeric(1)),
+        vapply(response_active, function(id) input[[paste0("strength_", input_key(id))]] %||% 50, numeric(1)),
         response_active
       )
 
-      pressure_active <- pn$id[vapply(pn$id, function(id) isTRUE(input[[paste0("pressure_active_", id)]]), logical(1))]
+      pressure_active <- pn$id[vapply(pn$id, function(id) isTRUE(input[[paste0("pressure_active_", input_key(id))]]), logical(1))]
       pressure_strengths <- setNames(
-        vapply(pressure_active, function(id) input[[paste0("pressure_strength_", id)]] %||% 50, numeric(1)),
+        vapply(pressure_active, function(id) input[[paste0("pressure_strength_", input_key(id))]] %||% 50, numeric(1)),
         pressure_active
       )
 

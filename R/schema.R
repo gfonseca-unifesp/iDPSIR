@@ -14,8 +14,9 @@
 
 get_dpsir_color_palettes <- function() {
   list(
-    default = c("#1f77b4", "#d62728", "#2ca02c", "#ff7f0e", "#9467bd"),
-    colorblind = c("#0072B2", "#D55E00", "#009E73", "#E69F00", "#CC79A7"),
+    # Revisao 2, item 3.11: Okabe-Ito (colorblind safe) is the default.
+    default = c("#0072B2", "#D55E00", "#009E73", "#E69F00", "#CC79A7"),
+    classic = c("#1f77b4", "#d62728", "#2ca02c", "#ff7f0e", "#9467bd"),
     muted = c("#4E79A7", "#E15759", "#59A14F", "#F28E2B", "#B07AA1"),
     high_contrast = c("#0050A4", "#B00020", "#00843D", "#C75B12", "#6A1B9A")
   )
@@ -23,8 +24,8 @@ get_dpsir_color_palettes <- function() {
 
 get_dpsir_palette_choices <- function() {
   c(
-    "Default" = "default",
-    "Colorblind safe" = "colorblind",
+    "Okabe-Ito, colorblind safe (default)" = "default",
+    "Classic" = "classic",
     "Muted" = "muted",
     "High contrast" = "high_contrast"
   )
