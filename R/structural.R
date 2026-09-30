@@ -319,3 +319,41 @@ threshold_warnings <- function(g) {
   }
   out
 }
+
+# =====================================================
+# Revisao 3, E3.1 - structural uncertainty
+# =====================================================
+# Probability that a link is absent in a resampled draw, from the evidence
+# behind it (the literature shows structure weighs more than magnitude:
+# Crozier et al. 2025; Tam et al. 2025). Configurable: `by_evidence` gives
+# the probability for each evidence type; a strength estimated from data
+# (weight_source "r2" or "calibrated") is never absent; any type not listed
+# (blank included) gets `default`.
+structural_absence_defaults <- function() {
+  list(
+    by_evidence = c(
+      definition = 0, regression = 0, calibration = 0,
+      literature = 0.1, literature_review = 0.1, observational = 0.1, monitoring = 0.1,
+      remote_sensing = 0.1, epidemiological = 0.1,
+      expert_assessment = 0.2, policy_document = 0.2, management_plan = 0.2
+    ),
+    estimated_sources = c("r2", "calibrated"),
+    default = 0.2
+  )
+}
+
+# One probability per edge of `g` (in E(g) order).
+edge_absence_probability <- function(g, rules = structural_absence_defaults()) {
+  m <- igraph::ecount(g)
+  if (m == 0) return(numeric())
+  ev <- igraph::E(g)$evidence_type
+  if (is.null(ev)) ev <- rep("", m)
+  ev <- tolower(trimws(as.character(ev)))
+  ev[is.na(ev)] <- ""
+  src <- igraph::E(g)$weight_source
+  if (is.null(src)) src <- rep("", m)
+  p <- unname(rules$by_evidence[ev])
+  p[is.na(p)] <- rules$default
+  p[as.character(src) %in% rules$estimated_sources] <- 0
+  p
+}

@@ -242,7 +242,13 @@ local_seed <- function(seed, frame = parent.frame()) {
 # and the result is the % of simulations in which the Impact is still
 # neutralized. Draws that would make the loops amplify (rho(B) >= 1) are
 # skipped and counted in the `skipped` attribute.
-sufficiency_confidence <- function(g, p_D, p_R, n_simulations = 300, seed = 42, threshold = 1e-9) {
+# Revisao 3, E3.1: `structural = TRUE` also drops each link from a draw with
+# the probability edge_absence_probability() gives it (weaker evidence,
+# more often absent). The strength draws are made first, for every
+# simulation, so structural = FALSE reproduces the earlier numbers exactly
+# and structural = TRUE only adds the absences on top of the same draws.
+sufficiency_confidence <- function(g, p_D, p_R, n_simulations = 300, seed = 42, threshold = 1e-9,
+                                   structural = FALSE, absence = NULL) {
   stopifnot(inherits(g, "igraph"))
   stopifnot(n_simulations >= 1)
 
@@ -274,9 +280,11 @@ sufficiency_confidence <- function(g, p_D, p_R, n_simulations = 300, seed = 42, 
   B0 <- effect_matrix(g)
   worsening0 <- if (gated) propagate(gated_effect_matrix(g, p_D, B0), p_D)[impact_ids] else propagate(B0, p_D)[impact_ids]
   affected <- abs(worsening0) > threshold
+  draws <- resample_edge_weights(g, base_weight, low, high, n_simulations, seed, structural, absence)
+  attr_structural <- structural
   with_local_seed(seed, {
     for (sim in seq_len(n_simulations)) {
-      E(g_sim)$weight <- runif(length(base_weight), low, high)
+      E(g_sim)$weight <- draws[sim, ]
       B_sim <- effect_matrix(g_sim)
       if (spectral_radius(B_sim) >= 1 - 1e-9) next
       # Revisao 2, item C2: the gates are re-evaluated in every draw.
@@ -298,7 +306,26 @@ sufficiency_confidence <- function(g, p_D, p_R, n_simulations = 300, seed = 42, 
     stringsAsFactors = FALSE
   )
   attr(out, "skipped") <- skipped
+  attr(out, "structural") <- attr_structural
   out
+}
+
+# The n x m matrix of resampled strengths used by the confidence readings:
+# row = simulation. Uniform within each band, drawn exactly as before
+# (simulation by simulation, one value per edge); with `structural`, a
+# second matrix of uniforms, drawn after all the strengths, sets absent links
+# to 0.
+resample_edge_weights <- function(g, w, low, high, n, seed, structural = FALSE, absence = NULL) {
+  m <- length(w)
+  with_local_seed(seed, {
+    draws <- matrix(stats::runif(n * m, low, high), nrow = n, ncol = m, byrow = TRUE)
+    if (isTRUE(structural) && m > 0) {
+      p_abs <- if (is.null(absence)) edge_absence_probability(g) else absence
+      gone <- matrix(stats::runif(n * m), nrow = n, ncol = m, byrow = TRUE) < matrix(p_abs, n, m, byrow = TRUE)
+      draws[gone] <- 0
+    }
+    draws
+  })
 }
 
 # =====================================================

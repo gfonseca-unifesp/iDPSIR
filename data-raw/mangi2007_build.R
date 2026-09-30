@@ -86,7 +86,7 @@ nodes$descriptor <- c(
   "Recommended (section 6): credit to buy authorized gear and compensation for gear declared illegal.")
 
 mk <- function(f, t, cls, sg, s) data.frame(from = f, to = t, strength_class = cls, interaction_type = sg,
-                                          evidence_type = "literature_review", reference = sec(s), stringsAsFactors = FALSE)
+                                          evidence_type = "literature", reference = sec(s), stringsAsFactors = FALSE)
 edges <- rbind(
   # Drivers -> Pressures
   mk("D1","P1","strong","positive","3.1.1"), mk("D2","P1","weak","positive","3.2.1"),

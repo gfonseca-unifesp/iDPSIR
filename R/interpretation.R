@@ -128,6 +128,11 @@ interpret_scenario <- function(g, sc, threshold = 1e-9) {
                   df$confidence >= INTERPRETATION_FRAGILE[1] & df$confidence <= INTERPRETATION_FRAGILE[2]]
   if (length(fr) > 0) msgs <- c(msgs, sprintf("Fragile verdicts (confidence between %d%% and %d%%): %s - narrowing the uncertainty of the links involved would settle them.",
                                              INTERPRETATION_FRAGILE[1], INTERPRETATION_FRAGILE[2], paste(fr, collapse = ", ")))
+  rob <- sc$priority_robustness
+  if (!is.null(rob) && nrow(rob) >= 2 && !is.null(attr(rob, "top_stable")) && attr(rob, "top_stable") < 0.8) {
+    msgs <- c(msgs, sprintf("The top priority depends on the values v and on how the index is combined: it stays first in only %.0f%% of the variations tested.",
+                            100 * attr(rob, "top_stable")))
+  }
   closed <- sc$gates_net
   if (!is.null(closed) && nrow(closed) > 0 && any(!closed$open)) {
     msgs <- c(msgs, sprintf("State trigger%s closed with the response: %s - nothing passes beyond %s.",

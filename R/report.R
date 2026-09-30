@@ -310,7 +310,8 @@ build_full_report_html <- function(
         if (!is.null(sc$prioritization) && nrow(sc$prioritization) > 0) {
           tagList(
             tags$h5("Impact prioritization"),
-            report_html_table(format_prioritization_table(sc$prioritization)),
+            report_html_table(format_prioritization_table(sc$prioritization, sc$priority_robustness)),
+            priority_robustness_note(sc$priority_robustness, function(x) tags$p(x)),
             caption_tag(
               "Table", next_table_n(),
               sprintf("For \"%s\": relevance of each Impact (value v x importance D x reliability) and priority (relevance x the share of the worsening the response leaves uncovered). %s", scenario_name, PRIORITIZATION_METHOD_NOTE)
@@ -693,7 +694,15 @@ build_full_report_html <- function(
                                 function(sc) as.character(sc$n_simulations %||% 300), character(1)))
           if (length(sims) == 0) "300" else paste(sims, collapse = "/")
         })),
-        " times (as set when each scenario was applied), uniformly within its uncertainty range, ",
+        " times (as set when each scenario was applied), uniformly within its uncertainty range",
+        {
+          st <- vapply(saved_scenarios[intersect(selected_scenario_names, names(saved_scenarios))],
+                       function(sc) isTRUE(sc$structural_uncertainty), logical(1))
+          if (any(st)) paste0("; with structural uncertainty (", paste(names(st)[st], collapse = ", "),
+                              "), each link is also absent with probability 0.2 (expert assessment, policy or blank), 0.1 (literature, observational) or 0 (definition, regression, calibration, or a strength estimated from data)")
+          else ""
+        },
+        ", ",
         "using a fixed random seed (", tags$code("seed = 42"), ") so that",
         " regenerating this report from the same savepoint reproduces the exact same numbers."
       )

@@ -71,7 +71,8 @@ saved_scenarios_to_json <- function(saved) {
       name = sc$name,
       response = data.frame(id = as.character(sc$active), strength = unname(as.numeric(sc$strengths[sc$active])), stringsAsFactors = FALSE),
       pressure = data.frame(id = as.character(sc$pressure_active), strength = unname(as.numeric(sc$pressure_strengths[sc$pressure_active])), stringsAsFactors = FALSE),
-      n_simulations = sc$n_simulations %||% 300
+      n_simulations = sc$n_simulations %||% 300,
+      structural_uncertainty = isTRUE(sc$structural_uncertainty)
     )
     for (k in temporal_keys) if (!is.null(sc[[k]])) out[[k]] <- sc[[k]]
     if (is.data.frame(sc$temporal_schedule) && nrow(sc$temporal_schedule) > 0) out$temporal_schedule <- sc$temporal_schedule
@@ -155,6 +156,7 @@ build_savepoint <- function(schema, nodes, edges, positions = NULL, metadata = l
       temporal_continue_after = scenario_state$temporal_continue_after,
       # Audit: the number of simulations of the confidence readings.
       n_simulations = scenario_state$n_simulations,
+      structural_uncertainty = scenario_state$structural_uncertainty,
       temporal_schedule = if (is.data.frame(scenario_state$temporal_schedule) && nrow(scenario_state$temporal_schedule) > 0) scenario_state$temporal_schedule else NULL
     )
   }
@@ -389,6 +391,7 @@ read_savepoint <- function(path, convert_legacy = TRUE) {
       temporal_trends_outside = if (is.null(ss_val(ss$temporal_trends_outside))) TRUE else isTRUE(ss$temporal_trends_outside),
       temporal_continue_after = ss_val(ss$temporal_continue_after) %||% 0,
       n_simulations = ss_val(ss$n_simulations) %||% 300,
+      structural_uncertainty = isTRUE(ss$structural_uncertainty),
       temporal_schedule = if (is.null(ss$temporal_schedule) || length(ss$temporal_schedule) == 0) NULL else as.data.frame(ss$temporal_schedule, stringsAsFactors = FALSE)
     )
   }

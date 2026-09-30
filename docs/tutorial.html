@@ -901,7 +901,7 @@ P1,S1,negative,0.55,,monitoring</pre>
             </div>
             <div class="control">
               <div class="label">Apply scenario<span class="widget">button</span></div>
-              <p>Runs both scenarios and shows <strong>"Is the response enough? (sufficiency)"</strong> — for each Impact, how much the pressure scenario worsens it, how much the response scenario mitigates (or, sometimes, worsens) it, whether that's enough to neutralize the worsening, and how strong the response would need to be if not. The effect is the product of the edges' strengths along each causal path, summed over paths. Everything is in <strong>standard deviations</strong> of each factor: a strength of 100% is a push of 1 SD (a push in the factor's own units is divided by its SD), and worsening, mitigation and net are in SD of each Impact; the report lists every push in SD and, where the factor has an SD, in its own units. The column <strong>Holds for self-regulation 0.25-1</strong> repeats the verdict with every factor's self-regulation set to 0.25, 0.5, 0.75 and 1 — the reading itself is the value 1, the equilibrium of the temporal simulation when nothing fades by itself — and says "yes" when the verdict does not depend on it (State triggers kept as in the reading). <strong>Simulations (confidence)</strong> (100, 300 or 1000) sets how many resamples the confidence and prioritization tables use — fewer is faster, more gives steadier percentages.</p>
+              <p>Runs both scenarios and shows <strong>"Is the response enough? (sufficiency)"</strong> — for each Impact, how much the pressure scenario worsens it, how much the response scenario mitigates (or, sometimes, worsens) it, whether that's enough to neutralize the worsening, and how strong the response would need to be if not. The effect is the product of the edges' strengths along each causal path, summed over paths. Everything is in <strong>standard deviations</strong> of each factor: a strength of 100% is a push of 1 SD (a push in the factor's own units is divided by its SD), and worsening, mitigation and net are in SD of each Impact; the report lists every push in SD and, where the factor has an SD, in its own units. The column <strong>Holds for self-regulation 0.25-1</strong> repeats the verdict with every factor's self-regulation set to 0.25, 0.5, 0.75 and 1 — the reading itself is the value 1, the equilibrium of the temporal simulation when nothing fades by itself — and says "yes" when the verdict does not depend on it (State triggers kept as in the reading). <strong>Simulations (confidence)</strong> (100, 300 or 1000) sets how many resamples the confidence and prioritization tables use — fewer is faster, more gives steadier percentages. <strong>Include structural uncertainty</strong> also lets each link be absent in a resampled draw, more often the weaker its evidence: 0.2 for an expert assessment, a policy document or no evidence type; 0.1 for literature or observations; never for a definition, a regression, a calibration or a strength estimated from data. It can lower or raise a confidence — a missing link on the pressure's side weakens the worsening too. The <strong>Impact prioritization</strong> table has a <strong>Rank stability</strong> column: the share of 500 variations (every value v changed by up to 20%, the index computed as a product or as a weighted sum) in which each Impact keeps its rank; the note below it says how often the top priority stays the same.</p>
             </div>
             <div class="control">
               <div class="label">How confident is that, response by response?<span class="widget">table</span></div>
@@ -1531,6 +1531,30 @@ P1,S1,negative,0.55,,monitoring</pre>
           stays open; with anti-poaching too it reaches about 345 kt, right at the threshold.
           The paper's own conclusion — a modest cut is a start, the MEY cut restores the
           stock — comes out of the model.</p>
+
+        <h3>Testing the causal assumption: aid without the fleet</h3>
+        <p>The whole story rests on one assumption: the aid also enlarged the fleet (two links,
+          post-tsunami and post-war aid → fleet capacity). A second savepoint drops exactly
+          those two links and keeps everything else. Load both and compare:</p>
+        <div class="table-wrap">
+          <table class="fields">
+            <tr><th></th><th>With aid → fleet (published example)</th><th>Without it (variant)</th></tr>
+            <tr><td class="key">Reach of the two aid programmes</td><td>9 factors, 5 of 5 Impacts</td><td>1 factor, 1 of 5 Impacts (income loss only)</td></tr>
+            <tr><td class="key">Fish stock, 2012 / 2021</td><td>324 / 307 kt — below B<sub>MSY</sub> from 2012</td><td>451 / 430 kt — never below</td></tr>
+            <tr><td class="key">Effort vs observed, 2006–2021</td><td>RMSE 658 thousand kW-days (NSE 0.93)</td><td>RMSE 6,152 (NSE −4.9): effort stays near 10,000</td></tr>
+            <tr><td class="key">Impacts in 2030, with quota and anti-poaching</td><td>four still worse than with no response</td><td>all four better than with no response</td></tr>
+          </table>
+        </div>
+        <p>Without the link, the aid cannot become a pressure — and the model can no longer
+          reproduce the effort that was actually observed. The data, not only the paper's
+          narrative, support the assumption.</p>
+        <div class="code-cluster">
+          <div class="code-card">
+            <h4>The variant</h4>
+            <p class="muted">Same network and scenario, without the two aid → fleet links.</p>
+            <pre><a href="example_gnanapragasam_noaidfleet.idpsir.json" download>example_gnanapragasam_noaidfleet.idpsir.json</a></pre>
+          </div>
+        </div>
       </section>
 
       <!-- ============ PORT EXAMPLE ============ -->

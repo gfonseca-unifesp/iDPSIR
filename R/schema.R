@@ -233,8 +233,17 @@ get_interaction_types <- function() {
   c("positive", "negative")
 }
 
+# Revisao 3, E3.1: one list for the form, the examples and the structural
+# uncertainty (structural_absence_defaults()). "literature" covers a link
+# taken from published studies without its own estimate; "regression",
+# "calibration" and "definition" mark links estimated from data, fitted to
+# data or true by construction.
 get_evidence_types <- function() {
   c(
+    "literature",
+    "regression",
+    "calibration",
+    "definition",
     "observational",
     "monitoring",
     "expert_assessment",

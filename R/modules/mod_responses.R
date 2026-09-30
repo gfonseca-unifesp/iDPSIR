@@ -67,7 +67,7 @@ plot_download_row <- function(ns, prefix) {
 # function - also used to rebuild the saved scenarios of a savepoint.
 # Strengths are in % (as on the sliders).
 compute_scenario <- function(g, response_nodes_df, name, active_ids, strengths,
-                             pressure_active_ids, pressure_strengths, n_simulations = 300,
+                             pressure_active_ids, pressure_strengths, n_simulations = 300, structural = FALSE,
                              progress = function(amount, detail) invisible(NULL)) {
   press <- build_press_vector(g, active_ids, strengths / 100)
   p_D <- build_press_vector(g, pressure_active_ids, pressure_strengths / 100)
@@ -76,7 +76,7 @@ compute_scenario <- function(g, response_nodes_df, name, active_ids, strengths,
   progress(0.2, "Sufficiency")
   suff_df <- sufficiency(g, p_D, press)
   progress(0.3, "Confidence (resampling edge strengths)")
-  conf <- build_confidence_matrix(g, p_D, response_nodes_df, n_simulations = n_simulations, planned = press)
+  conf <- build_confidence_matrix(g, p_D, response_nodes_df, n_simulations = n_simulations, planned = press, structural = structural)
   # Revisao 2, items C4/C5: State triggers and the reach they leave.
   gates_pressure <- state_gates(g, p_D)
   gates_net <- state_gates(g, p_D + press)
@@ -85,12 +85,15 @@ compute_scenario <- function(g, response_nodes_df, name, active_ids, strengths,
   sr_sensitivity <- tryCatch(self_regulation_sensitivity(g, p_D, press), error = function(e) NULL)
   # Revisao 2, item B7: relevance and priority of each Impact.
   progress(0.1, "Impact prioritization")
-  prioritization <- impact_prioritization(g, p_D, suff_df, n_simulations = n_simulations)
+  prioritization <- impact_prioritization(g, p_D, suff_df, n_simulations = n_simulations, structural = structural)
+  # Revisao 3, E4.2: how stable the priority order is.
+  priority_rob <- tryCatch(priority_robustness(prioritization), error = function(e) NULL)
   progress(0.3, "Done")
   list(
     name = name, active = active_ids, strengths = strengths, press = press, reach = reach,
     pressure_active = pressure_active_ids, pressure_strengths = pressure_strengths, p_D = p_D,
     sufficiency_df = suff_df, sufficiency_confidence_matrix = conf, n_simulations = n_simulations,
+    structural_uncertainty = isTRUE(structural), priority_robustness = priority_rob,
     prioritization = prioritization, gates_pressure = gates_pressure, gates_net = gates_net,
     reach_effective = reach_effective, sr_sensitivity = sr_sensitivity
   )
@@ -102,7 +105,7 @@ input_key <- function(id) {
   vapply(as.character(id), function(x) paste0("k", paste(sprintf("%02x", as.integer(charToRaw(enc2utf8(x)))), collapse = "")), character(1), USE.NAMES = FALSE)
 }
 
-build_confidence_matrix <- function(g, p_D, response_nodes_df, n_simulations = 300, seed = 42, planned = NULL) {
+build_confidence_matrix <- function(g, p_D, response_nodes_df, n_simulations = 300, seed = 42, planned = NULL, structural = FALSE) {
   if (nrow(response_nodes_df) == 0) {
     return(data.frame(Response = character(), stringsAsFactors = FALSE))
   }
@@ -110,7 +113,7 @@ build_confidence_matrix <- function(g, p_D, response_nodes_df, n_simulations = 3
   per_response <- lapply(seq_len(nrow(response_nodes_df)), function(i) {
     rid <- response_nodes_df$id[i]
     p_r <- build_press_vector(g, rid, setNames(1, rid))
-    sufficiency_confidence(g, p_D, p_r, n_simulations = n_simulations, seed = seed)
+    sufficiency_confidence(g, p_D, p_r, n_simulations = n_simulations, seed = seed, structural = structural)
   })
 
   if (nrow(per_response[[1]]) == 0) {
@@ -127,7 +130,7 @@ build_confidence_matrix <- function(g, p_D, response_nodes_df, n_simulations = 3
   # this row resamples the scenario actually set (the sliders), i.e. the
   # confidence of the verdict shown in the sufficiency table.
   if (!is.null(planned) && any(planned != 0)) {
-    pl <- sufficiency_confidence(g, p_D, planned, n_simulations = n_simulations, seed = seed)
+    pl <- sufficiency_confidence(g, p_D, planned, n_simulations = n_simulations, seed = seed, structural = structural)
     row <- as.data.frame(t(pl$neutralized_pct), stringsAsFactors = FALSE)
     names(row) <- impact_labels
     out <- rbind(cbind(Response = "Planned scenario (as set)", row, stringsAsFactors = FALSE), out)
@@ -135,6 +138,7 @@ build_confidence_matrix <- function(g, p_D, response_nodes_df, n_simulations = 3
   }
   attr(out, "skipped") <- max(vapply(per_response, function(x) as.numeric(attr(x, "skipped") %||% 0), numeric(1)))
   attr(out, "n_simulations") <- n_simulations
+  attr(out, "structural") <- isTRUE(structural)
   out
 }
 
@@ -168,7 +172,11 @@ mod_responses_ui <- function(id) {
         column(width = 4, textInput(ns("scenario_name"), "Scenario name", value = "Scenario 1")),
         # Revisao 2, item 3.4: fewer simulations = faster (e.g. in the
         # browser-only demo), more = steadier percentages.
-        column(width = 4, selectInput(ns("n_simulations"), "Simulations (confidence)", choices = c(100, 300, 1000), selected = 300)),
+        column(width = 4,
+          selectInput(ns("n_simulations"), "Simulations (confidence)", choices = c(100, 300, 1000), selected = 300),
+          # Revisao 3, E3.1.
+          checkboxInput(ns("structural_uncertainty"), "Include structural uncertainty (links with weaker evidence may be absent)", value = FALSE)
+        ),
         column(width = 4, br(), actionButton(ns("apply_scenario"), "Apply scenario", icon = icon("play"), class = "btn-success", width = "100%"))
       )
     ),
@@ -413,6 +421,7 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
             graph(), rn, input$scenario_name, active_ids, strengths,
             pressure_active_ids, pressure_strengths,
             n_simulations = as.integer(input$n_simulations %||% 300),
+            structural = isTRUE(input$structural_uncertainty),
             progress = function(amount, detail) incProgress(amount, detail = detail)
           )
         })
@@ -495,7 +504,7 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
     output$prioritization_table <- renderDT({
       sc <- shown_scenario()
       req(sc, sc$prioritization)
-      datatable(format_prioritization_table(sc$prioritization), rownames = FALSE, options = list(dom = "t", pageLength = 20))
+      datatable(format_prioritization_table(sc$prioritization, sc$priority_robustness), rownames = FALSE, options = list(dom = "t", pageLength = 20))
     })
 
     output$prioritization_plot <- renderPlot({
@@ -507,9 +516,12 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
     output$prioritization_note <- renderUI({
       sc <- shown_scenario()
       req(sc, sc$prioritization)
-      if (isTRUE(attr(sc$prioritization, "all_zero"))) {
-        div(class = "alert alert-warning", "The pressure scenario does not move any Impact, so importance D is 0 everywhere.")
-      }
+      tagList(
+        if (isTRUE(attr(sc$prioritization, "all_zero"))) {
+          div(class = "alert alert-warning", "The pressure scenario does not move any Impact, so importance D is 0 everywhere.")
+        },
+        priority_robustness_note(sc$priority_robustness, helpText)
+      )
     })
 
     output$download_prioritization_csv <- downloadHandler(
@@ -517,7 +529,7 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
       content = function(file) {
         sc <- shown_scenario()
         req(sc, sc$prioritization)
-        utils::write.csv(format_prioritization_table(sc$prioritization), file, row.names = FALSE)
+        utils::write.csv(format_prioritization_table(sc$prioritization, sc$priority_robustness), file, row.names = FALSE)
       }
     )
 
@@ -1461,11 +1473,12 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
           incProgress(1 / length(defs), detail = d$name)
           sc <- tryCatch(
             compute_scenario(graph(), rn, d$name, d$active, d$strengths, d$pressure_active, d$pressure_strengths,
-                             n_simulations = as.integer(d$n_simulations %||% 300)),
+                             n_simulations = as.integer(d$n_simulations %||% 300),
+                             structural = isTRUE(d$structural_uncertainty)),
             error = function(e) NULL
           )
           if (is.null(sc)) next
-          temporal <- d[setdiff(names(d), c("name", "active", "strengths", "pressure_active", "pressure_strengths", "n_simulations"))]
+          temporal <- d[setdiff(names(d), c("name", "active", "strengths", "pressure_active", "pressure_strengths", "n_simulations", "structural_uncertainty"))]
           rebuilt[[d$name]] <- utils::modifyList(sc, temporal)
         }
       })
@@ -1583,7 +1596,8 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
         # Revisao 2, item A5.
         temporal_settings(isolate(restored())),
         # Audit: saved with the scenario, like the temporal settings.
-        list(n_simulations = as.integer(input$n_simulations %||% isolate(restored())$n_simulations %||% 300))
+        list(n_simulations = as.integer(input$n_simulations %||% isolate(restored())$n_simulations %||% 300),
+             structural_uncertainty = isTRUE(input$structural_uncertainty %||% isolate(restored())$structural_uncertainty))
       )
     }
 
@@ -1594,6 +1608,7 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
       if (!is.null(n) && as.character(n) %in% c("100", "300", "1000")) {
         updateSelectInput(session, "n_simulations", selected = as.character(n))
       }
+      if (!is.null(rs$structural_uncertainty)) updateCheckboxInput(session, "structural_uncertainty", value = isTRUE(rs$structural_uncertainty))
     })
 
     # Revisao 2, item 0.4: the last state read from live controls survives

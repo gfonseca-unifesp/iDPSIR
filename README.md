@@ -299,6 +299,13 @@ explanation of each; the short version:
 Load any of them from the wizard's Start step (Load savepoint), or via CSV import for
 the three that have plain tables.
 
+**Causal-assumption variant.** `docs/example_gnanapragasam_noaidfleet.idpsir.json` is the Sri Lanka example without
+the two "aid → fleet capacity" links (built by
+[`data-raw/gnanapragasam2026_variant_build.R`](data-raw/gnanapragasam2026_variant_build.R)):
+the aid then reaches only fisher income loss, the stock never falls below B_MSY, and
+the simulated effort misses the observed one (RMSE 6,152 against 658) - the data support
+the assumption that the aid enlarged the fleet.
+
 **First run (defaults only).** `docs/example_mangi_default.idpsir.json` and
 `docs/example_gnanapragasam_default.idpsir.json` hold the same networks with every setting
 at the app's default (every link moderate, self-regulation 0.5, no growth or thresholds),
@@ -470,7 +477,12 @@ has four tabs:
   equilibrium of the relevance specification) × reliability (share of simulations in
   which that effect keeps its sign), and priority = relevance × gap (the share of the
   worsening the response leaves uncovered), with a bar chart, a CSV download and a
-  report section. The sufficiency reading above is deliberately static and ignores
+  report section, and a **Rank stability** column (share of 500 variations - values v
+  changed by up to 20%, product or weighted-sum index - in which each Impact keeps its
+  rank). **Include structural uncertainty** also drops links from the resampled draws,
+  more often the weaker their evidence (0.2 expert/policy/blank, 0.1 literature or
+  observations, 0 for definitions, regressions, calibrations and strengths estimated
+  from data). The sufficiency reading above is deliberately static and ignores
   a node's `self_regulation` on purpose — that attribute (and `growth_rate`) only
   feeds the optional temporal simulation below, never the primary verdict. **Reach**
   always shows how many factors — and how many Impacts — a response's influence can

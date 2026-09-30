@@ -135,6 +135,20 @@ registradas no roadmap).
   origem móvel o modelo vence a persistência a partir de 2014, empata em 2013 e perde em 2012
   (com só três anos pós-guerra, esse auxílio sai superestimado, 0,21 contra 0,12). No texto:
   "consistente fora da amostra e melhor que referências ingênuas", não "validado".
+- **E5.1–E5.2:** pré-registro (`analysis/sim_networks/PREREGISTRO.md`, commitado antes de
+  qualquer execução; inclui a condição C2t para separar crescimento da troca estática →
+  temporal) e gerador (`generate.R`, testado em `tests/testthat/test-sim-generator.R`).
+- **E3:** lista única de tipos de evidência (+ literature, regression, calibration,
+  definition); incerteza estrutural por aresta (`edge_absence_probability()`: 0,2
+  expert/política/branco, 0,1 literatura/observação, 0 definição/regressão/calibração ou força
+  estimada). Os sorteios de β são feitos antes das ausências (matriz), então
+  `structural = FALSE` reproduz os números antigos. Pode subir a confiança (uma ligação da
+  pressão também some). Variante do Sri Lanka sem auxílio → frota
+  (`example_gnanapragasam_noaidfleet`): alcance do auxílio 1/5, estoque nunca abaixo de
+  B_MSY, esforço RMSE 6.152 (NSE −4,9) contra 658 — os dados sustentam a hipótese.
+- **E4:** forma aditiva opcional; justificativa do produto (perda esperada evitável);
+  `priority_robustness()` (v ± 20%, produto × soma) → coluna "Rank stability", nota e
+  mensagem na Interpretation quando o topo é instável (< 80%).
 
 Revisão 2 executada até a Fase 4 (branches `revisao2-fase0` … `revisao2-fase4`; ver o
 roadmap). Coautora: Marcela Bergo Davanso (`CITATION.cff`, `LICENSE`, `DESCRIPTION`; UNIFESP). Pendências conhecidas: PDF da especificação de relevância a atualizar (seções 4 e
