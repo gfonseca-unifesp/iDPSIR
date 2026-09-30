@@ -25,6 +25,7 @@ test_that("the report escapes HTML in user text and builds every optional sectio
   expect_true(grepl("&lt;script&gt;", html, fixed = TRUE))
   expect_true(grepl("Table 1.", html, fixed = TRUE))
   expect_true(grepl("Driver-to-Impact pathways", html, fixed = TRUE))
+  expect_true(grepl("Strength and confidence of the network", html, fixed = TRUE))
 })
 
 test_that("import_matrices reads CSV files and keeps the structure", {

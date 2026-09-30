@@ -18,6 +18,14 @@ mod_metrics_ui <- function(id) {
         DTOutput(ns("general_table"))
       ),
       tabPanel(
+        "Strength & confidence",
+        helpText("How strong the network is and how well founded its strengths are, as a whole.",
+                 "Static reading, without State triggers; the sign and interval rows resample the link bands (200 draws, fixed seed)."),
+        DTOutput(ns("strength_confidence_table")),
+        h4("By transition (where the network is least founded first)"),
+        DTOutput(ns("strength_by_transition_table"))
+      ),
+      tabPanel(
         "Centralities",
         fluidRow(
           column(width = 4, ina_toggle_directed(ns("directed"))),
@@ -58,6 +66,19 @@ mod_metrics_server <- function(id, schema, graph) {
         rownames = FALSE,
         options = list(dom = "t")
       )
+    })
+
+    strength_confidence <- reactive({
+      req(graph())
+      network_strength_confidence(graph())
+    })
+
+    output$strength_confidence_table <- renderDT({
+      datatable(strength_confidence()$summary, rownames = FALSE, options = list(dom = "t", pageLength = 50))
+    })
+
+    output$strength_by_transition_table <- renderDT({
+      datatable(strength_confidence()$by_transition, rownames = FALSE, options = list(dom = "t", pageLength = 50))
     })
 
     output$centrality_table <- renderDT({

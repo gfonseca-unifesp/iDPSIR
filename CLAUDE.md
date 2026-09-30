@@ -53,7 +53,8 @@ testthat::test_dir("tests/testthat")          # ou: Rscript tests/testthat.R
 - `R/loop_analysis.R` — só `build_interaction_matrix()`, `self_regulation_diagonal()`,
   `build_press_vector()` (o motor de equilíbrio antigo está em `legacy/`).
 - `R/pathways.R` — caminhos pela ordem do schema; efeito = produto dos β com sinal.
-- `R/reach.R`, `R/metrics.R`, `R/responses.R` (`get_feedback_categories()`),
+- `R/reach.R`, `R/metrics.R` (inclui `network_strength_confidence()`: força e confiança
+  globais, aba Metrics e relatório), `R/responses.R` (`get_feedback_categories()`),
   `R/graph.R` (grafo, layouts, visual), `R/scenario_plots.R` (gráfico temporal e de
   prioridade), `R/report.R` (relatório HTML), `R/io.R` (CSV, savepoint com cenário e
   cenários salvos).

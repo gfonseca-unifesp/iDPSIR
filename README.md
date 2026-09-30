@@ -80,7 +80,7 @@ iDPSIR/
 │   ├── schema.R              # configurable DPSIR schema (levels, order, palettes, vocabularies)
 │   ├── validate.R             # node/edge validation against the schema
 │   ├── graph.R                # igraph builder, layered layout, network/community visuals
-│   ├── metrics.R              # centralities, general metrics, DPSIR descriptors
+│   ├── metrics.R              # centralities, general metrics, strength & confidence, DPSIR descriptors
 │   ├── pathways.R             # causal pathways that follow the DPSIR order; effect = product of signed strengths (with band)
 │   ├── loop_analysis.R        # interaction matrix (signed strengths, self-regulation on the diagonal) and the push vector, used by the temporal engine
 │   ├── structural.R           # edge strengths as standardized path coefficients (beta): Weak/Moderate/Strong classes, uncertainty bands, r-squared shortcuts, the rho(B) < 1 check, conversion of older files
@@ -97,7 +97,7 @@ iDPSIR/
 │   │   ├── mod_graph.R         # Graph tab: filters, display options, pathway highlighting, category/community coloring, save snapshots for the report
 │   │   ├── mod_responses.R     # Scenarios tab: build a pressure scenario and a response scenario, apply the sufficiency reading (with an optional temporal-simulation disclosure), reach, save/compare scenarios
 │   │   ├── mod_report.R        # Report tab: pick metrics sections + saved graph snapshots + saved scenarios (+ optional temporal simulation), download the HTML report (numbered figure/table captions, parametrization described)
-│   │   ├── mod_metrics.R       # Metrics tab: general / centralities / DPSIR descriptors
+│   │   ├── mod_metrics.R       # Metrics tab: general / strength & confidence / centralities / DPSIR descriptors
 │   │   └── mod_wizard.R        # wizard shell tying every step/tab together
 │   ├── ui_main.R               # top-level UI (ina_ui)
 │   └── server_main.R           # top-level server (ina_server)
@@ -536,8 +536,12 @@ has four tabs:
   chart and every scenario side by side. The same scenario is shown in the Scenarios
   results, the temporal simulation and this tab (one selector in each, kept in sync);
   the report opens its scenario part with the same reading.
-- **Metrics** — general network metrics, centralities, and DPSIR descriptors (gaps
-  such as Impacts without a Response, or Pressures not covered by one).
+- **Metrics** — general network metrics; **strength and confidence** of the network as
+  a whole (link classes, explained variance, loop amplification, Driver-to-Impact total
+  effects; where the strengths came from, band widths, evidence and references, expected
+  absent links, sign and interval of the total effects under the link bands - also by
+  transition, least founded first); centralities; and DPSIR descriptors (gaps such as
+  Impacts without a Response, or Pressures not covered by one).
 - **Report** — pick which sections (saved graph snapshots, metrics, centralities,
   descriptors, edge references, saved scenarios, reproducibility info — R/package
   versions and the parameters used in the stochastic analyses) go into one

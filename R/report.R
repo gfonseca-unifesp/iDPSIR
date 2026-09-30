@@ -597,7 +597,15 @@ build_full_report_html <- function(
       caption_tag(
         "Table", next_table_n(),
         "Network-level metrics (density, diameter, transitivity, modularity, number of connected components) computed over the full built graph."
-      )
+      ),
+      tags$h3("Strength and confidence of the network"),
+      report_html_table((nsc <- network_strength_confidence(graph))$summary),
+      caption_tag(
+        "Table", next_table_n(),
+        "How strong the network is (link classes, explained variance, loop amplification, Driver-to-Impact total effects) and how well founded its strengths are (origin of the strengths, band widths, evidence and references, expected absent links, sign and interval of the total effects under the link bands, 200 draws). Static reading, without State triggers."
+      ),
+      report_html_table(nsc$by_transition),
+      caption_tag("Table", next_table_n(), "The same by transition between categories; least founded first.")
     ))
   }
 
