@@ -62,8 +62,11 @@ B_mid <- B_eq(mean(effort_obs$total_effort_kwdays_1000[effort_obs$year >= 2004])
 sr_stock <- 1 - exp(-r_int * B_mid / K)   # discrete-year recovery at the 2004-2021 mean level
 B_lim <- 0.5 * B_MSY
 
-# Calibrated aid strengths (see calibrate_aid() below; values fixed here so
-# the build is deterministic).
+# Calibrated aid strengths, fitted by least squares to the observed effort
+# 2006-2021 (analysis/validation_srilanka/calibrate.R, calibrate_aid(); that
+# fit gives 0.342 and 0.089, R2 = 0.93); values fixed here, rounded, so the
+# build is deterministic. The out-of-sample test (fit 2006-2014, predict
+# 2015-2021) is analysis/validation_srilanka/validate.R.
 BETA_R1_D3 <- 0.345
 BETA_R2_D3 <- 0.085
 

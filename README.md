@@ -329,14 +329,25 @@ draws the figures.
   first and is never crossed at realistic levels, so the stock would never reach its
   Impacts.
 - **The two aid strengths** were fitted to the observed effort, 2006–2021
-  (R² = 0.93).
+  (R² = 0.93 within the fitted years; fit rewritten in
+  [`analysis/validation_srilanka/calibrate.R`](analysis/validation_srilanka/calibrate.R)).
 - **Self-regulation**: in the temporal simulation a link passes its strength every
   window, and a factor with self-regulation *s* settles at strength ÷ *s*. States whose
   strengths come from an equilibrium (the Schaefer stock, the motorized share) keep
   *s* = 1 so the static and temporal readings agree; the fleet, whose boats persist,
   keeps 0.02.
 
-The replay reproduces the paper's benchmarks: the stock falls below B_MSY in 2012 (the
+**Two different checks.** *Consistency with the paper's bioeconomic model* - the app's
+replay against that model's outputs - and *validation against data* - the observed effort
+out of sample. For the second, the aid strengths were fitted on 2006-2014 and effort was
+predicted for 2015-2021 ([`analysis/validation_srilanka/validate.R`](analysis/validation_srilanka/validate.R)):
+RMSE 559 thousand kW-days (bias +351), lower than holding the 2014 value (632) or the
+2006-2014 linear trend (5,737); the 90% band from the strengths' uncertainty covers every
+year. 2015-2021 is a plateau, though, so the test says little about the aid's effect;
+with a rolling origin the model beats holding the last value from 2014 on, ties in 2013
+and loses in 2012 (fitted with only three post-war years, that aid is over-estimated).
+
+Consistency with the bioeconomic model: the stock falls below B_MSY in 2012 (the
 paper: catch passes H_MSY in 2012) and is at 307 kt in 2021 (≈ 321 kt); with the 25%
 quota from 2022, effort reaches 12,470 thousand kW-days in 2030 (E_MEY = 12,287) and
 the stock 406 kt (413 kt in Table 4).

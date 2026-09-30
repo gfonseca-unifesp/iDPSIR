@@ -121,6 +121,21 @@ visual). Colunas antigas (`uncertainty`, `controllability`, `temporal_scale`,
 
 ## Estado
 
+**Revisão 3 em andamento** (`ROADMAP_REVISAO3_iDPSIR.md`, branch `revisao3`; decisões E-a/E-b
+registradas no roadmap).
+- **E1:** premissas declaradas: unidades em DP; leitura estática = equilíbrio temporal com s = 1
+  (`static_equivalent_windows()`, `temporal_equilibrium()`, `test-equivalence.R`); redação
+  convergência × estabilidade; `self_regulation_sensitivity()` com coluna na tabela de
+  suficiência.
+- **E2:** validação do Sri Lanka em `analysis/validation_srilanka/`. Calibração 2006–2021
+  reproduz o build (0,342/0,089; R² 0,93). Fora da amostra (ajuste 2006–2014, previsão
+  2015–2021): RMSE 559 mil kW-dia, viés +351, NSE −0,48. Melhor que persistência de 2014
+  (632) e tendência linear (5.737); banda de 90% cobre todos os anos (larga, ±1.300). **Leitura
+  honesta:** 2015–2021 é um platô, então o teste diz pouco sobre o efeito do auxílio; em
+  origem móvel o modelo vence a persistência a partir de 2014, empata em 2013 e perde em 2012
+  (com só três anos pós-guerra, esse auxílio sai superestimado, 0,21 contra 0,12). No texto:
+  "consistente fora da amostra e melhor que referências ingênuas", não "validado".
+
 Revisão 2 executada até a Fase 4 (branches `revisao2-fase0` … `revisao2-fase4`; ver o
 roadmap). Coautora: Marcela Bergo Davanso (`CITATION.cff`, `LICENSE`, `DESCRIPTION`; UNIFESP). Pendências conhecidas: PDF da especificação de relevância a atualizar (seções 4 e
 7.4, V5 com eficácia = cobertura); mesclar as branches da Revisão 2 em `main`.

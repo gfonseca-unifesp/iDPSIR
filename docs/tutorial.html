@@ -1445,7 +1445,7 @@ P1,S1,negative,0.55,,monitoring</pre>
           <a href="#conventions">golden rule</a>, since the orientation holds for every one of
           its links.</p>
 
-        <h3>Does the model reproduce what happened?</h3>
+        <h3>Does the model reproduce what happened? Two different checks</h3>
         <p>Before asking about policy, check the replay. Open <strong>Scenarios</strong>,
           click <strong>Apply scenario</strong>, then open <strong>Temporal simulation</strong>
           and tick <strong>Show temporal simulation</strong>. The responses run
@@ -1458,14 +1458,23 @@ P1,S1,negative,0.55,,monitoring</pre>
         </figure>
         <div class="table-wrap">
           <table class="fields">
-            <tr><th></th><th>Simulated</th><th>Paper</th></tr>
-            <tr><td class="key">Effort, 2005–2021</td><td>follows the series (R² = 0.93)</td><td>Fig. 4</td></tr>
+            <tr><th>Consistency with the paper's bioeconomic model</th><th>Simulated</th><th>Paper</th></tr>
             <tr><td class="key">Stock falls below B<sub>MSY</sub></td><td>2012 (window 8)</td><td>catch passes H<sub>MSY</sub> in 2012, falls from 2014</td></tr>
             <tr><td class="key">Stock in 2021</td><td>307 kt</td><td>≈ 321 kt (Schaefer equilibrium, Table 4)</td></tr>
             <tr><td class="key">Effort in 2030 with the 25% quota</td><td>12,470</td><td>E<sub>MEY</sub> = 12,287</td></tr>
             <tr><td class="key">Stock in 2030 with the 25% quota</td><td>406 kt</td><td>413 kt (Table 4)</td></tr>
           </table>
         </div>
+        <p>The rows above compare the app with the <em>outputs of the paper's own model</em>: they
+          show the two models agree, not that either matches reality. The check against data is
+          the fishing effort itself. The two aid strengths are fitted to the observed effort
+          (2006–2021, R² = 0.93 within the fitted years). To test it out of sample, they were
+          fitted on 2006–2014 only and effort was predicted for 2015–2021: the error (RMSE 559
+          thousand kW-days, a slight over-estimate) is lower than holding the 2014 value
+          (632) or extending the 2006–2014 trend (5,737), but 2015–2021 is a plateau, so the
+          test says little about the aid's effect itself; fitted with only 2006–2012, the
+          post-war aid is over-estimated and the prediction is worse than holding the last
+          value. Script and figures: <code>analysis/validation_srilanka/</code>.</p>
         <p>Without any response (dashed lines) effort only creeps up with the growth trends
           (to about 11,200 by 2030) and the stock never drops below B<sub>MSY</sub>: in this
           model, the overfishing is the aid's doing.</p>
