@@ -462,7 +462,9 @@ has four tabs:
   touch through some causal path, independent of the reading above. An optional
   **temporal simulation** disclosure (`R/temporal.R`) runs the same two scenarios
   forward window by window instead of reading a single instant — useful when a
-  response might, windows later, become a new pressure itself. Pressure and response
+  response might, windows later, become a new pressure itself. **Scenario to
+  simulate** picks the scenario applied above or any saved one (with its own temporal
+  settings), to revisit its tables and charts without re-applying it. Pressure and response
   each run as **"Added every window"** (default: the push is applied again every
   window), **"Applied once and held"** (window 1 only; the level it creates fades
   only through self-regulation) or **"For a number of windows"** (a start window and a

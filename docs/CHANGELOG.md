@@ -4251,3 +4251,16 @@ No Mangi, vereditos e prioridade coincidem com a versão parametrizada (a estrut
 no Sri Lanka, a rede crua dá a resposta otimista e o artigo a inverte. Nova seção 7 do
 tutorial. A rede antiga do Mangi ficou como fixture (`tests/testthat/fixtures/mangi2007_v1_*`)
 dos testes de suficiência da Revisão 1; `test-example-mangi.R` novo.
+
+## Simulação temporal: escolher o cenário (30/09/2026)
+
+Pedido do usuário: revisitar tabelas e gráficos temporais dos cenários salvos. A caixa
+"Temporal simulation" ganhou o seletor "Scenario to simulate" (cenário aplicado ou qualquer
+cenário salvo, inclusive os restaurados de um savepoint, sem precisar aplicar). Um cenário
+salvo roda com a pressão/resposta dele e, na primeira execução após a escolha, com as
+configurações temporais dele (os controles são atualizados; a atualização só chega ao
+servidor depois, por isso essa execução usa as configurações salvas diretamente). Ao voltar
+para o cenário atual, restaura o que estava na tela; aplicar um cenário novo volta o seletor
+para ele. "Save this scenario" continua gravando as configurações da última execução do
+cenário aplicado, nunca as de um salvo revisitado. A caixa agora aparece também só com
+cenários salvos (flag em `reactiveVal`, que só invalida quando o valor muda).

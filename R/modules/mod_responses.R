@@ -536,7 +536,7 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
     # Revisao 2, Fase D: "For a number of windows" - start and duration per
     # pushed factor (live inputs when present, else the saved schedule).
     schedule_ids <- function() {
-      sc <- current_scenario()
+      sc <- temporal_scenario()
       if (is.null(sc)) return(character())
       ids <- c(names(sc$p_D)[sc$p_D != 0], names(sc$press)[sc$press != 0])
       unique(ids[!is.na(ids)])
@@ -570,8 +570,18 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
     output$mode_help_pressure <- renderUI(helpText(mode_help[[input$temporal_mode_pressure %||% "permanent"]]))
     output$mode_help_response <- renderUI(helpText(mode_help[[input$temporal_mode_response %||% "permanent"]]))
 
+    # The temporal box is available once a scenario is applied OR saved
+    # scenarios exist (e.g. restored from a savepoint). A reactiveVal only
+    # invalidates when its value changes, so saving another scenario does
+    # not redraw the section (and untick "Show temporal simulation").
+    temporal_available <- reactiveVal(FALSE)
+    observe({
+      v <- !is.null(current_scenario()) || length(saved_scenarios$list) > 0
+      if (!identical(v, isolate(temporal_available()))) temporal_available(v)
+    })
+
     output$temporal_and_save_section <- renderUI({
-      req(current_scenario())
+      req(temporal_available())
       # isolate(): reading the temporal inputs here must not make this whole
       # section re-render (and untick "Show temporal simulation") every time
       # one of them changes - they are only used as starting values.
@@ -590,6 +600,7 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
             "useful when a response might, windows later, become a new pressure itself (e.g. aid that grows the fleet,",
             "which later increases fishing effort)."
           ),
+          uiOutput(ns("temporal_source_ui")),
           # Revisao 2, items A1-A4.
           fluidRow(
             column(6,
@@ -709,7 +720,7 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
     # Shiny-free function; the progress bar is wired in only through the
     # optional `on_step` callback it exposes for exactly this purpose.
     output$schedule_controls <- renderUI({
-      sc <- current_scenario()
+      sc <- temporal_scenario()
       req(sc)
       # Only the groups set to "For a number of windows".
       ids <- c(
@@ -717,7 +728,9 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
         if (identical(input$temporal_mode_response, "window")) names(sc$press)[sc$press != 0]
       )
       req(length(ids) > 0)
-      sched <- isolate(temporal_schedule(seed_state()))
+      # A saved scenario brings its own periods.
+      sched <- if (!is.null(temporal_source_name()) && is.data.frame(sc$temporal_schedule)) sc$temporal_schedule
+               else isolate(temporal_schedule(seed_state()))
       labs <- nodes()$label[match(ids, nodes()$id)]
       tagList(
         tags$h6("Period of each push (for a number of windows)"),
@@ -769,11 +782,81 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
     last_run_settings <- reactiveVal(NULL)
     observeEvent(current_scenario(), last_run_settings(NULL))
 
+    # Which scenario the temporal simulation runs: the one applied above
+    # ("current") or any saved scenario - to revisit its tables and charts
+    # without re-applying it. A saved scenario runs with the pressure and
+    # response it was saved with and, when first selected, with its own
+    # temporal settings (the controls are updated to them).
+    temporal_source_name <- reactive({
+      s <- input$temporal_source
+      if (is.null(s) || identical(s, "__current__") || !s %in% names(saved_scenarios$list)) NULL else s
+    })
+    temporal_scenario <- reactive({
+      n <- temporal_source_name()
+      if (is.null(n)) current_scenario() else saved_scenarios$list[[n]]
+    })
+    output$temporal_source_ui <- renderUI({
+      saved <- names(saved_scenarios$list)
+      choices <- c(if (!is.null(current_scenario())) c("Current scenario (applied above)" = "__current__"),
+                   setNames(saved, saved))
+      req(length(choices) > 0)
+      sel <- isolate(input$temporal_source)
+      if (is.null(sel) || !sel %in% choices) sel <- choices[[1]]
+      tagList(
+        selectInput(ns("temporal_source"), "Scenario to simulate", choices = choices, selected = sel, width = "100%"),
+        uiOutput(ns("temporal_source_note"))
+      )
+    })
+    output$temporal_source_note <- renderUI({
+      sc <- temporal_scenario()
+      req(sc)
+      lab <- function(ids) { l <- nodes()$label[match(ids, nodes()$id)]; ifelse(is.na(l), ids, l) }
+      txt <- function(ids, st) if (length(ids) == 0) "none" else paste(sprintf("%s at %d%%", lab(ids), round(st[ids])), collapse = ", ")
+      helpText(sprintf("Pressure: %s. Response: %s.", txt(sc$pressure_active, sc$pressure_strengths), txt(sc$active, sc$strengths)))
+    })
+    # Applying a new scenario brings the simulation back to it.
+    observeEvent(current_scenario(), {
+      if (!is.null(isolate(input$temporal_source))) updateSelectInput(session, "temporal_source", selected = "__current__")
+    }, ignoreInit = TRUE)
+
+    # The settings a source runs with the first time it is selected: a saved
+    # scenario's own; for "current", what was on screen before leaving it.
+    current_stash <- reactiveVal(NULL)
+    last_run_source <- reactiveVal("__current__")
+    settings_of_saved <- function(sc) {
+      out <- lapply(names(temporal_defaults), function(k) if (present(sc[[k]])) sc[[k]] else temporal_defaults[[k]])
+      out <- setNames(out, names(temporal_defaults))
+      out$temporal_schedule <- sc$temporal_schedule
+      out
+    }
+    apply_settings_to_controls <- function(ts) {
+      updateSelectInput(session, "temporal_mode_pressure", selected = ts$temporal_mode_pressure)
+      updateSelectInput(session, "temporal_mode_response", selected = ts$temporal_mode_response)
+      updateSelectInput(session, "temporal_stop_rule", selected = ts$temporal_stop_rule)
+      updateNumericInput(session, "temporal_max_windows", value = ts$temporal_max_windows)
+      updateNumericInput(session, "temporal_windows", value = ts$temporal_windows)
+      updateNumericInput(session, "temporal_continue_after", value = ts$temporal_continue_after %||% 0)
+      updateNumericInput(session, "temporal_tol_rel", value = ts$temporal_tol_rel)
+      updateCheckboxInput(session, "baseline_without_response", value = isTRUE(ts$baseline_without_response))
+      updateCheckboxInput(session, "temporal_trends_outside", value = !isFALSE(ts$temporal_trends_outside))
+      if (!is.null(input$temporal_gate_mode)) updateSelectInput(session, "temporal_gate_mode", selected = ts$temporal_gate_mode)
+    }
+
     temporal_result <- reactive({
-      sc <- current_scenario()
+      sc <- temporal_scenario()
       req(sc, isTRUE(input$show_temporal))
 
-      ts <- temporal_settings()
+      src <- input$temporal_source %||% "__current__"
+      if (!identical(src, last_run_source())) {
+        # First run after switching scenario: its own settings, not the
+        # controls (their update reaches the server only after this run).
+        if (identical(last_run_source(), "__current__")) current_stash(temporal_settings())
+        ts <- if (identical(src, "__current__")) current_stash() %||% temporal_settings() else settings_of_saved(sc)
+        apply_settings_to_controls(ts)
+        last_run_source(src)
+      } else {
+        ts <- temporal_settings()
+      }
 
       # Revisao 2, item 0.5: report the failure instead of leaving the
       # table/chart blank with Shiny's terse grey error text.
@@ -805,23 +888,27 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
       # comparison run and "Save this scenario" use them, not whatever is on
       # screen now (possibly edited but never run).
       tr$settings <- ts
-      last_run_settings(ts)
+      tr$p_D <- sc$p_D
+      tr$press <- sc$press
+      tr$scenario_name <- if (identical(src, "__current__")) NULL else src
+      # "Save this scenario" saves the applied scenario with the settings of
+      # its own last run - not of a saved scenario revisited here.
+      if (identical(src, "__current__")) last_run_settings(ts)
       tr
     }) %>%
       # Revisao 2, item 3.3: runs on "Run simulation" (and when the
-      # disclosure is opened or a new scenario is applied), not on every
-      # change of a setting.
-      bindEvent(input$run_temporal, input$show_temporal, current_scenario())
+      # disclosure is opened, a new scenario is applied or another scenario
+      # is chosen), not on every change of a setting.
+      bindEvent(input$run_temporal, input$show_temporal, current_scenario(), input$temporal_source)
 
     # Revisao 2, item C3: the same run with the other criterion, for
     # "Compare both".
     temporal_result_load <- reactive({
-      sc <- current_scenario()
-      req(sc, isTRUE(input$show_temporal), identical(input$temporal_gate_mode, "compare"))
+      req(isTRUE(input$show_temporal), identical(input$temporal_gate_mode, "compare"))
       tr <- temporal_result()
       ts <- tr$settings
       simulate_temporal_pair(
-        graph(), sc$p_D, sc$press,
+        graph(), tr$p_D, tr$press,
         windows = max(1, ts$temporal_windows %||% 5),
         mode_D = ts$temporal_mode_pressure, mode_R = ts$temporal_mode_response,
         stop_rule = ts$temporal_stop_rule, max_windows = max(1, ts$temporal_max_windows %||% 50),
