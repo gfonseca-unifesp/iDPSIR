@@ -28,7 +28,10 @@
 
 - **E-a:** opção (c) — manter as duas leituras, provar a equivalência com s = 1 e medir a sensibilidade.
 - **E-b:** calibrar os auxílios em 2006–2014 e testar em 2015–2021, com validação de origem móvel como robustez.
-- **E-d:** consultar o CEP já, em paralelo.
+- **E-d / E6 (30/09, decisão do autor): o teste de usabilidade sai do plano.** Tudo no app e no
+  manuscrito vem da literatura ou de resultados hipotéticos; não haverá coleta com participantes,
+  portanto nada depende de CEP. As Fases E6.1–E6.3 não serão feitas, e o manuscrito não reivindica
+  usabilidade medida.
 - **Branch:** `revisao3`, a partir de `revisao2-exemplo-porto`. O manuscrito (`manuscrito_v5/`, `MANUSCRIPT_*.docx`) fica fora do git.
 
 Correções feitas ao conferir o plano contra o código:

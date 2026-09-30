@@ -146,6 +146,8 @@ registradas no roadmap).
   pressão também some). Variante do Sri Lanka sem auxílio → frota
   (`example_gnanapragasam_noaidfleet`): alcance do auxílio 1/5, estoque nunca abaixo de
   B_MSY, esforço RMSE 6.152 (NSE −4,9) contra 658 — os dados sustentam a hipótese.
+- **E6 (teste de usabilidade): fora do plano** por decisão do autor — não há coleta com
+  participantes, nada depende de CEP.
 - **E4:** forma aditiva opcional; justificativa do produto (perda esperada evitável);
   `priority_robustness()` (v ± 20%, produto × soma) → coluna "Rank stability", nota e
   mensagem na Interpretation quando o topo é instável (< 80%).
