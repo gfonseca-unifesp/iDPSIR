@@ -58,8 +58,8 @@ testthat::test_dir("tests/testthat")          # ou: Rscript tests/testthat.R
   `mod_data.R` (Start/Model/Nodes/Edges/Review), `mod_graph.R`, `mod_responses.R`
   (Scenarios; `compute_scenario()`), `mod_metrics.R`, `mod_report.R`.
 - `data/` — exemplos (Mangi 2007, Gnanapragasam 2026 com parâmetros e esforço observado,
-  porto didático `port_*`, `sample_*`); `data-raw/` — scripts que geram os exemplos do Sri
-  Lanka e do porto e suas figuras;
+  porto didático `port_*`, `sample_*`); `data-raw/` — scripts que geram os exemplos (Sri
+  Lanka, Mangi, porto, versões "first run") e suas figuras;
   `docs/` — tutorial, savepoints de exemplo, figuras; `legacy/` — código fora de uso;
   `tests/testthat/` — suíte (fixtures de formatos antigos em `fixtures/`).
 
@@ -110,6 +110,7 @@ visual). Colunas antigas (`uncertainty`, `controllability`, `temporal_scale`,
 | D17/D18/D21 | Aresta = β padronizado com faixa; r² só atalho; classes 0,15/0,45/0,80; sinal sem padrão; confiança antiga vira faixa. |
 | D20 | Persistência do desvio = 1 − `self_regulation`; padrão 0,5. |
 | D23 | Camada de medida: referência, DP/CV, limiar em unidade real (z), força > 100% ou em unidades. |
+| 30/09 (Mangi) | Exemplo do Mangi refeito a partir do artigo (Tabela 1, seções 3–6): não se monitoram dois indicadores em cadeia causal (sem Estado→Estado; ouriço com pressão própria, pesca de peixe-porco); arestas por classe (o artigo não dá forças), soma dos β² que chegam a cada fator < 1; único parâmetro: crescimento populacional de 3,7%/ano. Versões "first run" (só defaults) de Mangi e Sri Lanka para comparação no tutorial (`data-raw/first_run_build.R`). A rede antiga ficou em `tests/testthat/fixtures/mangi2007_v1_*`. |
 | 30/09 (auditoria) | Tolerância de neutralização vale para o rótulo e para a parada "até neutralizar" (0 = só zero). "Add level" com papel (D/P/S/I/R ou personalizado, p.ex. sub-driver) e posição; papéis padrão escritos no schema; remover nível sem fatores. Tracejado das arestas segue a confiança derivada da faixa (legenda explica). |
 | 30/09 | `uncertainty`/`controllability` removidos (não entravam em cálculo). Papéis vêm do schema. Paleta Okabe-Ito padrão. Exemplo do Sri Lanka parametrizado pelo artigo (limiar = B_MSY; B_lim nunca é cruzado). Cenários salvos entram no savepoint (definição; recalculados ao carregar). |
 

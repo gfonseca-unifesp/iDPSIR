@@ -275,7 +275,7 @@ test_that("Revisao 2, item 3.13: saved scenarios (definitions) round-trip throug
   expect_equal(back[[1]]$temporal_schedule$start, c(1, 6))
   expect_equal(back[[2]]$strengths, c(R3 = 85))
   expect_length(back[[2]]$pressure_active, 0)
-  expect_null(read_savepoint("../../docs/example_mangi.idpsir.json")$saved_scenarios)
+  expect_null(read_savepoint("../../docs/example_fisheries.idpsir.json")$saved_scenarios)
 })
 
 test_that("audit: merging savepoints with the same file name never creates duplicate ids", {

@@ -29,8 +29,8 @@ test_that("every verdict format_temporal_table() emits has a defined color in id
 })
 
 test_that("green-mapped verdicts (Neutralized/Improved beyond neutral) only occur when net_impact <= 0, never for a worse-than-baseline row - Mangi fixture", {
-  nodes <- data.table::fread("../../data/mangi2007_nodes.csv", data.table = FALSE)
-  edges <- data.table::fread("../../data/mangi2007_edges.csv", data.table = FALSE)
+  nodes <- data.table::fread("fixtures/mangi2007_v1_nodes.csv", data.table = FALSE)
+  edges <- data.table::fread("fixtures/mangi2007_v1_edges.csv", data.table = FALSE)
   g <- build_igraph(nodes, edges, get_default_dpsir_schema())
 
   p_D <- build_press_vector(g, active_ids = c("D1", "D3"), strengths = c(D1 = 1, D3 = 1))

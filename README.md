@@ -102,8 +102,8 @@ iDPSIR/
 │   ├── ui_main.R               # top-level UI (ina_ui)
 │   └── server_main.R           # top-level server (ina_server)
 ├── data/                      # example data (sample_nodes.csv, sample_edges.csv, mangi2007_*.csv, gnanapragasam2026_*.csv incl. parameters and observed effort)
-├── data-raw/                  # scripts that build the Sri Lanka example (tables, savepoint, figures)
-├── docs/                      # getting-started tutorial (tutorial.html) and four example savepoints (example_fisheries/mangi/gnanapragasam/port.idpsir.json, see Example networks below)
+├── data-raw/                  # scripts that build the Sri Lanka, Mangi and port examples, and their first-run versions
+├── docs/                      # getting-started tutorial (tutorial.html) and the example savepoints (example_fisheries/mangi/gnanapragasam/port.idpsir.json and the *_default first-run versions, see Example networks below)
 ├── legacy/                    # code no longer used by the app (equilibrium engine, older scenario/plot code), kept for reference - not sourced
 ├── tests/
 │   ├── testthat.R             # test runner: Rscript tests/testthat.R
@@ -259,16 +259,19 @@ explanation of each; the short version:
   simplest way to get oriented with the wizard and the Graph/Scenarios tabs before
   anything else adds complexity.
   [`docs/example_fisheries.idpsir.json`](docs/example_fisheries.idpsir.json).
-- **Mangi et al. 2007** — 18 nodes, 31 edges, a real published coral-reef-fisheries
-  DPSIR network (*Ocean & Coastal Management*, 50(5-6), 463-480). This is the network
-  that caught a real bug during development: the app's older equilibrium-based
-  reading (removed since) showed a gear-restriction response making reef degradation
-  *worse* — wrong sign. The current sufficiency reading gets it right (see the
-  tutorial for the exact numbers).
-  [`docs/example_mangi.idpsir.json`](docs/example_mangi.idpsir.json) (pressure/response
-  pre-configured) or the underlying
+- **Mangi et al. 2007** — 22 factors, 33 links, built from the indicator scheme of a
+  published coral-reef-fisheries paper (*Ocean & Coastal Management*, 50(5-6), 463-480);
+  every link cites the article's section. Simplified for monitoring: no two indicators
+  in a cause-effect chain (the urchin release is one State, sea urchin density, fed by
+  its own Pressure, triggerfish fishing). Links are classes (the article gives no
+  strengths); the one parameter is the 3.7%/yr population growth. Four saved scenarios:
+  the 2007 measures as written and as enforced, plus the recommended ones, and all of
+  them fully complied — the only one that neutralizes every Impact, for about twenty years
+  before population growth overtakes it.
+  [`docs/example_mangi.idpsir.json`](docs/example_mangi.idpsir.json) or
   [`data/mangi2007_nodes.csv`](data/mangi2007_nodes.csv) /
-  [`data/mangi2007_edges.csv`](data/mangi2007_edges.csv).
+  [`data/mangi2007_edges.csv`](data/mangi2007_edges.csv); built by
+  [`data-raw/mangi2007_build.R`](data-raw/mangi2007_build.R).
 - **Gnanapragasam et al. 2026** — 17 nodes, 20 edges, Sri Lanka's small-scale fisheries
   (*Marine Policy*, 189, 107095), one window per year from 2004, parametrized from the
   paper's own data (see [below](#sri-lanka-example-how-it-was-parametrized)).
@@ -295,6 +298,15 @@ explanation of each; the short version:
 
 Load any of them from the wizard's Start step (Load savepoint), or via CSV import for
 the three that have plain tables.
+
+**First run (defaults only).** `docs/example_mangi_default.idpsir.json` and
+`docs/example_gnanapragasam_default.idpsir.json` hold the same networks with every setting
+at the app's default (every link moderate, self-regulation 0.5, no growth or thresholds),
+built by [`data-raw/first_run_build.R`](data-raw/first_run_build.R). Compared with the full
+examples they show what the structure alone decides and what the parametrization changes:
+for Mangi the verdicts and the priority agree (only the growth adds a deadline); for Sri Lanka the
+defaults give the optimistic answer and the article's parameters reverse it (tutorial,
+"First run").
 
 ### Sri Lanka example: how it was parametrized
 

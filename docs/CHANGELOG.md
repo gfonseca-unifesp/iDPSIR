@@ -4226,3 +4226,28 @@ métricas, núcleo numérico) + verificação ao vivo. Corrigido:
 - Métricas: "Directed" agora também orienta a proximidade; "Impacts without Response"
   conta arestas R → I. Relatório: rótulos em vez de ids, legenda com "Neutralized
   (relative)", alcance efetivo, texto obsoleto do "reach over c" removido.
+
+## Exemplo do Mangi refeito a partir do artigo + "first run" (30/09/2026)
+
+Com o artigo original (Mangi et al. 2007) em mãos, a rede de exemplo antiga mostrou três
+problemas: nós que não são indicadores do artigo (demanda de mercado, peixes grandes,
+biodiversidade, "Reef ecosystem degradation" como Impacto), indicadores do artigo ausentes
+(turismo, tradição, ouriço, branqueamento, conflitos, educação) e forças de ligação sem
+base (β convertidos de pesos antigos, com "Mangi 2007" como referência em todas as arestas
+e tipos de evidência inventados). Refeita (`data-raw/mangi2007_build.R`): 22 fatores, 33
+ligações, cada uma citando a seção do artigo. Decisão do usuário: o DPSIR serve para
+monitorar e gerir, não para retratar todas as interações — dois indicadores em cadeia
+causal não são ambos monitorados. Assim, "número de pescadores" e "sobre-exploração" viram
+uma pressão (esforço de pesca geral), e a cascata do ouriço vira um Estado (densidade de
+ouriço) com pressão própria (pesca do peixe-porco), sem ligação Estado→Estado. Todas as
+arestas são classes; o Review acusou soma de β² > 1 em quatro fatores (duas causas "strong"
+no coral etc.), corrigido rebaixando a causa que o artigo trata como secundária ou
+episódica. Único parâmetro: crescimento populacional de 3,7%/ano. Quatro cenários salvos
+(medidas de 2007 como escritas e como cumpridas a 30%, + recomendadas, todas cumpridas);
+só o último neutraliza tudo, por ~20 anos, até o crescimento populacional superá-lo.
+
+Versões "first run" (`data-raw/first_run_build.R`): Mangi e Sri Lanka com tudo no default.
+No Mangi, vereditos e prioridade coincidem com a versão parametrizada (a estrutura decide);
+no Sri Lanka, a rede crua dá a resposta otimista e o artigo a inverte. Nova seção 7 do
+tutorial. A rede antiga do Mangi ficou como fixture (`tests/testthat/fixtures/mangi2007_v1_*`)
+dos testes de suficiência da Revisão 1; `test-example-mangi.R` novo.

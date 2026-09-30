@@ -2,7 +2,8 @@
 # TESTS - R/sufficiency.R (Revisao 1: "two pushes" model)
 # =====================================================
 #
-# Primary fixture: the Mangi et al. 2007 network (data/mangi2007_*.csv), a
+# Primary fixture: the first Mangi et al. 2007 network (fixtures/mangi2007_v1_*.csv,
+# replaced as the published example on 30/09/2026 by a rebuild from the article), a
 # real, cited network - not a hand-built toy. Every expected number below
 # was independently computed in scratchpad/test_sufficiency.R before being
 # hardcoded here, and closely reproduces (within rounding) the worked
@@ -17,13 +18,13 @@
 # revision is that sufficiency()'s mitigation for that same scenario comes
 # out negative (correctly "helps").
 
-# Revisao 2, item 1.6: data/mangi2007_edges.csv now holds standardized
+# Revisao 2, item 1.6: fixtures/mangi2007_v1_edges.csv holds standardized
 # strengths (beta) - the older weights converted with beta = lambda * w
 # (c = 0.5), rounded to 3 decimals. The numbers below, from the Revisao 1
 # static reading, therefore still hold within the 1e-3 tolerance.
 mangi_graph <- function() {
-  nodes <- data.table::fread("../../data/mangi2007_nodes.csv", data.table = FALSE)
-  edges <- data.table::fread("../../data/mangi2007_edges.csv", data.table = FALSE)
+  nodes <- data.table::fread("fixtures/mangi2007_v1_nodes.csv", data.table = FALSE)
+  edges <- data.table::fread("fixtures/mangi2007_v1_edges.csv", data.table = FALSE)
   build_igraph(normalize_dpsir_nodes(nodes), normalize_dpsir_edges(edges), get_default_dpsir_schema())
 }
 

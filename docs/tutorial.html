@@ -562,10 +562,11 @@
         <li><a href="#conventions">4 · Modeling convention: signs</a></li>
         <li><a href="#self-regulation">5 · Self-regulation</a></li>
         <li><a href="#examples">6 · Example networks</a></li>
-        <li><a href="#worked-example">7 · Worked example</a></li>
-        <li><a href="#port-example">8 · Worked example: which response, and when?</a></li>
-        <li><a href="#savepoint">9 · Saving your work</a></li>
-        <li><a href="#glossary">10 · Glossary</a></li>
+        <li><a href="#first-run">7 · First run: defaults only</a></li>
+        <li><a href="#worked-example">8 · Worked example</a></li>
+        <li><a href="#port-example">9 · Worked example: which response, and when?</a></li>
+        <li><a href="#savepoint">10 · Saving your work</a></li>
+        <li><a href="#glossary">11 · Glossary</a></li>
       </ol>
     </nav>
 
@@ -1153,42 +1154,71 @@ P1,S1,negative,0.55,,monitoring</pre>
           </div>
         </div>
 
-        <h3>Mangi et al. 2007 — a real published network, and a real bug it caught</h3>
-        <p>18 nodes, 31 edges — coral-reef fisheries management in a real paper
-          (Mangi, S.C., Roberts, C.M., &amp; Rodwell, L.D. (2007). Reef fisheries
-          management in Kenya: Preliminary approach using the driver-pressure-state-
-          impacts-response (DPSIR) scheme of indicators. <em>Ocean &amp; Coastal
-          Management</em>, 50(5-6), 463-480,
+        <h3>Mangi et al. 2007 — a published indicator scheme, turned into a network</h3>
+        <p>22 factors, 33 links, built from the indicators of a real paper (Mangi, S.C., Roberts,
+          C.M., &amp; Rodwell, L.D. (2007). Reef fisheries management in Kenya: Preliminary
+          approach using the driver-pressure-state-impacts-response (DPSIR) scheme of
+          indicators. <em>Ocean &amp; Coastal Management</em>, 50(5-6), 463-480,
           <a href="https://doi.org/10.1016/j.ocecoaman.2006.10.003" target="_blank">doi:10.1016/j.ocecoaman.2006.10.003</a>).
-          This is the network that caught a real, reproducible bug during
-          development: the older equilibrium-based reading this app used to show
-          (removed since, see Scenarios above) reported <strong>Gear
-          restrictions</strong> as making <strong>Reef ecosystem degradation
-          worse</strong> — the wrong sign for a response explicitly meant to protect
-          the reef. Loading this network and applying pressure from
-          <strong>Coastal population growth</strong> + <strong>Market demand for reef
-          fish</strong>, with <strong>Gear restrictions</strong> as the response, shows
-          the corrected sufficiency reading: Reef ecosystem degradation reads
-          worsening 0.03 / mitigation <strong>-0.069</strong> / net -0.039,
-          <strong>Yes</strong>, neutralized at 44% strength — mitigation with the
-          right sign, not the wrong one. It's also a good look at a densely
-          cross-linked network: this single response's <strong>Reach</strong> covers
-          14 of the other 17 factors, because Responses here loop back into several
-          Drivers, Pressures and States at once, not just the one Impact they're aimed
-          at.</p>
-        <p class="muted" style="font-size:14px; margin-top:10px">This network is also
-          the concrete illustration of the <a href="#conventions">modeling convention</a>
-          above: every State is a <strong>neutral measurement</strong> —
-          <strong>Fish stock</strong>, <strong>Coral cover</strong>,
-          <strong>Biodiversity</strong> — never pre-judged as "decline" or
-          "degradation", so Pressure→State and State→Impact are both
-          <code>negative</code> and Response→State is <code>positive</code>, exactly the
-          standard signing from Step 2 above.</p>
+          Every factor is an indicator of the article's Table 1 or a response it describes, and
+          every link cites the section it comes from.</p>
+        <p><strong>One simplification, on purpose.</strong> DPSIR is a tool for monitoring and
+          management, not for portraying every interaction. Two indicators in a cause-effect chain
+          are not both monitored — one is enough. So "number of fishers" and "excessive
+          exploitation" are one Pressure (general fishing effort), and the urchin story of the
+          article (fishing removes the red-lined triggerfish, urchins are released, they erode the
+          reef and compete with fish) becomes one State to monitor, <strong>Sea urchin
+          density</strong>, fed by its own Pressure, <strong>Triggerfish fishing</strong>, in
+          parallel with general fishing. The app has no State → State links for the same reason.</p>
+        <p><strong>What is parametrized, and what is not.</strong> The article gives no link
+          strengths — it says so: "a 10% rise in coastal population does not correspond to a 10%
+          rise in fishing pressure". Every link is a class, <em>strong</em> only where the text
+          describes a main or dramatic effect (population as the main driving force; poverty
+          behind the cheap, destructive gears; fished reefs with half the coral cover). The classes
+          also respect what a standardized strength means: the squared strengths arriving at a
+          factor add up to less than 1 (the Review step checks it), so where two causes compete the
+          article's emphasis decides which one is strong. The one number used as a parameter is the
+          coastal population growth, <strong>3.7% per year</strong> (one window = one year). The
+          article's "barriers to change" (poor enforcement, low compliance) are not factors: they
+          are how much of a response actually acts, set with the response's strength.</p>
+        <figure class="figure">
+          <img src="example_mangi_network.png" alt="Network diagram: six Drivers (coastal population, poverty, unemployment, tourism employment, traditional fishing customs, sea warming), four Pressures (general fishing effort, triggerfish fishing, destructive gear use, thermal stress), three States (fish abundance, live coral cover, sea urchin density), three Impacts (declining catch, livelihood benefits, exclusion and conflicts) and six Responses.">
+          <figcaption><strong>Figure.</strong> The Mangi et al. 2007 network. Green links increase their target, red ones decrease it. Sea warming reaches the coral and no response reaches it.</figcaption>
+        </figure>
+        <p>Four scenarios are saved in the savepoint, all with the same pressure (coastal
+          population, poverty, unemployment and sea warming at 100%):</p>
+        <div class="table-wrap">
+          <table class="fields">
+            <tr><th>Scenario</th><th>Catch per fisher</th><th>Livelihoods</th><th>Conflicts</th></tr>
+            <tr><td class="key">1. Existing measures (parks, gear rules, education), as written</td><td>No — needs ×1.18</td><td>No — ×1.19</td><td>No — ×12</td></tr>
+            <tr><td class="key">2. The same, as enforced (30%)</td><td>No — ×3.9</td><td>No — ×4.0</td><td>No</td></tr>
+            <tr><td class="key">3. + recommended measures (alternative livelihoods, co-management, gear exchange)</td><td>No</td><td>No</td><td><strong>Yes</strong></td></tr>
+            <tr><td class="key">4. All measures, fully complied</td><td><strong>Yes</strong></td><td><strong>Yes</strong></td><td><strong>Yes</strong></td></tr>
+          </table>
+        </div>
+        <p>What the network says, in the article's own terms: the measures Kenya had in 2007 were
+          not enough even on paper, and far less as enforced; the recommended ones settle the
+          conflicts (marine parks alone <em>raise</em> them, because they exclude fishers — a
+          response that worsens an Impact); and with every measure fully complied all three Impacts
+          are neutralized, even though sea warming is out of every response's reach — so the gap is
+          <strong>compliance</strong>, not the choice of measures. The temporal simulation of
+          scenario 4 adds the <em>when</em>: the Impacts stay neutralized for about twenty years
+          (conflicts first return in year 21, catch in year 27), then the 3.7% population growth
+          overtakes measures sized for today.</p>
+        <figure class="figure">
+          <img src="example_mangi_temporal_4.png" alt="Three panels over 30 windows. The baseline rises from window 4; the net stays below zero until about window 21 to 27 and then climbs as the population grows.">
+          <figcaption><strong>Figure.</strong> Scenario 4 (all measures, fully complied), 30 years: dashed is the pressure alone, solid pressure and responses together. Neutralized for about two decades, then the population growth overtakes.</figcaption>
+        </figure>
+        <p class="muted" style="font-size:14px; margin-top:10px">Every State is a <strong>neutral
+          measurement</strong> — <strong>Fish abundance</strong>, <strong>Live coral
+          cover</strong>, <strong>Sea urchin density</strong> — never pre-judged as "decline" or
+          "degradation" (the <a href="#conventions">modeling convention</a> above). An earlier
+          version of this network (with link weights the article does not give) caught a real sign
+          bug of the old equilibrium reading during development; it is kept in the test suite.</p>
         <div class="code-cluster two">
           <div class="code-card">
             <h4>Download the example</h4>
-            <p class="muted">A ready-to-load savepoint, pressure and response scenario
-              already configured.</p>
+            <p class="muted">A ready-to-load savepoint: scenario 1 set up, four scenarios saved.</p>
             <pre><a href="example_mangi.idpsir.json" download>example_mangi.idpsir.json</a></pre>
           </div>
           <div class="code-card">
@@ -1239,6 +1269,72 @@ P1,S1,negative,0.55,,monitoring</pre>
             <p class="muted">The same network as plain CSV.</p>
             <pre><a href="../data/port_nodes.csv" download>port_nodes.csv</a></pre>
             <pre><a href="../data/port_edges.csv" download>port_edges.csv</a></pre>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ FIRST RUN ============ -->
+      <section class="block" id="first-run">
+        <div class="kicker">Using the app for the first time</div>
+        <h2>First run: the same networks with the defaults</h2>
+        <p class="lead">What do you get if you only draw the network — factors, links and signs —
+          and leave everything else as the app sets it? Each of these two examples also ships in a
+          "first run" version to find out: every link <em>moderate</em> (0.45), self-regulation
+          0.5, no growth, initial levels or thresholds, every Impact ecological with value 1, and
+          the temporal settings of a new project. The pressure and response scenario is the same
+          as in the full example.</p>
+
+        <h3>Mangi et al. 2007 — the structure carries the answer</h3>
+        <div class="table-wrap">
+          <table class="fields">
+            <tr><th>Scenario 1 (existing measures)</th><th>Parametrized (classes, 3.7% growth)</th><th>First run (defaults)</th></tr>
+            <tr><td class="key">Catch per fisher</td><td>worsening 1.85, net 0.28 — not neutralized (×1.18 needed)</td><td>worsening 0.91, net 0.18 — not neutralized (×1.25)</td></tr>
+            <tr><td class="key">Livelihoods</td><td>worsening 1.52, net 0.24 — not neutralized</td><td>identical to catch (0.91 / 0.18)</td></tr>
+            <tr><td class="key">Conflicts</td><td>worsening 0.70, net 0.64 — the measures barely help</td><td>worsening 0.46, net 0.54 — the measures make it <strong>worse</strong></td></tr>
+            <tr><td class="key">Top priority</td><td>Conflicts (0.35)</td><td>Conflicts (0.50)</td></tr>
+            <tr><td class="key">Scenario 4 (all measures, fully complied), over time</td><td>neutralized for ~20 years, then overtaken by population growth</td><td>neutralized for good</td></tr>
+          </table>
+        </div>
+        <p>The verdicts and the priority agree: which responses reach which Impacts, and whether
+          they are enough, comes from the structure and the signs. The classes change the
+          <em>sizes</em> — with every link equal, catch and livelihoods become indistinguishable and
+          the side effect of the marine parks outweighs their benefit for the conflicts. The growth
+          rate is what adds a deadline: measures that are enough today stop being enough in about
+          twenty years.</p>
+
+        <h3>Gnanapragasam et al. 2026 — the parametrization reverses the answer</h3>
+        <div class="table-wrap">
+          <table class="fields">
+            <tr><th>Indian trawler incursions + the four responses</th><th>Parametrized (article)</th><th>First run (defaults)</th></tr>
+            <tr><td class="key">Sufficiency (one instant)</td><td>no Impact worsened: the fish stock stays above its threshold (B_MSY), so nothing passes</td><td>Fisher income loss neutralized; catch and conflicts not (16-17% confidence)</td></tr>
+            <tr><td class="key">Temporal simulation</td><td>4 of 5 Impacts end worse than without the aid (the aid enlarges the fleet, which keeps growing)</td><td>"Neutralized at window 4" — the responses seem to solve everything</td></tr>
+            <tr><td class="key">Top priority</td><td>none worsened in the static reading</td><td>catch decline and conflicts, tied</td></tr>
+          </table>
+        </div>
+        <p>Here the story of the article — aid that became a pressure — lives in the parameters: the
+          stock threshold, the fleet's growth and the period of each aid programme. Drawn with the
+          defaults, the same network gives the optimistic and wrong answer.</p>
+
+        <div class="callout">
+          <span class="dot"></span>
+          <div><strong>The lesson for a first model.</strong> Start with the structure and the signs —
+          they already tell you <em>which</em> responses reach <em>which</em> Impacts, and often
+          whether they are enough. Then parametrize what you have evidence for, in this order of
+          payoff: thresholds and growth (they can reverse a verdict), link classes where the
+          evidence says "main" or "minor" (they change the sizes, and can change priorities), and last the temporal settings.
+          Compare with the first run to see which conclusions depend on what you added.</div>
+        </div>
+
+        <div class="code-cluster two">
+          <div class="code-card">
+            <h4>Mangi — first run</h4>
+            <p class="muted">Load it next to <code>example_mangi.idpsir.json</code> and compare scenario 1.</p>
+            <pre><a href="example_mangi_default.idpsir.json" download>example_mangi_default.idpsir.json</a></pre>
+          </div>
+          <div class="code-card">
+            <h4>Sri Lanka — first run</h4>
+            <p class="muted">Load it next to <code>example_gnanapragasam.idpsir.json</code>.</p>
+            <pre><a href="example_gnanapragasam_default.idpsir.json" download>example_gnanapragasam_default.idpsir.json</a></pre>
           </div>
         </div>
       </section>
