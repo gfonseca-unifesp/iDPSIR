@@ -110,6 +110,7 @@ visual). Colunas antigas (`uncertainty`, `controllability`, `temporal_scale`,
 | D17/D18/D21 | Aresta = β padronizado com faixa; r² só atalho; classes 0,15/0,45/0,80; sinal sem padrão; confiança antiga vira faixa. |
 | D20 | Persistência do desvio = 1 − `self_regulation`; padrão 0,5. |
 | D23 | Camada de medida: referência, DP/CV, limiar em unidade real (z), força > 100% ou em unidades. |
+| 30/09 (auditoria) | Tolerância de neutralização vale para o rótulo e para a parada "até neutralizar" (0 = só zero). "Add level" com papel (D/P/S/I/R ou personalizado, p.ex. sub-driver) e posição; papéis padrão escritos no schema; remover nível sem fatores. Tracejado das arestas segue a confiança derivada da faixa (legenda explica). |
 | 30/09 | `uncertainty`/`controllability` removidos (não entravam em cálculo). Papéis vêm do schema. Paleta Okabe-Ito padrão. Exemplo do Sri Lanka parametrizado pelo artigo (limiar = B_MSY; B_lim nunca é cruzado). Cenários salvos entram no savepoint (definição; recalculados ao carregar). |
 
 ## Estado

@@ -11,5 +11,5 @@
 
 get_feedback_categories <- function(schema) {
   validate_schema(schema)
-  schema$name[!is.na(schema$role) & schema$role == "feedback"]
+  categories_with_role("feedback", schema)
 }

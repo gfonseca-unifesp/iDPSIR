@@ -402,19 +402,47 @@ test_that("until_neutralized is the default stop rule, truncates the history at 
   expect_equal(temporal_stop_note(never), "Not neutralized within 12 windows.")
 })
 
-test_that("A3: 'Neutralized (relative)' only when |net| is within 5% of the baseline AND not growing", {
+test_that("A3 (audit): 'Neutralized (relative)' when 0 < net <= tol x baseline, and 'until neutralized' stops there", {
   damp <- chain_run(chain_network(sr03), "permanent", "impulse", windows = 30)
   tbl <- format_temporal_table(chain_network(sr03), damp)
   expect_equal(tbl$verdict[tbl$window == 30], "Neutralized (relative)")
 
-  # Counter-example: baseline grows faster than the scenario - from window
-  # 61 on (exactly 5% at window 60) |net| is below 5% of the baseline, but
-  # the Impact is still getting worse.
+  # The old extra condition ("|net| not growing") is gone: a net that is
+  # within 5% of a fast-growing baseline is labelled, as the user decided.
   grow <- chain_run(chain_network(), "permanent", "impulse", windows = 61)
   tbl_g <- format_temporal_table(chain_network(), grow)
   last <- tbl_g[tbl_g$window == 61, ]
-  expect_lt(abs(last$net_impact), 0.05 * last$baseline_impact)
-  expect_equal(last$verdict, "Partial")
+  expect_lt(last$net_impact, 0.05 * last$baseline_impact)
+  expect_equal(last$verdict, "Neutralized (relative)")
+  # tol_rel = 0 turns the label off.
+  expect_equal(format_temporal_table(chain_network(), grow, tol_rel = 0)$verdict[tbl_g$window == 61], "Partial")
+
+  # Stop rule: with tol_rel the run stops at the first window within the
+  # tolerance; with tol_rel = 0 (default) it never stops here.
+  first_ok <- min(tbl_g$window[tbl_g$verdict == "Neutralized (relative)"])
+  r <- chain_run(chain_network(), "permanent", "impulse", stop_rule = "until_neutralized", max_windows = 80, tol_rel = 0.05)
+  expect_equal(r$neutralized_at, first_ok)
+  expect_match(temporal_stop_note(r), "within 5% of its baseline")
+  strict <- chain_run(chain_network(), "permanent", "impulse", stop_rule = "until_neutralized", max_windows = 80)
+  expect_true(is.na(strict$neutralized_at))
+})
+
+test_that("audit: 'until neutralized' also waits for an Impact that only the response worsens", {
+  # R raises I2 directly (positive edge) while mitigating the chain to I1:
+  # the baseline never reaches I2, so the old rule ignored it and stopped.
+  nodes <- normalize_dpsir_nodes(data.frame(
+    id = c("P", "E", "I1", "I2", "R"), label = c("P", "E", "I1", "I2", "R"),
+    dpsir_category = c("Pressure", "State", "Impact", "Impact", "Response"),
+    self_regulation = c(0.5, 0.5, 0.5, 0.5, 0), stringsAsFactors = FALSE
+  ))
+  edges <- normalize_dpsir_edges(data.frame(
+    from = c("P", "E", "R", "R"), to = c("E", "I1", "P", "I2"), weight = 1,
+    interaction_type = c("positive", "positive", "negative", "positive"), stringsAsFactors = FALSE
+  ))
+  g <- build_igraph(nodes, edges, get_default_dpsir_schema())
+  r <- simulate_temporal_pair(g, build_press_vector(g, "P", c(P = 1)), build_press_vector(g, "R", c(R = 1)),
+                              stop_rule = "until_neutralized", max_windows = 15)
+  expect_true(is.na(r$neutralized_at))
 })
 
 test_that("A4: baseline_without_response ignores Impact -> Response links in the baseline round only", {
@@ -434,4 +462,13 @@ test_that("A4: baseline_without_response ignores Impact -> Response links in the
   expect_true(any(with_links$baseline[, "R"] != 0))
   expect_true(all(without$baseline[, "R"] == 0))
   expect_equal(without$scenario, with_links$scenario)
+})
+
+test_that("audit: a windowed push whose period falls outside the run is reported", {
+  g <- chain_network(sr03)
+  sched <- data.frame(id = c("P", "R"), start = c(1, 40), duration = c(5, 3), stringsAsFactors = FALSE)
+  r <- simulate_temporal_pair(g, build_press_vector(g, "P", c(P = 1)), build_press_vector(g, "R", c(R = 1)),
+                              windows = 10, mode_D = "window", mode_R = "window", schedule = sched)
+  expect_length(r$schedule_notes, 1)
+  expect_match(r$schedule_notes, "'R'.*never acts")
 })

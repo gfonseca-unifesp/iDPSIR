@@ -153,6 +153,8 @@ build_savepoint <- function(schema, nodes, edges, positions = NULL, metadata = l
       # Revisao 2, Fase D.
       temporal_trends_outside = scenario_state$temporal_trends_outside,
       temporal_continue_after = scenario_state$temporal_continue_after,
+      # Audit: the number of simulations of the confidence readings.
+      n_simulations = scenario_state$n_simulations,
       temporal_schedule = if (is.data.frame(scenario_state$temporal_schedule) && nrow(scenario_state$temporal_schedule) > 0) scenario_state$temporal_schedule else NULL
     )
   }
@@ -219,7 +221,17 @@ merge_savepoints <- function(savepoints, source_names) {
 
     needs_prefix <- nodes$id %in% seen_ids
     id_map <- setNames(nodes$id, nodes$id)
-    id_map[needs_prefix] <- paste0(prefix, nodes$id[needs_prefix])
+    # Audit: files with the same name (or a prefixed id that already
+    # exists) gave duplicate ids - add the file's position until unique.
+    for (k in which(needs_prefix)) {
+      candidate <- paste0(prefix, nodes$id[k])
+      if (candidate %in% c(seen_ids, nodes$id, id_map[-k])) candidate <- paste0(source_names[i], "_", i, "__", nodes$id[k])
+      j <- 2
+      while (candidate %in% c(seen_ids, nodes$id, id_map[-k])) {
+        candidate <- paste0(source_names[i], "_", i, "_", j, "__", nodes$id[k]); j <- j + 1
+      }
+      id_map[k] <- candidate
+    }
 
     if (any(needs_prefix)) {
       renamed <- c(renamed, paste0(nodes$id[needs_prefix], " -> ", id_map[needs_prefix]))
@@ -298,7 +310,10 @@ read_savepoint <- function(path, convert_legacy = TRUE) {
   raw_nodes_df <- as.data.frame(raw$nodes, stringsAsFactors = FALSE)
   # Revisao 2, item A8: an older savepoint without self_regulation keeps the
   # behaviour it was saved with (0), not the new default 0.5.
-  is_legacy_file <- is.null(raw$metadata$weight_mode) || !identical(raw$metadata$weight_mode, "structural")
+  # Audit: a file without metadata$weight_mode but with the structural
+  # edge columns (e.g. edited by hand or by another tool) is NOT legacy.
+  structural_cols <- !is.null(raw_edges) && any(c("strength_class", "weight_low", "weight_high", "weight_source") %in% names(raw_edges))
+  is_legacy_file <- (is.null(raw$metadata$weight_mode) || !identical(raw$metadata$weight_mode, "structural")) && !structural_cols
   if (is_legacy_file && nrow(raw_nodes_df) > 0 && !"self_regulation" %in% names(raw_nodes_df)) {
     raw_nodes_df$self_regulation <- 0
   }
@@ -310,7 +325,7 @@ read_savepoint <- function(path, convert_legacy = TRUE) {
   # keeps its static numbers exactly.
   metadata <- raw$metadata
   conversion <- NULL
-  is_legacy <- is.null(metadata$weight_mode) || !identical(metadata$weight_mode, "structural")
+  is_legacy <- is_legacy_file
   if (isTRUE(convert_legacy) && is_legacy && !is.null(raw_edges) && nrow(raw_edges) > 0) {
     legacy_c <- suppressWarnings(as.numeric(raw$scenario_state$effect_horizon))
     if (length(legacy_c) != 1 || is.na(legacy_c)) legacy_c <- 0.5
@@ -373,6 +388,7 @@ read_savepoint <- function(path, convert_legacy = TRUE) {
       # Revisao 2, Fase D.
       temporal_trends_outside = if (is.null(ss_val(ss$temporal_trends_outside))) TRUE else isTRUE(ss$temporal_trends_outside),
       temporal_continue_after = ss_val(ss$temporal_continue_after) %||% 0,
+      n_simulations = ss_val(ss$n_simulations) %||% 300,
       temporal_schedule = if (is.null(ss$temporal_schedule) || length(ss$temporal_schedule) == 0) NULL else as.data.frame(ss$temporal_schedule, stringsAsFactors = FALSE)
     )
   }

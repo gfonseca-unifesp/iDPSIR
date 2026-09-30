@@ -4189,3 +4189,40 @@ categórico...").
 
 Minimalista e incremental. Vocabulário controlado e validação por construção.
 Reprodutibilidade (adicionar `renv`). Testar rodando o app a cada mudança de módulo.
+
+## Auditoria pré-merge da Revisão 2 (30/09/2026, branch `revisao2-exemplo-porto`)
+
+Auditoria completa antes de mesclar em `main`: 3 agentes (cenários/relatório, dados/grafo/
+métricas, núcleo numérico) + verificação ao vivo. Corrigido:
+
+- **Tolerância de neutralização** não fazia nada na prática: a condição extra "|net| não
+  cresce" impedia o rótulo em todos os exemplos, e o relatório usava 5% fixo. Agora
+  (decisão do usuário) rotula quando 0 < net ≤ tol × baseline e a parada "até neutralizar"
+  também para aí (0 = só zero). A parada passou a considerar também Impactos que só a
+  resposta piora. Tabela/gráfico/relatório usam a tolerância e as configurações da última
+  execução (não a tela editada sem rodar); "Save this scenario" grava as da última execução.
+- **Paleta**: aplicar paleta invalidava o grafo e apagava os cenários salvos. Causa real
+  (confirmada ao vivo): `observeEvent()` sobre um `reactive()` dispara na invalidação,
+  não na mudança de valor. Agora a estrutura do schema é comparada por valor com a do
+  último build. Dropdown mostra a paleta em uso.
+- **Add level**: modal com papel (5 papéis ou personalizado) e posição; demais níveis
+  deslocam; remover nível sem fatores; papéis padrão escritos no schema. Bug achado ao
+  vivo: num savepoint antigo (papéis inferidos pela ordem), inserir um nível deslocava a
+  inferência e a Pressão perdia o papel — agora os papéis inferidos são fixados antes.
+- Grafo: layout em camadas embolava (física ligada) — física desligada; filtro de
+  subsistema só mostrava "All"; caminhos respeitam o filtro; modo comunidade mantém as
+  formas; espaçamento vertical escondido no circular; legenda do tracejado explica a
+  confiança derivada da faixa.
+- Dados/io: CSV sem `subsystem` quebrava a aba Graph; re-salvar perdia metadados;
+  "Save savepoint" no passo 1 gravava projeto vazio (botão escondido até carregar);
+  combinar arquivos de mesmo nome gerava ids duplicados; savepoint sem `weight_mode` mas
+  com colunas estruturais era reconvertido; edição de aresta trocava `evidence_type`
+  desconhecido, perdia o rótulo `converted` e centrava a faixa em √r² em vez de β.
+- Núcleo: sorteios pulados (ρ ≥ 1) apareciam como "—" (= não afetado) — agora "not
+  computable" + aviso; força para neutralizar com gatilho limitada a ×10 (agora até
+  ×10⁴); avisos novos: gatilho empurrado para o lado oposto, limiar = nível inicial,
+  crescimento com SD sem nível inicial, piso já atingido, período "por N janelas" fora
+  da execução. Priorização distingue Impacto melhorado pela pressão de "não afetado".
+- Métricas: "Directed" agora também orienta a proximidade; "Impacts without Response"
+  conta arestas R → I. Relatório: rótulos em vez de ids, legenda com "Neutralized
+  (relative)", alcance efetivo, texto obsoleto do "reach over c" removido.

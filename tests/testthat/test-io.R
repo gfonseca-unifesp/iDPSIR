@@ -233,12 +233,13 @@ test_that("scenario_state round-trips the temporal settings, with defaults for o
   st <- list(
     response_active = "R1", response_strengths = c(R1 = 100), pressure_active = "D1", pressure_strengths = c(D1 = 50),
     temporal_mode_pressure = "impulse", temporal_mode_response = "permanent", temporal_stop_rule = "fixed",
-    temporal_max_windows = 30, temporal_windows = 12, temporal_tol_rel = 10, baseline_without_response = TRUE
+    temporal_max_windows = 30, temporal_windows = 12, temporal_tol_rel = 10, baseline_without_response = TRUE,
+    n_simulations = 1000
   )
   tmp <- tempfile(fileext = ".idpsir.json"); on.exit(unlink(tmp))
   write_savepoint(build_savepoint(schema, nodes, edges, scenario_state = st), tmp)
   back <- read_savepoint(tmp)$scenario_state
-  for (k in names(st)[5:11]) expect_equal(back[[k]], st[[k]], info = k)
+  for (k in names(st)[5:12]) expect_equal(back[[k]], st[[k]], info = k)
 
   st_min <- st[1:4]
   write_savepoint(build_savepoint(schema, nodes, edges, scenario_state = st_min), tmp)
@@ -275,4 +276,22 @@ test_that("Revisao 2, item 3.13: saved scenarios (definitions) round-trip throug
   expect_equal(back[[2]]$strengths, c(R3 = 85))
   expect_length(back[[2]]$pressure_active, 0)
   expect_null(read_savepoint("../../docs/example_mangi.idpsir.json")$saved_scenarios)
+})
+
+test_that("audit: merging savepoints with the same file name never creates duplicate ids", {
+  sp <- read_savepoint("../../docs/example_fisheries.idpsir.json")
+  m <- merge_savepoints(list(sp, sp, sp), c("a", "a", "a"))
+  expect_false(any(duplicated(m$nodes$id)))
+  expect_true(all(c(m$edges$from, m$edges$to) %in% m$nodes$id))
+})
+
+test_that("audit: a savepoint without weight_mode but with structural edge columns is not converted", {
+  sp <- read_savepoint("../../docs/example_port.idpsir.json")
+  raw <- jsonlite::read_json("../../docs/example_port.idpsir.json", simplifyVector = TRUE)
+  raw$metadata$weight_mode <- NULL
+  tmp <- tempfile(fileext = ".idpsir.json"); on.exit(unlink(tmp))
+  jsonlite::write_json(raw, tmp, auto_unbox = TRUE, digits = NA, null = "null")
+  back <- read_savepoint(tmp)
+  expect_equal(back$edges$weight, sp$edges$weight)
+  expect_null(back$metadata$converted_from)
 })

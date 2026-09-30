@@ -24,6 +24,7 @@ mod_metrics_ui <- function(id) {
           column(width = 4, ina_toggle_normalized(ns("normalized"))),
           column(width = 4, checkboxInput(ns("weighted"), "Weighted by edge weight (link strength)", value = FALSE))
         ),
+        helpText("Directed: betweenness and closeness follow the arrows (closeness along outgoing paths, so it is blank for factors with no outgoing path, e.g. Impacts without a Response link). Degree is always the total number of links."),
         DTOutput(ns("centrality_table"))
       ),
       tabPanel(

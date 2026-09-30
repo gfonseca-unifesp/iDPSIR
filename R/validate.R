@@ -473,6 +473,10 @@ normalize_dpsir_nodes <- function(nodes, schema = get_default_dpsir_schema()) {
   nodes$id <- trimws(as.character(nodes$id))
   nodes$label <- as.character(nodes$label)
   nodes$dpsir_category <- trimws(as.character(nodes$dpsir_category))
+  # Audit: an imported file without `subsystem` crashed the Graph tab's
+  # subsystem filter; it is optional, so default to empty.
+  if (!"subsystem" %in% names(nodes)) nodes$subsystem <- if (nrow(nodes) == 0) character() else ""
+  nodes$subsystem <- ifelse(is.na(nodes$subsystem), "", as.character(nodes$subsystem))
 
   # Revisao 2 (30/09): uncertainty/controllability removed (never used in
   # any calculation); dropped from older files, like temporal_scale.

@@ -242,6 +242,13 @@ growth_warnings <- function(nodes) {
       nodes$label[frac], 100 * gr[frac]
     ))
   }
+  # Audit: growth with an SD but no initial level is measured against a
+  # base level of 1 in SD units - say so.
+  sd_noref <- gr != 0 & !is.na(sd) & is.na(ref)
+  if (any(sd_noref)) {
+    out <- c(out, sprintf("'%s' grows %+.1f%% per window and has an SD but no initial level: the growth is applied to a base level of 1 (in the factor's own units). Enter the initial level to grow from it.",
+                          nodes$label[sd_noref], 100 * gr[sd_noref]))
+  }
   nocap_ref <- !is.na(cap) & is.na(ref)
   if (any(nocap_ref)) {
     out <- c(out, sprintf("'%s' has a growth ceiling but no initial level: the ceiling is read against a base level of 1.", nodes$label[nocap_ref]))
@@ -249,6 +256,11 @@ growth_warnings <- function(nodes) {
   reached <- !is.na(cap) & !is.na(ref) & gr > 0 & cap <= ref
   if (any(reached)) {
     out <- c(out, sprintf("'%s' already starts at or above its growth ceiling, so its trend stays at zero.", nodes$label[reached]))
+  }
+  # Audit: a decline with a floor at or above the initial level never moves.
+  floor_reached <- !is.na(cap) & !is.na(ref) & gr < 0 & cap >= ref
+  if (any(floor_reached)) {
+    out <- c(out, sprintf("'%s' declines but already starts at or below its floor, so its trend stays at zero.", nodes$label[floor_reached]))
   }
   out
 }
@@ -271,7 +283,23 @@ threshold_warnings <- function(g) {
   p_all <- setNames(as.numeric(role %in% c("driver", "pressure")), V(g)$name)
   B <- effect_matrix(g)
   dev <- tryCatch(static_state_deviation(g, B, p_all, th$id), error = function(e) rep(NA_real_, nrow(th)))
-  never <- !is.na(dev) & !gate_is_open(dev, th$z, th$direction) & abs(dev) < abs(th$z)
+  # Audit: z = 0 (the threshold equals the initial level) means the trigger
+  # is open from the start.
+  at_start <- abs(th$z) < 1e-12 & th$direction != "both"
+  if (any(at_start)) {
+    out <- c(out, sprintf("'%s': the threshold equals the initial level, so the trigger is open from the start.", labels[at_start]))
+  }
+  # Audit: the pressures move the State away from the threshold, so the
+  # trigger never opens this way (it used to be reported only when the
+  # deviation went the right way but not far enough).
+  opposite <- !at_start & th$direction != "both" & !is.na(dev) & abs(dev) > 1e-9 & sign(dev) != sign(th$z)
+  if (any(opposite)) {
+    out <- c(out, sprintf(
+      "'%s': with every pressure at 100%% it moves %s (%.2f SD), away from the threshold (%.2f SD) - check the threshold level or the signs of the edges arriving at it.",
+      labels[opposite], ifelse(dev[opposite] > 0, "up", "down"), dev[opposite], th$z[opposite]
+    ))
+  }
+  never <- !at_start & !opposite & !is.na(dev) & !gate_is_open(dev, th$z, th$direction) & abs(dev) < abs(th$z)
   if (any(never)) {
     out <- c(out, sprintf(
       "'%s': with every pressure at 100%% its deviation in a single instant (%.2f SD) does not reach the threshold (%.2f SD) - the static reading keeps this trigger closed; it can still open over time by accumulation.",

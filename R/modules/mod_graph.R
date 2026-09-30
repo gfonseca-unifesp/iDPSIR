@@ -56,6 +56,10 @@ mod_graph_ui <- function(id) {
         # Revisao 2, item 3.11: one source of colors - the model's own palette
         # (Model step) unless another is picked here for this view.
         selectInput(ns("palette"), "Color palette", choices = c("As set in the model" = "model", get_dpsir_palette_choices()), selected = "model"),
+        conditionalPanel(
+          condition = sprintf("input['%s'] == 'community'", ns("color_by")),
+          helpText("Colored by community - the palette applies when coloring by DPSIR category.")
+        ),
         checkboxInput(ns("use_shapes"), "Use DPSIR shapes", value = TRUE),
         selectInput(ns("subsystem_filter"), "Subsystem", choices = "All"),
         checkboxInput(ns("show_node_legend"), "Show category/community legend", value = TRUE),
@@ -73,15 +77,19 @@ mod_graph_ui <- function(id) {
           ns("edge_width_by"), "Edge width based on",
           choices = c("Edge weight" = "weight", "Confidence" = "confidence", "Fixed" = "fixed")
         ),
-        sliderInput(ns("confidence_threshold"), "Dash edges below confidence", min = 0, max = 1, value = 0.5, step = 0.05)
+        sliderInput(ns("confidence_threshold"), "Dash edges below confidence", min = 0, max = 1, value = 0.5, step = 0.05),
+        helpText("Confidence = 1 - (width of the edge's uncertainty band / its strength). A class edge (weak/moderate/strong) has the band of its class, so the default classes may already fall below 0.5 and show dashed.")
       ),
 
       box(
         width = 12, title = "Layout & spacing", status = "primary", solidHeader = TRUE,
         collapsible = TRUE, collapsed = TRUE,
-        sliderInput(ns("x_spacing"), "Horizontal spacing between categories", min = 100, max = 500, value = 200, step = 25),
-        sliderInput(ns("y_spacing"), "Vertical spacing between nodes", min = 30, max = 250, value = 80, step = 10),
-        sliderInput(ns("avoid_overlap"), "Avoid node overlap", min = 0, max = 1, value = 0.5, step = 0.1),
+        sliderInput(ns("x_spacing"), "Horizontal spacing between categories (ring size when circular)", min = 100, max = 500, value = 200, step = 25),
+        # Audit: the circular layout has no vertical spacing.
+        conditionalPanel(
+          condition = sprintf("input['%s'] != 'circular'", ns("layout_mode")),
+          sliderInput(ns("y_spacing"), "Vertical spacing between nodes", min = 30, max = 250, value = 80, step = 10)
+        ),
         sliderInput(ns("node_font_size"), "Graph label font size", min = 8, max = 40, value = 14, step = 1),
         sliderInput(ns("legend_font_size"), "Legend font size", min = 8, max = 40, value = 14, step = 1),
         tags$hr(),
@@ -99,7 +107,11 @@ mod_graph_ui <- function(id) {
         selectInput(ns("path_from_category"), "Pathway from category", choices = character()),
         selectInput(ns("path_to_category"), "Pathway to category", choices = character()),
         selectInput(ns("path_highlight"), "Highlight pathway", choices = c("None" = "none"), width = "100%"),
-        uiOutput(ns("path_status"))
+        uiOutput(ns("path_status")),
+        conditionalPanel(
+          condition = sprintf("input['%s'] == 'community'", ns("color_by")),
+          helpText("The highlight shows only when nodes are colored by DPSIR category.")
+        )
       ),
 
       box(
@@ -143,11 +155,16 @@ mod_graph_ui <- function(id) {
 
 mod_graph_server <- function(id, schema, nodes, edges, graph, positions, set_positions, epoch = NULL) {
   moduleServer(id, function(input, output, session) {
-    observeEvent(nodes(), {
+    # The Explore tab is built only when step 6 is first reached, so an
+    # update sent before the dropdown existed was lost (it only offered
+    # "All"). Re-send when the input appears, keeping a still-valid choice.
+    observeEvent(list(nodes(), is.null(input$subsystem_filter)), {
       n <- nodes()
-
-      subsystems <- sort(unique(n$subsystem[nzchar(n$subsystem)]))
-      updateSelectInput(session, "subsystem_filter", choices = c("All", subsystems), selected = "All")
+      req(n)
+      subsystems <- sort(unique(n$subsystem[!is.na(n$subsystem) & nzchar(n$subsystem)]))
+      current <- isolate(input$subsystem_filter)
+      updateSelectInput(session, "subsystem_filter", choices = c("All", subsystems),
+                        selected = if (!is.null(current) && current %in% subsystems) current else "All")
     })
 
     # =================================================
@@ -174,8 +191,11 @@ mod_graph_server <- function(id, schema, nodes, edges, graph, positions, set_pos
     path_candidates <- reactive({
       req(graph(), input$path_from_category, input$path_to_category)
 
-      paths <- find_dpsir_paths(graph(), input$path_from_category, input$path_to_category, schema = schema())
-      compute_critical_pathways(graph(), paths, top_n = 10)
+      # Audit: only pathways that are on screen (the subsystem filter).
+      g <- filtered_graph()
+      req(g)
+      paths <- find_dpsir_paths(g, input$path_from_category, input$path_to_category, schema = schema())
+      compute_critical_pathways(g, paths, top_n = 10)
     })
 
     observeEvent(path_candidates(), {
@@ -315,13 +335,13 @@ mod_graph_server <- function(id, schema, nodes, edges, graph, positions, set_pos
           confidence_threshold = d_conf_threshold(),
           x_spacing = d_x_spacing(),
           y_spacing = d_y_spacing(),
-          avoid_overlap = input$avoid_overlap,
           node_font_size = d_node_font(),
           legend_font_size = d_legend_font(),
           layout_mode = input$layout_mode,
           manual_positions = manual_positions,
           show_node_legend = input$show_node_legend,
-          show_edge_legend = input$show_edge_legend
+          show_edge_legend = input$show_edge_legend,
+          use_shapes = input$use_shapes
         )
       } else {
         build_network_visual(
@@ -336,7 +356,6 @@ mod_graph_server <- function(id, schema, nodes, edges, graph, positions, set_pos
           confidence_threshold = d_conf_threshold(),
           x_spacing = d_x_spacing(),
           y_spacing = d_y_spacing(),
-          avoid_overlap = input$avoid_overlap,
           node_font_size = d_node_font(),
           legend_font_size = d_legend_font(),
           highlighted_nodes = highlighted_nodes(),
@@ -548,7 +567,7 @@ mod_graph_server <- function(id, schema, nodes, edges, graph, positions, set_pos
 
       parts <- c(layout_desc, color_desc, filter_desc, size_desc, edge_desc)
 
-      if (!is.null(input$path_highlight) && input$path_highlight != "none") {
+      if (!identical(input$color_by, "community") && !is.null(input$path_highlight) && input$path_highlight != "none") {
         candidates <- path_candidates()
         idx <- as.integer(input$path_highlight)
         if (!is.na(idx) && idx <= nrow(candidates)) {

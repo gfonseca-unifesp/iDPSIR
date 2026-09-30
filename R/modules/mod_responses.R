@@ -129,7 +129,10 @@ build_confidence_matrix <- function(g, p_D, response_nodes_df, n_simulations = 3
     row <- as.data.frame(t(pl$neutralized_pct), stringsAsFactors = FALSE)
     names(row) <- impact_labels
     out <- rbind(cbind(Response = "Planned scenario (as set)", row, stringsAsFactors = FALSE), out)
+    per_response <- c(per_response, list(pl))
   }
+  attr(out, "skipped") <- max(vapply(per_response, function(x) as.numeric(attr(x, "skipped") %||% 0), numeric(1)))
+  attr(out, "n_simulations") <- n_simulations
   out
 }
 
@@ -413,11 +416,12 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
         h5("How confident is that, response by response?"),
         p(
           class = "text-muted",
-          "Every response in the network, evaluated alone at the strength set above, against the same pressure",
-          "scenario: % of simulations - resampling every edge's strength within its uncertainty range - in",
-          "which that response alone neutralizes each Impact."
+          "First row: the scenario as set above. Then every response in the network, evaluated alone at 100%,",
+          "against the same pressure scenario: % of simulations - resampling every edge's strength within its",
+          "uncertainty range - in which it neutralizes each Impact."
         ),
         DTOutput(ns("confidence_matrix_table")),
+        uiOutput(ns("confidence_skipped_note")),
         uiOutput(ns("triggers_section")),
         # Revisao 2, item B7.
         h5("Impact prioritization"),
@@ -471,6 +475,15 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
         utils::write.csv(format_prioritization_table(sc$prioritization), file, row.names = FALSE)
       }
     )
+
+    output$confidence_skipped_note <- renderUI({
+      sc <- current_scenario()
+      req(sc)
+      m <- sc$sufficiency_confidence_matrix
+      note <- skipped_draws_note(attr(m, "skipped"), attr(m, "n_simulations") %||% sc$n_simulations)
+      if (is.null(note)) return(NULL)
+      div(class = "alert alert-warning", note)
+    })
 
     output$confidence_matrix_table <- renderDT({
       sc <- current_scenario()
@@ -615,6 +628,7 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
               ),
               conditionalPanel(
                 condition = sprintf("input['%s'] == 'until_neutralized'", ns("temporal_stop_rule")),
+                helpText("Stops at the first window in which every Impact the response reaches - and that is worsened with or without the response - is at or below zero, or within the tolerance of its baseline."),
                 numericInput(ns("temporal_max_windows"), "Maximum windows", value = ts$temporal_max_windows, min = 1, max = 200, step = 1),
                 # Revisao 2, item D4: with a growing trend, neutralizing may be temporary.
                 numericInput(ns("temporal_continue_after"), "Continue after neutralizing (windows)", value = ts$temporal_continue_after %||% 0, min = 0, max = 100, step = 1)
@@ -626,7 +640,7 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
             ),
             column(6,
               numericInput(ns("temporal_tol_rel"), "Neutralization tolerance (% of baseline)", value = ts$temporal_tol_rel, min = 0, max = 50, step = 1),
-              helpText("Only labels the table ('Neutralized (relative)'); the run stops only when the Impact reaches zero."),
+              helpText("An Impact whose net value is at or below this share of its baseline counts as 'Neutralized (relative)' in the table, and 'Until neutralized' stops there too. 0 = only zero counts. Takes effect on the next Run simulation."),
               checkboxInput(ns("baseline_without_response"), "Baseline without any response (ignore Impact -> Response links)", value = isTRUE(ts$baseline_without_response))
             )
           ),
@@ -752,6 +766,9 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
       content = function(file) utils::write.csv(intensity_table(), file, row.names = FALSE)
     )
 
+    last_run_settings <- reactiveVal(NULL)
+    observeEvent(current_scenario(), last_run_settings(NULL))
+
     temporal_result <- reactive({
       sc <- current_scenario()
       req(sc, isTRUE(input$show_temporal))
@@ -760,7 +777,7 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
 
       # Revisao 2, item 0.5: report the failure instead of leaving the
       # table/chart blank with Shiny's terse grey error text.
-      tryCatch(
+      tr <- tryCatch(
         withProgress(message = "Simulating temporal windows", value = 0, {
           simulate_temporal_pair(
             graph(), sc$p_D, sc$press,
@@ -773,6 +790,7 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
             schedule = ts$temporal_schedule,
             trends_outside = !isFALSE(ts$temporal_trends_outside),
             continue_after = ts$temporal_continue_after %||% 0,
+            tol_rel = max(0, ts$temporal_tol_rel %||% 5) / 100,
             on_step = function(t, total) {
               incProgress(1 / total, detail = sprintf("Window %d of %d", t, total))
             }
@@ -783,6 +801,12 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
           req(FALSE)
         }
       )
+      # Audit: the settings of THIS run - the table labels, the "load"
+      # comparison run and "Save this scenario" use them, not whatever is on
+      # screen now (possibly edited but never run).
+      tr$settings <- ts
+      last_run_settings(ts)
+      tr
     }) %>%
       # Revisao 2, item 3.3: runs on "Run simulation" (and when the
       # disclosure is opened or a new scenario is applied), not on every
@@ -794,7 +818,8 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
     temporal_result_load <- reactive({
       sc <- current_scenario()
       req(sc, isTRUE(input$show_temporal), identical(input$temporal_gate_mode, "compare"))
-      ts <- temporal_settings()
+      tr <- temporal_result()
+      ts <- tr$settings
       simulate_temporal_pair(
         graph(), sc$p_D, sc$press,
         windows = max(1, ts$temporal_windows %||% 5),
@@ -802,10 +827,12 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
         stop_rule = ts$temporal_stop_rule, max_windows = max(1, ts$temporal_max_windows %||% 50),
         baseline_without_response = isTRUE(ts$baseline_without_response), gate_mode = "load",
         schedule = ts$temporal_schedule, trends_outside = !isFALSE(ts$temporal_trends_outside),
-        continue_after = ts$temporal_continue_after %||% 0
+        continue_after = ts$temporal_continue_after %||% 0,
+        tol_rel = max(0, ts$temporal_tol_rel %||% 5) / 100
       )
     }) %>%
-      bindEvent(input$run_temporal, input$show_temporal, current_scenario(), input$temporal_gate_mode)
+      # Audit: follows the main run (same settings), not every input change.
+      bindEvent(temporal_result(), input$temporal_gate_mode)
 
     output$temporal_gates_section <- renderUI({
       tr <- temporal_result()
@@ -878,11 +905,12 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
       tr <- temporal_result()
       req(tr)
       note <- temporal_stop_note(tr)
-      req(note)
-      div(class = if (is.na(tr$neutralized_at)) "alert alert-secondary" else "alert alert-success", role = "status", note)
+      tagList(
+        if (!is.null(note)) div(class = if (is.na(tr$neutralized_at)) "alert alert-secondary" else "alert alert-success", role = "status", note),
+        if (length(tr$schedule_notes) > 0) div(class = "alert alert-warning", lapply(tr$schedule_notes, tags$p))
+      )
     })
 
-    temporal_tol <- function() max(0, (input$temporal_tol_rel %||% 5)) / 100
 
     output$temporal_stability_note <- renderUI({
       tr <- temporal_result()
@@ -896,7 +924,7 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
       tr <- temporal_result()
       req(tr)
 
-      df <- format_temporal_table(graph(), tr, tol_rel = temporal_tol())
+      df <- format_temporal_table(graph(), tr, tol_rel = tr$tol_rel)
       if (nrow(df) == 0) {
         return(datatable(
           data.frame(Note = "No Impact factors in this network yet."),
@@ -942,7 +970,7 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
     temporal_chart_df <- reactive({
       tr <- temporal_result()
       req(tr)
-      format_temporal_table(graph(), tr, tol_rel = temporal_tol())
+      format_temporal_table(graph(), tr, tol_rel = tr$tol_rel)
     })
 
     output$temporal_chart <- renderPlot({
@@ -1076,7 +1104,9 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
       # impulse/permanent mode to use.
       # Revisao 2, item A5: every temporal setting, so the report re-runs
       # the same simulation.
-      sc <- utils::modifyList(sc, isolate(temporal_settings(seed_state())))
+      # Audit: prefer the settings of the last run of this scenario, so the
+      # report reproduces what was seen; else what is on screen.
+      sc <- utils::modifyList(sc, isolate(last_run_settings()) %||% isolate(temporal_settings(seed_state())))
 
       # Revisao 2, item 3.9: ask before overwriting a saved scenario.
       if (sc$name %in% names(saved_scenarios$list)) {
@@ -1270,13 +1300,14 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
 
       response_active <- rn$id[vapply(rn$id, function(id) isTRUE(input[[paste0("active_", input_key(id))]]), logical(1))]
       response_strengths <- setNames(
-        vapply(response_active, function(id) input[[paste0("strength_", input_key(id))]] %||% 50, numeric(1)),
+        # Audit: the strength actually used (the "in units" field when filled).
+        vapply(response_active, function(id) effective_strength(paste0("strength_", input_key(id)), paste0("units_", input_key(id)), node_sd(id)), numeric(1)),
         response_active
       )
 
       pressure_active <- pn$id[vapply(pn$id, function(id) isTRUE(input[[paste0("pressure_active_", input_key(id))]]), logical(1))]
       pressure_strengths <- setNames(
-        vapply(pressure_active, function(id) input[[paste0("pressure_strength_", input_key(id))]] %||% 50, numeric(1)),
+        vapply(pressure_active, function(id) effective_strength(paste0("pressure_strength_", input_key(id)), paste0("pressure_units_", input_key(id)), node_sd(id)), numeric(1)),
         pressure_active
       )
 
@@ -1288,9 +1319,20 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
           pressure_strengths = pressure_strengths
         ),
         # Revisao 2, item A5.
-        temporal_settings(isolate(restored()))
+        temporal_settings(isolate(restored())),
+        # Audit: saved with the scenario, like the temporal settings.
+        list(n_simulations = as.integer(input$n_simulations %||% isolate(restored())$n_simulations %||% 300))
       )
     }
+
+    # Restores "Simulations (confidence)" from a loaded savepoint.
+    observe({
+      rs <- restored()
+      n <- rs$n_simulations
+      if (!is.null(n) && as.character(n) %in% c("100", "300", "1000")) {
+        updateSelectInput(session, "n_simulations", selected = as.character(n))
+      }
+    })
 
     # Revisao 2, item 0.4: the last state read from live controls survives
     # the controls going stale (network edited, graph invalidated) - so a

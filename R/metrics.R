@@ -159,7 +159,9 @@ compute_all_metrics <- function(g, directed = TRUE, normalized = TRUE, weighted 
     node = node_labels,
     degree = compute_degree(g_analysis, weighted = weighted),
     betweenness = compute_betweenness(g_analysis, directed = directed, normalized = normalized, weighted = weighted),
-    closeness = compute_closeness(g_analysis, normalized = normalized, weighted = weighted),
+    # Audit: with "Directed" on, closeness follows the arrows (outgoing
+    # paths) - it used mode = "all" either way. Degree stays total degree.
+    closeness = compute_closeness(g_analysis, mode = if (isTRUE(directed)) "out" else "all", normalized = normalized, weighted = weighted),
     pagerank = compute_pagerank(g_analysis, weighted = weighted),
     eigenvector = compute_eigenvector(g_analysis, weighted = weighted),
     stringsAsFactors = FALSE
@@ -224,7 +226,12 @@ compute_dpsir_descriptors <- function(g, schema) {
   } else if (nrow(edges) == 0) {
     impact_ids
   } else {
-    covered <- unique(edges$from[edges$from %in% impact_ids & edges$to %in% response_ids])
+    # Audit: a Response acting directly on the Impact (R -> I) also covers
+    # it, not only an Impact -> Response link.
+    covered <- unique(c(
+      edges$from[edges$from %in% impact_ids & edges$to %in% response_ids],
+      edges$to[edges$to %in% impact_ids & edges$from %in% response_ids]
+    ))
     setdiff(impact_ids, covered)
   }
 

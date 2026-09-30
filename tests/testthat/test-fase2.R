@@ -80,3 +80,52 @@ test_that("2.4: resampling and community detection leave the caller's RNG untouc
   expect_identical(a, b)
   expect_identical(membership(compute_communities(g)), membership(compute_communities(g)))
 })
+
+test_that("audit: add a level with a role at a position, and remove an unused one", {
+  s <- get_default_dpsir_schema()
+  s2 <- schema_add_level(s, "Sub-driver", 2, "sub-driver")
+  expect_equal(schema_categories(s2), c("Driver", "Sub-driver", "Pressure", "State", "Impact", "Response"))
+  expect_equal(s2$order, 1:6)
+  # A custom role stays outside the five; the default roles do not shift.
+  r <- schema_roles(s2)
+  expect_true(is.na(r[["Sub-driver"]]))
+  expect_equal(unname(r[c("Driver", "Pressure", "State", "Impact", "Response")]), DPSIR_ROLES)
+  # The chain respects the new order.
+  conn <- schema_allowed_connections(s2)
+  expect_equal(conn[["Driver"]], "Sub-driver")
+  expect_equal(conn[["Sub-driver"]], "Pressure")
+  expect_setequal(conn[["Response"]], c("Driver", "Sub-driver", "Pressure", "State", "Impact"))
+  # A new, distinct color (not a repeat, not grey).
+  expect_false(toupper(s2$color[s2$name == "Sub-driver"]) %in% toupper(s$color))
+
+  # A second driver-role level is allowed and plays the driver role.
+  s3 <- schema_add_level(s, "Global driver", 1, "driver")
+  expect_equal(categories_with_role("driver", s3), c("Global driver", "Driver"))
+
+  expect_error(schema_add_level(s, "driver", 1, "driver"), "already exists")
+  expect_error(schema_add_level(s, "X", 9, "driver"), "Position")
+  expect_error(schema_add_level(s, "X", 1.5, "driver"), "Position")
+
+  expect_error(schema_remove_level(s2, "Pressure", used_categories = "Pressure"), "still has factors")
+  s4 <- schema_remove_level(s2, "Sub-driver")
+  expect_equal(schema_categories(s4), schema_categories(s))
+  expect_equal(s4$order, 1:5)
+  expect_equal(schema_missing_roles(schema_remove_level(s, "State")), "state")
+})
+
+test_that("audit: schemas with inferred and explicit roles are equivalent", {
+  old <- get_default_dpsir_schema()
+  old$role <- c(NA, NA, NA, NA, "feedback")
+  expect_true(schemas_equivalent(old, get_default_dpsir_schema()))
+  expect_error(validate_schema(transform(old, order = as.character(order))), "order")
+})
+
+test_that("audit: adding a level to an older schema (inferred roles) keeps every role", {
+  old <- get_default_dpsir_schema()
+  old$role <- c(NA, NA, NA, NA, "feedback")
+  s <- schema_add_level(old, "Sub-driver", 2, "sub-driver")
+  r <- schema_roles(s)
+  expect_equal(unname(r[c("Driver", "Pressure", "State", "Impact", "Response")]), DPSIR_ROLES)
+  expect_length(schema_missing_roles(s), 0)
+  expect_equal(unname(schema_roles(schema_remove_level(s, "Sub-driver"))), DPSIR_ROLES)
+})

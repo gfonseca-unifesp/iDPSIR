@@ -144,15 +144,20 @@ sufficiency <- function(g, p_D, p_R, threshold = 1e-9) {
     mitigation <- net - worsening
     linear_net <- propagate(gated_effect_matrix(g, p_D, B), p_net)[impact_ids]
     neutralized_by <- ifelse(net <= threshold, ifelse(linear_net > threshold, "trigger", "mitigation"), NA_character_)
-    # Strength to neutralize by bisection on the response's scale s in [0, 10].
+    # Strength to neutralize by bisection on the response's scale s. Audit:
+    # the upper bound doubles from 10 up to 10^4 (it was fixed at 10, so a
+    # response needing more than x10 was reported as never neutralizing).
     net_at <- function(s) {
       p <- p_D + s * p_R
       propagate(gated_effect_matrix(g, p, B), p)[impact_ids]
     }
     strength_to_neutralize <- vapply(seq_along(impact_ids), function(k) {
-      if (all(p_R == 0) || net_at(10)[k] > threshold) return(NA_real_)
+      if (all(p_R == 0)) return(NA_real_)
       if (net_at(0)[k] <= threshold) return(0)
-      lo <- 0; hi <- 10
+      hi <- 10
+      while (net_at(hi)[k] > threshold && hi < 1e4) hi <- hi * 2
+      if (net_at(hi)[k] > threshold) return(NA_real_)
+      lo <- 0
       for (i in 1:40) {
         mid <- (lo + hi) / 2
         if (net_at(mid)[k] <= threshold) hi <- mid else lo <- mid
@@ -330,7 +335,20 @@ format_confidence_matrix <- function(df) {
   cols <- setdiff(names(df), "Response")
   for (col in cols) {
     v <- suppressWarnings(as.numeric(df[[col]]))
-    df[[col]] <- ifelse(is.na(v), "\u2014", sprintf("%.0f", v))
+    # Audit: NaN = every resampled draw made the loops amplify, so there is
+    # no percentage - not the same as an Impact the pressure does not reach.
+    df[[col]] <- ifelse(is.nan(v), "not computable", ifelse(is.na(v), "\u2014", sprintf("%.0f", v)))
   }
   df
+}
+
+# Audit: a plain-language note when resampled draws had to be skipped
+# (rho(B) >= 1: the loops would amplify), NULL when none were.
+skipped_draws_note <- function(skipped, n_simulations) {
+  if (is.null(skipped) || is.na(skipped) || skipped == 0) return(NULL)
+  if (skipped >= n_simulations) {
+    return(sprintf("All %d resampled draws made the feedback loops amplify (effect matrix spectral radius >= 1), so the percentages cannot be computed - narrow the uncertainty ranges of the edges in the loops.", n_simulations))
+  }
+  sprintf("%d of %d resampled draws were skipped because the feedback loops would amplify (spectral radius >= 1); the percentages use the remaining %d.",
+          skipped, n_simulations, n_simulations - skipped)
 }

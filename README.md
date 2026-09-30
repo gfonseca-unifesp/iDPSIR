@@ -461,13 +461,13 @@ has four tabs:
   growth moves the base level), and an **Edge intensity by window** table (CSV) shows
   what each link out of a growing factor or a thresholded State passes on. The simulation runs **until the response neutralizes
   the Impact** (default, up to 50 windows, editable: it stops at the first window in
-  which every Impact the response reaches, and that the pressure has already worsened,
-  is at or below zero — or reports "Not neutralized within N windows"), or for a
+  which every Impact the response reaches, and that is worsened in either run, is at
+  or below zero or within the tolerance below — or reports "Not neutralized within N windows"), or for a
   **fixed number of windows**; **Continue after neutralizing** keeps running N more
   windows, since with a growing trend a neutralization may not last. A table shows how each Impact changes window by window
   (the stop window highlighted), with a "Neutralized (relative)" label when the net
-  value is within a tolerance of the baseline (default 5%) and not growing — the
-  tolerance only labels the table, it never stops the run. An option runs the baseline
+  value is within a tolerance of the baseline (default 5%) — "until neutralized"
+  also stops there (tolerance 0 = only zero counts). An option runs the baseline
   **without any response** (ignoring Impact → Response links). A chart shows one panel
   per Impact, dashed baseline vs. solid Net, points colored by that window's Verdict,
   the neutralized zone (Net ≤ 0) shaded and the stop window marked (downloadable as

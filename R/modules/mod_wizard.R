@@ -45,7 +45,11 @@ mod_wizard_ui <- function(id) {
     tags$hr(),
     fluidRow(
       column(width = 3, actionButton(ns("prev_step"), "Back", icon = icon("arrow-left"), width = "100%")),
-      column(width = 6, downloadButton(ns("download_savepoint"), "Save savepoint (.idpsir.json)", width = "100%")),
+      # Audit: hidden until a project exists (on step 1 it wrote an empty file).
+      column(width = 6, conditionalPanel(
+        condition = sprintf("output['%s']", ns("project_loaded")),
+        downloadButton(ns("download_savepoint"), "Save savepoint (.idpsir.json)", width = "100%")
+      )),
       column(
         width = 3,
         # Next has nowhere left to go once Explore (the last step) is reached,
@@ -148,6 +152,9 @@ mod_wizard_server <- function(id) {
       }
     })
 
+    output$project_loaded <- reactive(isTRUE(data$loaded()))
+    outputOptions(output, "project_loaded", suspendWhenHidden = FALSE)
+
     output$download_savepoint <- downloadHandler(
       filename = function() paste0("project_", Sys.Date(), ".idpsir.json"),
       content = function(file) {
@@ -156,6 +163,12 @@ mod_wizard_server <- function(id) {
           nodes = data$nodes(),
           edges = data$edges(),
           positions = data$positions(),
+          # Audit: keep the project name, author, created_at and notes of a
+          # loaded savepoint (they were dropped on every re-save).
+          metadata = {
+            m <- data$metadata() %||% list()
+            m[c("project_name", "author", "created_at", "notes")[c("project_name", "author", "created_at", "notes") %in% names(m)]]
+          },
           scenario_state = responses$scenario_state(),
           saved_scenarios = responses$saved_scenarios()
         )

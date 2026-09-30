@@ -305,7 +305,10 @@ build_edge_legend <- function(confidence_threshold = 0.5) {
   rbind(
     legend,
     data.frame(
-      label = paste0("Low confidence (< ", confidence_threshold, ")"),
+      # Audit (30/09): confidence is derived from the edge's uncertainty
+      # band (1 - band width / strength), so say so in the legend.
+      label = paste0("Wide uncertainty band
+(confidence < ", confidence_threshold, ")"),
       color = "#848484",
       arrows = "to",
       dashes = TRUE,
@@ -467,11 +470,12 @@ build_network_visual <- function(
   layout <- compute_effective_layout(nodes, schema, layout_mode = layout_mode, x_spacing = x_spacing, y_spacing = y_spacing, manual_positions = manual_positions)
   nodes <- merge(nodes, layout, by = "id", sort = FALSE)
 
-  # Circular mode is a precise ring - physics would only distort it, so
-  # every node is excluded from the simulation. Layered mode keeps physics on
-  # by default (so the "avoid overlap" slider still spreads out same-category
-  # nodes) EXCEPT for nodes the user has actually dragged, which get excluded
-  # too so they stop drifting back under the solver.
+  # Revisao 2 (audit, 30/09): every node is excluded from the physics
+  # simulation, in both layouts. Layered mode used to keep physics on so an
+  # "avoid overlap" slider could spread same-category nodes - but with
+  # fixed.x = FALSE (see below) the solver pulled nodes out of their
+  # category columns and collapsed the diagram into a tangle (seen live on
+  # the port example). The layout already spaces each column by y_spacing.
   #
   # Deliberately `physics = FALSE`, not `fixed.x/fixed.y = TRUE`: vis-network's
   # own drag handler snapshots each node's fixed.x/fixed.y at the START of
@@ -489,7 +493,7 @@ build_network_visual <- function(
   manually_placed <- if (!is.null(manual_positions) && nrow(manual_positions) > 0) manual_positions$id else character()
   nodes$`fixed.x` <- FALSE
   nodes$`fixed.y` <- FALSE
-  nodes$physics <- !(identical(layout_mode, "circular") | nodes$id %in% manually_placed)
+  nodes$physics <- FALSE
 
   # ===================================================
   # NODE SIZE (degree, optionally weighted by edge strength)
@@ -622,7 +626,8 @@ build_community_visual <- function(
     layout_mode = "layered",
     manual_positions = NULL,
     show_node_legend = TRUE,
-    show_edge_legend = TRUE
+    show_edge_legend = TRUE,
+    use_shapes = TRUE
 ) {
   req(nodes)
 
@@ -655,7 +660,10 @@ build_community_visual <- function(
   legend_nodes <- build_community_legend(membership)
   community_colors <- setNames(legend_nodes$color, legend_nodes$label)
   nodes$color <- unname(community_colors[nodes$group])
-  nodes$shape <- "dot"
+  # Audit: keep the category shapes, so the DPSIR level stays readable
+  # while the color shows the community.
+  shp <- schema_shapes(schema)[as.character(nodes$dpsir_category)]
+  nodes$shape <- if (isTRUE(use_shapes)) ifelse(is.na(shp), "dot", unname(shp)) else "dot"
 
   # See compute_effective_layout()/build_network_visual() for why manual
   # positions are skipped in circular mode (a position dragged in layered
@@ -670,7 +678,7 @@ build_community_visual <- function(
   manually_placed <- if (!is.null(manual_positions) && nrow(manual_positions) > 0) manual_positions$id else character()
   nodes$`fixed.x` <- FALSE
   nodes$`fixed.y` <- FALSE
-  nodes$physics <- !(identical(layout_mode, "circular") | nodes$id %in% manually_placed)
+  nodes$physics <- FALSE
 
   nodes <- size_nodes_by_degree(nodes, graph, node_size_mode, node_size_weighted)
   nodes <- border_by_threshold(nodes)

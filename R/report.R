@@ -74,13 +74,19 @@ build_full_report_html <- function(
   # provenance header's "Scenario definitions" table below and by
   # "Response sufficiency"'s own per-scenario line further down, so the two
   # can never describe the same scenario two different ways.
+  # Audit: factor labels, not ids, in the scenario definitions.
+  lab <- function(ids) {
+    l <- V(graph)$label[match(ids, V(graph)$name)]
+    ifelse(is.na(l) | !nzchar(l), ids, l)
+  }
   scenario_definition_text <- function(sc) {
     pressure_text <- if (length(sc$pressure_active) == 0) {
       "none (no pressure scenario)"
     } else {
-      paste(sprintf("%s at %d%%", sc$pressure_active, round(sc$pressure_strengths[sc$pressure_active])), collapse = ", ")
+      paste(sprintf("%s at %d%%", lab(sc$pressure_active), round(sc$pressure_strengths[sc$pressure_active])), collapse = ", ")
     }
-    response_text <- paste(sprintf("%s at %d%%", sc$active, round(sc$strengths[sc$active])), collapse = ", ")
+    response_text <- if (length(sc$active) == 0) "none" else
+      paste(sprintf("%s at %d%%", lab(sc$active), round(sc$strengths[sc$active])), collapse = ", ")
     list(pressure = pressure_text, response = response_text)
   }
 
@@ -177,6 +183,7 @@ build_full_report_html <- function(
       tags$p(
         tags$strong("Per-window Verdict colors: "),
         tags$span(style = "color: #1b8a3a; font-weight: bold;", "green"), " = improved/neutralized (≤ 0), ",
+        tags$span(style = "color: #5cb85c; font-weight: bold;", "light green"), " = neutralized (relative): still above 0 but within the chosen tolerance of the baseline, ",
         tags$span(style = "color: #e0a100; font-weight: bold;", "amber"), " = partial (helped but still > 0), ",
         tags$span(style = "color: #c0392b; font-weight: bold;", "red"), " = failure (at or above baseline)."
       )
@@ -225,6 +232,11 @@ build_full_report_html <- function(
           )
         ),
         report_html_table(format_confidence_matrix(sc$sufficiency_confidence_matrix)),
+        {
+          m <- sc$sufficiency_confidence_matrix
+          note <- skipped_draws_note(attr(m, "skipped"), attr(m, "n_simulations") %||% sc$n_simulations)
+          if (!is.null(note)) tags$p(class = "report-warning", note)
+        },
         caption_tag(
           "Table", next_table_n(),
           sprintf(
@@ -265,7 +277,7 @@ build_full_report_html <- function(
         tags$h2("Response sufficiency"),
         tags$p(
           "For each selected scenario: whether the response is strong enough to neutralize the pressure's",
-          "worsening on each Impact, how confident that verdict is, and whether it holds up across different reach settings."
+          "worsening on each Impact, how confident that verdict is, and which Impact to prioritize."
         ),
         tagList(sufficiency_scenario_sections)
       ))
@@ -287,21 +299,27 @@ build_full_report_html <- function(
   # used throughout this project (e.g. R/responses.R's apply_response()).
   if (length(selected_scenario_names) > 0 && length(saved_scenarios) > 0) {
     total_impacts <- count_impacts_in_graph(graph)
-    reach_row <- function(scenario_name, reach) {
+    reach_row <- function(scenario_name, reach, eff = NULL) {
       reached_impacts_row <- reach$impacts
       reached_impacts <- if (length(reached_impacts_row) == 0) 0L else reached_impacts_row
+      # Audit: the screen also says what the scenario reaches with its
+      # closed triggers (item C5); the report now does too.
+      in_scenario <- if (!is.null(eff) && length(eff$closed) > 0 && eff$total < reach$total) {
+        sprintf("%d (trigger closed: %s)", eff$total, paste(eff$closed_labels, collapse = ", "))
+      } else as.character(reach$total)
       data.frame(
         Scenario = scenario_name,
         `Factors reached` = reach$total,
         `Impacts reached` = sprintf("%d of %d", reached_impacts, total_impacts),
+        `Reached in this scenario` = in_scenario,
         check.names = FALSE,
         stringsAsFactors = FALSE
       )
     }
-    baseline_reach_row <- reach_row("Baseline", list(total = 0L, by_category = data.frame(category = character(), count = integer())))
+    baseline_reach_row <- reach_row("Baseline", list(total = 0L, by_category = data.frame(category = character(), count = integer())), NULL)
     reach_df <- do.call(rbind, c(
       list(baseline_reach_row),
-      lapply(selected_scenario_names, function(scenario_name) reach_row(scenario_name, saved_scenarios[[scenario_name]]$reach))
+      lapply(selected_scenario_names, function(scenario_name) reach_row(scenario_name, saved_scenarios[[scenario_name]]$reach, saved_scenarios[[scenario_name]]$reach_effective))
     ))
 
     sections <- c(sections, list(
@@ -342,7 +360,9 @@ build_full_report_html <- function(
           # Revisao 2, Fase D.
           schedule = sc$temporal_schedule,
           trends_outside = !isFALSE(sc$temporal_trends_outside),
-          continue_after = sc$temporal_continue_after %||% 0
+          continue_after = sc$temporal_continue_after %||% 0,
+          # Audit: the report used the default tolerance, not the saved one.
+          tol_rel = max(0, sc$temporal_tol_rel %||% 5) / 100
         )
 
         stability_note <- temporal_stability_note(tr$stability)
@@ -352,7 +372,7 @@ build_full_report_html <- function(
         # node/baseline_impact/net_impact/verdict, como
         # format_temporal_table() as devolve) quanto a tabela em HTML
         # (renomeadas pra exibicao logo abaixo).
-        raw_df <- format_temporal_table(graph, tr)
+        raw_df <- format_temporal_table(graph, tr, tol_rel = tr$tol_rel)
 
         table_tag <- if (nrow(raw_df) == 0) {
           tags$p("No Impact factors in this network yet.")
@@ -382,7 +402,10 @@ build_full_report_html <- function(
 
         # Revisao 2, items A2/C0/C3: how the run ended, the trigger criterion
         # and the levels in the factors' own units.
-        stop_tag <- if (!is.null(temporal_stop_note(tr))) tags$p(temporal_stop_note(tr)) else NULL
+        stop_tag <- tagList(
+          if (!is.null(temporal_stop_note(tr))) tags$p(temporal_stop_note(tr)),
+          lapply(tr$schedule_notes, function(n) tags$p(class = "report-warning", n))
+        )
         # Revisao 2, Fase 4 (checklist): the settings behind the run.
         mode_text <- function(m) switch(m %||% "permanent",
           permanent = "added every window", impulse = "applied once and held", window = "for a set number of windows", m)
@@ -397,7 +420,7 @@ build_full_report_html <- function(
           paste0(" Periods: ", paste(sprintf("%s windows %d-%d", labs, as.integer(sched$start), as.integer(sched$start + sched$duration - 1)), collapse = "; "), ".")
         } else ""
         settings_tag <- tags$p(sprintf(
-          "Settings: pressure %s; response %s; %s; neutralization tolerance %s%% of the baseline (labels only); growth trends %s.%s",
+          "Settings: pressure %s; response %s; %s; neutralization tolerance %s%% of the baseline (labels and stop); growth trends %s.%s",
           mode_text(sc$temporal_mode_pressure), mode_text(sc$temporal_mode_response),
           if (identical(sc$temporal_stop_rule, "fixed")) sprintf("%d windows", as.integer(sc$temporal_windows %||% 5))
           else sprintf("until neutralized (up to %d windows)", as.integer(sc$temporal_max_windows %||% 50)),
@@ -406,7 +429,9 @@ build_full_report_html <- function(
           sched_text
         ))
         gate_tag <- if (nrow(tr$thresholds) > 0) {
-          tags$p(sprintf("Trigger criterion: %s.", if (identical(tr$gate_mode, "load")) "load arriving at the State in each window" else "accumulated State level"))
+          tags$p(sprintf("Trigger criterion: %s.%s", if (identical(tr$gate_mode, "load")) "load arriving at the State in each window" else "accumulated State level",
+                         # Audit: "Compare both" is a screen-only view; the report runs the level criterion.
+                         if (identical(sc$temporal_gate_mode, "compare")) " (\"Compare both\" was selected on screen; the report shows the level criterion - switch to \"load\" and save again to report the other.)" else ""))
         } else NULL
         level_df <- temporal_level_table(graph, tr)
         level_tag <- if (nrow(level_df) > 0) {

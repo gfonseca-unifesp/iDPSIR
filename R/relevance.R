@@ -127,6 +127,9 @@ impact_prioritization <- function(g, p_D, suff_df, n_simulations = 300, seed = 4
     gap = unname(gap),
     priority = ifelse(affected, relevance * gap, NA_real_),
     affected = affected,
+    # Audit: only worsened Impacts are prioritized; one the pressure
+    # improves is labelled as such instead of "Not affected".
+    improved = unname(suff_df$worsening[match(impact_ids, suff_df$id)] < -1e-9),
     stringsAsFactors = FALSE
   )
   out <- out[order(-ifelse(is.na(out$priority), -Inf, out$priority), -ifelse(is.na(out$relevance), -Inf, out$relevance)), ]
@@ -142,11 +145,13 @@ format_prioritization_table <- function(df) {
     Impact = df$node,
     Class = df$endpoint_class,
     `Importance D` = round(df$D, 2),
-    `Reliability rho` = ifelse(is.na(df$rho), "-", sprintf("%.0f%%", 100 * df$rho)),
+    # Audit: NaN rho = every draw skipped (loops amplify) - not computable.
+    `Reliability rho` = ifelse(is.nan(df$rho), "not computable", ifelse(is.na(df$rho), "-", sprintf("%.0f%%", 100 * df$rho))),
     `Value v` = round(df$value_v, 2),
-    Relevance = ifelse(df$affected, sprintf("%.2f", df$relevance), "-"),
-    Gap = ifelse(df$affected, sprintf("%.2f", df$gap), "Not affected"),
-    Priority = ifelse(df$affected, sprintf("%.2f", df$priority), "-"),
+    Relevance = ifelse(df$affected & is.nan(df$relevance), "not computable", ifelse(df$affected, sprintf("%.2f", df$relevance), "-")),
+    Gap = ifelse(df$affected, sprintf("%.2f", df$gap),
+                 ifelse(df$improved %in% TRUE, "Improved by the pressure", "Not affected")),
+    Priority = ifelse(df$affected & is.nan(df$priority), "not computable", ifelse(df$affected, sprintf("%.2f", df$priority), "-")),
     check.names = FALSE, stringsAsFactors = FALSE
   )
 }

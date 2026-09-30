@@ -255,6 +255,7 @@ mod_data_server <- function(id, seed = NULL) {
       rv$start_warnings <- character()
       rv$loaded <- TRUE
       rv$epoch <- rv$epoch + 1
+          rv$graph_message <- ""
       rv$start_message <- "New project started with the default DPSIR schema."
     })
 
@@ -305,6 +306,7 @@ mod_data_server <- function(id, seed = NULL) {
           rv$graph <- NULL
           rv$loaded <- TRUE
           rv$epoch <- rv$epoch + 1
+          rv$graph_message <- ""
           rv$start_warnings <- c(
             if (isTRUE(input$import_convert_legacy)) preflight$warnings[!grepl("is above 1 - unusual", preflight$warnings)] else preflight$warnings,
             legacy_conversion_notes(imported$conversion)
@@ -344,6 +346,7 @@ mod_data_server <- function(id, seed = NULL) {
           rv$graph <- NULL
           rv$loaded <- TRUE
           rv$epoch <- rv$epoch + 1
+          rv$graph_message <- ""
           rv$start_message <- paste0(
             "Savepoint loaded: '", restored$metadata$project_name %||% "Untitled",
             "' (last updated ", restored$metadata$updated_at %||% "?", ")."
@@ -386,6 +389,7 @@ mod_data_server <- function(id, seed = NULL) {
           rv$graph <- NULL
           rv$loaded <- TRUE
           rv$epoch <- rv$epoch + 1
+          rv$graph_message <- ""
 
           rename_note <- if (length(merged$renamed_ids) > 0) {
             paste0(" IDs renamed to avoid collisions: ", paste(merged$renamed_ids, collapse = ", "), ".")
@@ -395,7 +399,9 @@ mod_data_server <- function(id, seed = NULL) {
 
           rv$start_message <- paste0(
             "Combined ", length(savepoints), " savepoints: ", nrow(merged$nodes), " nodes, ",
-            nrow(merged$edges), " edges.", rename_note
+            nrow(merged$edges), " edges.", rename_note,
+            # Audit: say what combining does not carry over.
+            " Dragged positions, scenarios and project details of the source files are not combined."
           )
         },
         error = function(e) {
@@ -424,7 +430,7 @@ mod_data_server <- function(id, seed = NULL) {
         fluidRow(
           column(
             width = 4,
-            selectInput(ns("model_palette"), "Color palette", choices = get_dpsir_palette_choices(), selected = "default")
+            selectInput(ns("model_palette"), "Color palette", choices = get_dpsir_palette_choices(), selected = isolate(current_palette()))
           ),
           column(
             width = 4,
@@ -434,10 +440,13 @@ mod_data_server <- function(id, seed = NULL) {
           column(
             width = 4,
             br(),
-            actionButton(ns("add_level"), "Add level", icon = icon("plus"))
+            actionButton(ns("add_level"), "Add level", icon = icon("plus")),
+            actionButton(ns("remove_level"), "Remove selected level", icon = icon("trash"))
           )
         ),
 
+        helpText("Each level connects to the next one; a feedback level can also connect back to any earlier level. The role tells the engine what the level's factors are (the Pressure scenario lists driver and pressure factors, the sufficiency reading judges impact factors, feedback factors are the responses); a custom role (e.g. a sub-driver) is part of the chain but none of those."),
+        uiOutput(ns("schema_role_warning")),
         DTOutput(ns("schema_table"))
       )
       }, error = render_step_error)
@@ -448,7 +457,9 @@ mod_data_server <- function(id, seed = NULL) {
       req(rv$schema)
 
       display <- rv$schema[order(rv$schema$order), ]
-      display$role <- ifelse(is.na(display$role), "-", display$role)
+      inferred <- schema_roles(display)[display$name]
+      display$role <- ifelse(is.na(display$role) | !nzchar(display$role),
+                             ifelse(is.na(inferred), "-", paste0(inferred, " (inferred)")), display$role)
 
       datatable(
         display,
@@ -460,15 +471,41 @@ mod_data_server <- function(id, seed = NULL) {
 
     observeEvent(input$apply_palette, {
       rv$schema <- apply_schema_palette(rv$schema, input$model_palette)
+      showNotification("Palette applied - the Graph tab uses it right away (no rebuild needed).", type = "message")
     })
 
+    # The palette whose colors match the current schema (e.g. after loading a
+    # savepoint), so the dropdown shows what is actually in use.
+    current_palette <- function() {
+      pals <- get_dpsir_color_palettes()
+      cols <- toupper(rv$schema$color[order(rv$schema$order)])
+      hit <- names(pals)[vapply(pals, function(p) identical(toupper(recycle_to_length(p, length(cols))), cols), logical(1))]
+      if (length(hit) == 0) "default" else hit[1]
+    }
+
+    # Audit (30/09): the modal asks for the level's role (one of the five
+    # engine roles or a custom one, e.g. a sub-driver) and its position; the
+    # other levels shift so the order stays 1..n. Levels without factors can
+    # be removed.
+    role_choices <- c("Driver" = "driver", "Pressure" = "pressure", "State" = "state",
+                      "Impact" = "impact", "Response (feedback)" = "feedback", "Custom..." = "custom")
+
     observeEvent(input$add_level, {
+      n <- nrow(rv$schema)
+      current <- rv$schema$name[order(rv$schema$order)]
       showModal(modalDialog(
         title = "Add schema level",
-        textInput(ns("lvl_name"), "Level name"),
-        numericInput(ns("lvl_order"), "Position (order)", value = max(rv$schema$order) + 1, step = 1),
+        textInput(ns("lvl_name"), "Level name", placeholder = "e.g. Sub-driver"),
+        selectInput(ns("lvl_role"), "Role", choices = role_choices, selected = "driver"),
+        conditionalPanel(
+          condition = sprintf("input['%s'] == 'custom'", ns("lvl_role")),
+          textInput(ns("lvl_custom_role"), "Custom role", placeholder = "e.g. sub-driver")
+        ),
+        selectInput(ns("lvl_position"), "Insert",
+                    choices = setNames(seq_len(n + 1), c(paste("before", current), "at the end")),
+                    selected = n + 1),
         selectInput(ns("lvl_shape"), "Shape", choices = get_dpsir_shape_cycle()),
-        checkboxInput(ns("lvl_feedback"), "Feedback level (can connect back)", value = FALSE),
+        helpText("The new level connects to the next level in the order; a feedback level also connects back to every earlier one."),
         footer = tagList(
           modalButton("Cancel"),
           actionButton(ns("confirm_add_level"), "Add", class = "btn-primary")
@@ -477,24 +514,47 @@ mod_data_server <- function(id, seed = NULL) {
     })
 
     observeEvent(input$confirm_add_level, {
-      name <- trimws(input$lvl_name)
+      role <- if (identical(input$lvl_role, "custom")) input$lvl_custom_role else input$lvl_role
+      new_schema <- tryCatch(
+        schema_add_level(rv$schema, input$lvl_name, input$lvl_position, role, input$lvl_shape),
+        error = function(e) {
+          showNotification(conditionMessage(e), type = "error")
+          NULL
+        }
+      )
+      if (is.null(new_schema)) return()
+      rv$schema <- new_schema
+      removeModal()
+    })
 
-      if (!nzchar(name) || name %in% rv$schema$name) {
-        showNotification("Invalid or already existing level name.", type = "error")
+    observeEvent(input$remove_level, {
+      sel <- input$schema_table_rows_selected
+      if (length(sel) == 0) {
+        showNotification("Select a level in the table first.", type = "warning")
         return()
       }
-
-      new_row <- data.frame(
-        name = name,
-        order = input$lvl_order,
-        color = "#777777",
-        shape = input$lvl_shape,
-        role = if (isTRUE(input$lvl_feedback)) "feedback" else NA_character_,
-        stringsAsFactors = FALSE
+      name <- rv$schema$name[order(rv$schema$order)][sel]
+      used <- unique(as.character(rv$nodes$dpsir_category))
+      new_schema <- tryCatch(
+        schema_remove_level(rv$schema, name, used),
+        error = function(e) {
+          showNotification(conditionMessage(e), type = "error")
+          NULL
+        }
       )
+      if (is.null(new_schema)) return()
+      rv$schema <- new_schema
+      showNotification(sprintf("Level '%s' removed.", name), type = "message")
+    })
 
-      rv$schema <- rbind(rv$schema, new_row)
-      removeModal()
+    output$schema_role_warning <- renderUI({
+      req(rv$schema)
+      missing <- schema_missing_roles(rv$schema)
+      if (length(missing) == 0) return(NULL)
+      div(class = "alert alert-warning", sprintf(
+        "No level plays the role(s): %s. The analyses that need them (e.g. the Pressure scenario, sufficiency, responses) will be empty until a level does.",
+        paste(missing, collapse = ", ")
+      ))
     })
 
     # =================================================
@@ -800,6 +860,8 @@ mod_data_server <- function(id, seed = NULL) {
           return()
         }
         sd_value <- cv / 100 * reference_value
+      } else if (!is.na(sd_value) && !is.na(cv)) {
+        showNotification("Both an SD and a CV were given - the SD was used.", type = "message")
       }
       if (!is.na(sd_value) && sd_value <= 0) {
         showNotification("The typical variation must be greater than 0 (or left blank).", type = "error")
@@ -954,7 +1016,11 @@ mod_data_server <- function(id, seed = NULL) {
             column(6, numericInput(ns("em_high"), "Highest plausible", value = if (identical(mode, "value")) d$weight_high else NA, min = 0, step = 0.05))
           )
         ),
-        selectInput(ns("em_evidence"), "Evidence type", choices = get_evidence_types(), selected = d$evidence_type),
+        # Audit: keep an imported evidence type that is not in the list
+        # (it used to become the first choice silently on edit).
+        selectInput(ns("em_evidence"), "Evidence type",
+                    choices = unique(c(get_evidence_types(), if (!is.null(d$evidence_type) && !is.na(d$evidence_type) && nzchar(d$evidence_type)) d$evidence_type)),
+                    selected = d$evidence_type),
         textInput(ns("em_reference"), "Reference (optional)", value = d$reference, placeholder = "DOI, URL, or citation"),
         tags$p(
           class = "text-muted", style = "font-size: 13px;",
@@ -1059,8 +1125,11 @@ mod_data_server <- function(id, seed = NULL) {
             return()
           }
           band <- band_from_r2_n(r2, n)
-          low <- min(band[["low"]], weight)
-          high <- max(band[["high"]], weight)
+          # Audit: when beta is given too, the band's width comes from r2/n
+          # but it is centred on beta (it used to stay around sqrt(r2)).
+          shift <- weight - beta_from_r2(r2)
+          low <- max(0, min(band[["low"]] + shift, weight))
+          high <- max(band[["high"]] + shift, weight)
         } else if (xor(is.na(low), is.na(high))) {
           showNotification("Give both ends of the uncertainty range, or neither.", type = "error")
           return()
@@ -1072,6 +1141,15 @@ mod_data_server <- function(id, seed = NULL) {
           showNotification("A strength above 1 is unusual for a standardized coefficient - check the value.", type = "warning")
         }
         weight_source <- "given"
+        # Audit: an edge converted from an older file keeps that label when
+        # its value and range were not changed in the form.
+        orig <- if (!is.null(idx_editing)) rv$edges[idx_editing, , drop = FALSE] else NULL
+        same_num <- function(a, b) (is.na(a) && is.na(b)) || (!is.na(a) && !is.na(b) && abs(a - b) < 1e-9)
+        if (!is.null(orig) && identical(as.character(orig$weight_source), "converted") &&
+            same_num(weight, as.numeric(orig$weight)) && same_num(low, as.numeric(orig$weight_low)) &&
+            same_num(high, as.numeric(orig$weight_high))) {
+          weight_source <- "converted"
+        }
       } else {
         strength_class <- mode
       }
@@ -1202,11 +1280,28 @@ mod_data_server <- function(id, seed = NULL) {
     # Explore) require a rebuild. Start actions already set rv$graph to NULL
     # themselves in the same flush, so the `!is.null()` check keeps this from
     # overwriting their own message.
-    observeEvent(list(rv$nodes, rv$edges, rv$schema), {
+    # Audit (30/09): only STRUCTURAL changes drop the built graph. A palette
+    # (colors/shapes of the levels) is cosmetic - the Graph tab colors from
+    # the live schema - and used to force a rebuild that also cleared every
+    # saved scenario.
+    # A reactive() propagates invalidation even when its value is the same,
+    # so observeEvent() on it fired on every palette change (confirmed live).
+    # The structure is compared with the one the graph was built with.
+    schema_structure_of <- function(s) {
+      if (is.null(s)) return(NULL)
+      s <- s[order(s$order), , drop = FALSE]
+      paste(s$name, schema_roles(s)[s$name], collapse = "|")
+    }
+    built_structure <- reactiveVal(NULL)
+    invalidate_graph <- function() {
       if (!is.null(rv$graph)) {
         rv$graph <- NULL
         rv$graph_message <- "The network changed since the graph was built - rebuild it in step 5 (Review and build)."
       }
+    }
+    observeEvent(list(rv$nodes, rv$edges), invalidate_graph(), ignoreInit = TRUE)
+    observeEvent(rv$schema, {
+      if (!identical(schema_structure_of(rv$schema), isolate(built_structure()))) invalidate_graph()
     }, ignoreInit = TRUE)
 
     observeEvent(input$build_graph, {
@@ -1214,6 +1309,7 @@ mod_data_server <- function(id, seed = NULL) {
         {
           was_stale <- is.null(rv$graph)
           built <- build_igraph(rv$nodes, rv$edges, rv$schema)
+          built_structure(schema_structure_of(rv$schema))
           # Revisao 2, item 1.3: the total effect only exists when rho(B) < 1.
           check_effect_matrix(built)
           rv$graph <- built

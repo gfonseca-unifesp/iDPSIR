@@ -57,9 +57,23 @@ get_default_dpsir_schema <- function(palette = "default") {
     order = seq_len(n),
     color = recycle_to_length(palettes[[palette]], n),
     shape = recycle_to_length(get_dpsir_shape_cycle(), n),
-    role = c(rep(NA_character_, n - 1), "feedback"),
+    # Audit (30/09): explicit roles for the default levels, so a level added
+    # on the Model step never shifts the inferred ones.
+    role = c("driver", "pressure", "state", "impact", "feedback"),
     stringsAsFactors = FALSE
   )
+}
+
+# Extra colors for levels beyond the palette's five (audit: a 6th level used
+# to repeat the first color, and an added level was plain grey).
+get_extra_level_colors <- function() {
+  c("#56B4E9", "#882255", "#44AA99", "#999933", "#AA4499", "#332288", "#999999")
+}
+
+schema_level_colors <- function(palette, n) {
+  base <- get_dpsir_color_palettes()[[palette]]
+  if (n <= length(base)) return(base[seq_len(n)])
+  recycle_to_length(c(base, get_extra_level_colors()), n)
 }
 
 # =====================================================
@@ -73,7 +87,7 @@ apply_schema_palette <- function(schema, palette = "default") {
   }
 
   schema <- schema[order(schema$order), ]
-  schema$color <- recycle_to_length(palettes[[palette]], nrow(schema))
+  schema$color <- schema_level_colors(palette, nrow(schema))
   schema
 }
 
@@ -107,7 +121,7 @@ validate_schema <- function(schema) {
     stop("Schema level names must be unique.", call. = FALSE)
   }
 
-  if (any(is.na(schema$order)) || any(duplicated(schema$order))) {
+  if (!is.numeric(schema$order) || any(is.na(schema$order)) || any(duplicated(schema$order))) {
     stop("Schema level 'order' must be unique and non-missing.", call. = FALSE)
   }
 
@@ -142,10 +156,9 @@ schemas_equivalent <- function(schema_a, schema_b) {
     return(FALSE)
   }
 
-  roles_a <- schema_a$role[match(categories_a, schema_a$name)]
-  roles_b <- schema_b$role[match(categories_b, schema_b$name)]
-
-  identical(roles_a, roles_b)
+  # Audit: compare the roles the engine uses (explicit or inferred), so an
+  # older savepoint (roles inferred) matches a new one (roles written out).
+  identical(unname(schema_roles(schema_a)[categories_a]), unname(schema_roles(schema_b)[categories_b]))
 }
 
 # =====================================================
@@ -268,7 +281,9 @@ schema_roles <- function(schema = get_default_dpsir_schema()) {
   given[is.na(given)] <- ""
   roles <- ifelse(given %in% DPSIR_ROLES, given, NA_character_)
   chain <- which(is.na(roles) | roles != "feedback")
-  free <- chain[is.na(roles[chain])]
+  # Only levels with NO role written are inferred; a custom role (e.g.
+  # "sub-driver") is a deliberate choice and stays outside the five.
+  free <- chain[given[chain] == ""]
   n <- length(chain)
   infer <- rep(NA_character_, n)
   if (n >= 1) infer[1] <- "driver"
@@ -307,4 +322,72 @@ node_roles <- function(g) {
 has_role <- function(g, role) {
   r <- node_roles(g)
   !is.na(r) & r %in% role
+}
+
+
+# =====================================================
+# ADD / REMOVE A LEVEL (Model step; audit 30/09)
+# =====================================================
+#
+# A new level is inserted at `position` (1 = first); the levels at or after
+# it move down one, so the order is always 1..n with no gaps or ties and the
+# allowed connections (next level + feedback back) stay consistent. `role`
+# is one of DPSIR_ROLES or a custom label (e.g. "sub-driver"): a custom
+# level is part of the chain but plays none of the engine's five parts.
+schema_add_level <- function(schema, name, position, role, shape = "dot") {
+  name <- trimws(name)
+  if (!nzchar(name)) stop("The level needs a name.", call. = FALSE)
+  if (tolower(name) %in% tolower(schema$name)) stop(sprintf("A level named '%s' already exists.", name), call. = FALSE)
+  n <- nrow(schema)
+  position <- suppressWarnings(as.numeric(position))
+  if (length(position) != 1 || is.na(position) || position != round(position) || position < 1 || position > n + 1) {
+    stop(sprintf("Position must be a whole number from 1 to %d.", n + 1), call. = FALSE)
+  }
+  role <- tolower(trimws(as.character(role)))
+  if (!nzchar(role)) stop("Choose a role for the level.", call. = FALSE)
+  s <- freeze_schema_roles(schema)
+  s <- s[order(s$order), , drop = FALSE]
+  s$order <- seq_len(n)
+  s$order[s$order >= position] <- s$order[s$order >= position] + 1
+  # Keeps every existing color; the new level gets the first extra or palette
+  # extra color not in use yet.
+  pool <- unique(c(get_extra_level_colors(), unlist(get_dpsir_color_palettes(), use.names = FALSE)))
+  free_cols <- pool[!toupper(pool) %in% toupper(s$color)]
+  new_row <- data.frame(name = name, order = position, color = if (length(free_cols)) free_cols[1] else "#777777",
+                        shape = shape, role = role, stringsAsFactors = FALSE)
+  s <- rbind(s[, names(new_row)], new_row)
+  s <- s[order(s$order), , drop = FALSE]
+  rownames(s) <- NULL
+  validate_schema(s)
+  s
+}
+
+# Removes a level that no factor uses; renumbers the order 1..n.
+schema_remove_level <- function(schema, name, used_categories = character()) {
+  if (!name %in% schema$name) stop("Unknown level.", call. = FALSE)
+  if (name %in% used_categories) {
+    stop(sprintf("Level '%s' still has factors - move or remove them first.", name), call. = FALSE)
+  }
+  if (nrow(schema) <= 1) stop("The model needs at least one level.", call. = FALSE)
+  s <- freeze_schema_roles(schema)
+  s <- s[s$name != name, , drop = FALSE]
+  s <- s[order(s$order), , drop = FALSE]
+  s$order <- seq_len(nrow(s))
+  rownames(s) <- NULL
+  s
+}
+
+# Writes the inferred roles out, so inserting or removing a level never
+# shifts them (an older schema has only "feedback" written; its other roles
+# are inferred from the order - see schema_roles()).
+freeze_schema_roles <- function(schema) {
+  r <- schema_roles(schema)[schema$name]
+  empty <- is.na(schema$role) | !nzchar(trimws(as.character(schema$role)))
+  schema$role[empty & !is.na(r)] <- unname(r[empty & !is.na(r)])
+  schema
+}
+
+# Engine roles missing from a schema (for a warning on the Model step).
+schema_missing_roles <- function(schema) {
+  setdiff(DPSIR_ROLES, schema_roles(schema))
 }

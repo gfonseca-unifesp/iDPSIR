@@ -228,6 +228,23 @@ push_active <- function(mode, t, ids, schedule = NULL) {
   t >= start & t < start + dur
 }
 
+# Audit: a "for a number of windows" push that never acts in the run
+# (duration <= 0, or it starts after the last window) used to do nothing
+# silently. One note per such factor; character() when all is well.
+schedule_notes <- function(g, p_D, p_R, mode_D, mode_R, schedule, ran) {
+  out <- character()
+  check <- function(p, mode) {
+    if (!identical(mode, "window")) return(character())
+    ids <- names(p)[!is.na(p) & p != 0]
+    if (length(ids) == 0) return(character())
+    active_any <- vapply(ids, function(id) any(vapply(seq_len(max(1, ran)), function(t) push_active("window", t, id, schedule), logical(1))), logical(1))
+    labs <- V(g)$label[match(ids, V(g)$name)]
+    labs <- ifelse(is.na(labs), ids, labs)
+    if (any(!active_any)) sprintf("'%s' is set to act for a number of windows, but its period (start/duration) falls outside the %d windows run, so it never acts.", labs[!active_any], ran) else character()
+  }
+  c(out, check(p_D, mode_D), check(p_R, mode_R))
+}
+
 # Runs two rounds side by side - baseline (p_D only) and scenario
 # (p_D + p_R) - window by window, each push either "impulse" (window 1 only)
 # or "permanent" (every window). Returns the full history (window x node)
@@ -239,13 +256,14 @@ push_active <- function(mode, t, ids, schedule = NULL) {
 #   neutralizes the Impacts it reaches, up to max_windows (default 50);
 #   "fixed" runs exactly `windows`. Passing `windows` without `stop_rule`
 #   keeps the older fixed-length behaviour (existing callers and tests).
-#   The stop criterion is ABSOLUTE (net <= tol_abs, i.e. reached or crossed
-#   zero), never the relative tolerance of the table (see
-#   format_temporal_table()): when the baseline grows faster than the
-#   scenario, |net| can drop below 5% of the baseline while the Impact is
-#   still getting worse. Only Impacts reached by the active responses AND
-#   already worsened in the baseline in that window count - so the run does
-#   not stop before the problem has even arrived through the chain.
+#   The stop criterion (audit, user decision 30/09): every considered Impact
+#   is at or below zero (net <= tol_abs) OR within `tol_rel` of its
+#   baseline (net <= tol_rel * baseline) - the same "Neutralized
+#   (relative)" rule as format_temporal_table(), so the table and the stop
+#   always agree. tol_rel = 0 keeps the strict absolute criterion. Impacts
+#   considered: those reached by the active responses that are worsened in
+#   the baseline OR in the scenario in that window - an Impact only the
+#   response worsens (baseline <= 0) must also come back before stopping.
 # - baseline_without_response: the baseline round ignores every edge
 #   arriving at a Response node (Impact -> Response links), so it is a true
 #   "no response at all" baseline. Off by default (older behaviour).
@@ -261,6 +279,7 @@ simulate_temporal_pair <- function(g, p_D, p_R, windows = 5,
                                     stop_rule = c("until_neutralized", "fixed"),
                                     max_windows = 50,
                                     tol_abs = 1e-9,
+                                    tol_rel = 0,
                                     baseline_without_response = FALSE,
                                     gate_mode = c("state_level", "load"),
                                     growth_rate = NULL,
@@ -360,8 +379,11 @@ simulate_temporal_pair <- function(g, p_D, p_R, windows = 5,
     if (!is.null(on_step)) on_step(t, n_windows)
 
     if (is.na(neutralized_at) && length(reached_impacts) > 0) {
-      considered <- reached_impacts[x_baseline[reached_impacts] > tol_abs]
-      if (length(considered) > 0 && all(x_scenario[considered] <= tol_abs)) {
+      xb <- x_baseline[reached_impacts]
+      xs <- x_scenario[reached_impacts]
+      considered <- xb > tol_abs | xs > tol_abs
+      ok <- xs <= tol_abs | (tol_rel > 0 & xb > tol_abs & xs <= tol_rel * xb)
+      if (any(considered) && all(ok[considered])) {
         neutralized_at <- t
         if (stop_rule == "until_neutralized" && continue_after == 0) {
           ran <- t
@@ -396,6 +418,8 @@ simulate_temporal_pair <- function(g, p_D, p_R, windows = 5,
     stop_rule = stop_rule,
     max_windows = if (stop_rule == "until_neutralized") max_windows else NA_integer_,
     neutralized_at = neutralized_at,
+    tol_rel = tol_rel,
+    schedule_notes = schedule_notes(g, setNames(p_D, node_names), setNames(p_R, node_names), mode_D, mode_R, schedule, ran),
     reached_impacts = reached_impacts,
     gate_mode = gate_mode,
     thresholds = th,
@@ -423,6 +447,11 @@ temporal_stop_note <- function(tr) {
   }
   if (is.na(tr$neutralized_at)) {
     return(sprintf("Not neutralized within %d windows.", tr$max_windows))
+  }
+  tol <- tr$tol_rel %||% 0
+  if (tol > 0) {
+    return(sprintf("Neutralized at window %d: every Impact the response reaches is at or below zero, or within %s%% of its baseline.",
+                   tr$neutralized_at, format(round(100 * tol, 1))))
   }
   sprintf("Neutralized at window %d: every Impact the response reaches is at or below zero.", tr$neutralized_at)
 }
@@ -485,11 +514,13 @@ temporal_stability_note <- function(stability) {
 # "coluna" exposta ao usuario, e' o array interno consumido em ~10 lugares
 # (storyboard antigo, downloads, relatorio); renomear so a saida desta
 # funcao ja resolve a incoerencia de vocabulario com risco bem menor.
-# Revisao 2, item A3: `tol_rel` (default 5% of the baseline) labels a net
-# value that is small relative to the baseline as "Neutralized (relative)" -
-# but only while |net| is not growing from the previous window, because a
-# baseline that grows faster than the scenario makes that ratio fall even
-# while the Impact keeps getting worse. The absolute rules stay as they were.
+# Revisao 2, item A3 (revised in the audit, user decision 30/09): `tol_rel`
+# (default 5% of the baseline) labels a positive net value at or below
+# tol_rel x baseline as "Neutralized (relative)". The earlier extra
+# condition "|net| not growing" was dropped: it meant the label almost never
+# appeared (never in the Sri Lanka or Mangi examples, even at 90%). The same
+# rule is the stop criterion of simulate_temporal_pair(). tol_rel = 0 turns
+# it off.
 format_temporal_table <- function(g, temporal_result, threshold = 1e-9, tol_rel = 0.05) {
   is_impact <- has_role(g, "impact")
   impact_ids <- V(g)$name[is_impact]
@@ -512,9 +543,7 @@ format_temporal_table <- function(g, temporal_result, threshold = 1e-9, tol_rel 
   rows <- lapply(seq_len(windows + 1) - 1, function(t) {
     b <- baseline_impact[t + 1, ]
     s <- scenario_impact[t + 1, ]
-    s_prev <- if (t == 0) s else scenario_impact[t, ]
-    not_growing <- abs(s) <= abs(s_prev) + threshold
-    relative_ok <- tol_rel > 0 & s > threshold & abs(s) <= tol_rel * abs(b) & not_growing
+    relative_ok <- tol_rel > 0 & s > threshold & b > threshold & s <= tol_rel * b
 
     verdict <- ifelse(
       # Revisao 2, item 2.1: window 0 has no verdict; an Impact the pressure
