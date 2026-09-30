@@ -117,6 +117,5 @@ visual). Colunas antigas (`uncertainty`, `controllability`, `temporal_scale`,
 ## Estado
 
 Revisão 2 executada até a Fase 4 (branches `revisao2-fase0` … `revisao2-fase4`; ver o
-roadmap). Pendências conhecidas: lista de coautores para `CITATION.cff`/`LICENSE`
-(hoje só o autor principal); PDF da especificação de relevância a atualizar (seções 4 e
+roadmap). Coautora: Marcela Bergo Davanso (`CITATION.cff`, `LICENSE`, `DESCRIPTION`; UNIFESP). Pendências conhecidas: PDF da especificação de relevância a atualizar (seções 4 e
 7.4, V5 com eficácia = cobertura); mesclar as branches da Revisão 2 em `main`.
