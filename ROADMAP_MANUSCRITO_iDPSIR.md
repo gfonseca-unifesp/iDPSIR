@@ -236,6 +236,12 @@ Para cada caso: estrutura e fontes → cenários → suficiência e prioridade (
   - a parametrizada dá "nada piora num instante; 4 de 5 Impactos terminam piores que sem auxílio".
 - **(M-d) Teste da hipótese causal:** sem as ligações auxílio → frota, o alcance cai e a reversão desaparece.
 
+> **Tabela 1 (Revisão 3, E7):** ver `analysis/tool_search/` — acrescentar a linha de Bryhn et
+> al. (2026, "Mind the GAP"), qualificar QPress (widgets Shiny; suficiência só de sinal) e FCM
+> (In-Cognitive tem incerteza Monte Carlo), e reformular a novidade: não "a primeira avaliação
+> de suficiência", mas "a primeira ferramenta aberta, sem instalação, que lê suficiência
+> propagando efeitos numa rede causal com evidência e incerteza por ligação".
+
 ### 4.4 (nova) O que a parametrização acrescenta
 
 > **Atualização (Revisão 3, E5):** o experimento com 1000 redes simuladas contradiz parte

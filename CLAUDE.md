@@ -154,6 +154,12 @@ registradas no roadmap).
   "limiares e crescimento primeiro" do tutorial/manuscrito não se sustenta — limiares e
   forças importam parecido, crescimento pouco para o veredito; e a prioridade é mais
   sensível à parametrização que o veredito. Resultados em `analysis/sim_networks/out/`.
+- **E7 (busca de ferramentas):** `analysis/tool_search/` (protocolo + tabela com fonte por
+  célula). Web/GitHub/CRAN feitos; WoS/Scopus/Scholar ficam com os autores. Achados: suficiência
+  **não** é exclusiva do iDPSIR (Ahtiainen et al., Marine Policy; Bryhn et al. 2026 "Mind the
+  GAP") — a novidade é a leitura por propagação numa rede causal, aberta e sem instalação; QPress
+  tem widgets Shiny; FCM já tem incerteza Monte Carlo (In-Cognitive 2023); ler Ramos-Quintana
+  et al. 2018.
 - **E6 (teste de usabilidade): fora do plano** por decisão do autor — não há coleta com
   participantes, nada depende de CEP.
 - **E4:** forma aditiva opcional; justificativa do produto (perda esperada evitável);
