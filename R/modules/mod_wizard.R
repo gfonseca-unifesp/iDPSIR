@@ -124,6 +124,7 @@ mod_wizard_server <- function(id) {
         id = ns("explore_tabs"),
         tabPanel("Graph", mod_graph_ui(ns("graph"))),
         tabPanel("Scenarios", mod_responses_ui(ns("responses"))),
+        tabPanel("Interpretation", mod_interpretation_ui(ns("responses"))),
         tabPanel("Metrics", mod_metrics_ui(ns("metrics"))),
         tabPanel("Report", mod_report_ui(ns("report")))
       )

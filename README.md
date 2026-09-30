@@ -499,6 +499,14 @@ has four tabs:
   ranking) was removed: it required a stability condition no network built by this
   app's schema can ever meet, and could silently invert a prediction's sign. Its code
   is kept in `legacy/` for reference.
+- **Interpretation** — a plain-language reading of the Scenarios results for the applied
+  or any saved scenario: how many worsened Impacts are neutralized, one sentence per
+  Impact in priority order (neutralized, % of the worsening covered and how much
+  stronger the response would have to be, not covered, worsened by the response),
+  key messages (the Impact to act on first, side effects, fragile verdicts), a coverage
+  chart and every scenario side by side. The same scenario is shown in the Scenarios
+  results, the temporal simulation and this tab (one selector in each, kept in sync);
+  the report opens its scenario part with the same reading.
 - **Metrics** — general network metrics, centralities, and DPSIR descriptors (gaps
   such as Impacts without a Response, or Pressures not covered by one).
 - **Report** — pick which sections (saved graph snapshots, metrics, centralities,

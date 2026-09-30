@@ -56,6 +56,7 @@ build_full_report_html <- function(
     selected_scenario_names = character(),
     include_reproducibility = FALSE,
     include_temporal_section = FALSE,
+    include_interpretation = TRUE,
     metadata = NULL,
     savepoint_filename = NULL
 ) {
@@ -195,6 +196,50 @@ build_full_report_html <- function(
   # References -> Network characterization (appendix, demoted from where
   # it used to open the report) -> Reproducibility (stays last, it's about
   # the report itself, not the network).
+
+  # Revisao 2 (30/09): plain-language interpretation (R/interpretation.R),
+  # the same reading as the Interpretation tab - first, so the report opens
+  # with what the numbers mean, then the detailed tables below.
+  if (isTRUE(include_interpretation) && length(selected_scenario_names) > 0 && length(saved_scenarios) > 0) {
+    chosen <- saved_scenarios[intersect(selected_scenario_names, names(saved_scenarios))]
+    chosen <- Filter(function(sc) !is.null(sc$sufficiency_df), chosen)
+    if (length(chosen) > 0) {
+      interp_sections <- lapply(names(chosen), function(scenario_name) {
+        sc <- chosen[[scenario_name]]
+        it <- interpret_scenario(graph, sc)
+        imp <- it$impacts
+        n_plot <- sum(imp$worsening > 1e-9 | abs(imp$mitigation) > 1e-9)
+        def <- scenario_definition_text(sc)
+        tagList(
+          tags$h4(scenario_name),
+          tags$p(tags$strong("Pressure: "), def$pressure, tags$br(), tags$strong("Response: "), def$response),
+          tags$p(tags$strong(it$headline)),
+          if (length(it$messages) > 0) tags$ul(lapply(it$messages, tags$li)),
+          tags$ol(lapply(seq_len(nrow(imp)), function(k) tags$li(tags$strong(imp$node[k]), ": ", imp$text[k]))),
+          tags$img(src = plot_to_data_uri(function() draw_sufficiency_plot(imp), width = 900, height = 140 + 60 * max(1, n_plot)),
+                   style = "max-width: 100%;"),
+          caption_tag("Figure", next_figure_n(), sprintf(
+            "For \"%s\": the pressure's worsening of each Impact (red; dark red = added by the response itself), what the response offsets (green) and the net effect (diamond; at or left of zero = neutralized). Impacts in priority order, top first.",
+            scenario_name))
+        )
+      })
+      cmp <- compare_scenario_interpretations(graph, chosen)
+      sections <- c(sections, list(
+        tags$h2("Interpretation"),
+        tags$p(
+          "A plain-language reading of each selected scenario: whether the response is enough for each Impact,",
+          "in priority order, and what to watch. The tables in the next section hold the numbers behind it."
+        ),
+        tagList(interp_sections),
+        if (nrow(cmp) > 0) tagList(
+          tags$h3("Scenarios side by side"),
+          report_html_table(cmp),
+          caption_tag("Table", next_table_n(),
+            "Each selected scenario against its own pressure scenario: for each Impact, whether the response neutralizes it, the share of the worsening it covers, or whether it worsens it; and the Impact to act on first.")
+        )
+      ))
+    }
+  }
 
   # Revisao 1, Fase 3: the sufficiency reading (R/sufficiency.R), one
   # subsection per selected scenario - the primary reading, matching the

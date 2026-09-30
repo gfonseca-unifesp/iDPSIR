@@ -44,6 +44,9 @@ testthat::test_dir("tests/testthat")          # ou: Rscript tests/testthat.R
 - `R/triggers.R` — gatilhos de Estado (limiar em unidade real, z, direção), leitura
   estática e temporal, alcance efetivo, tabela de níveis.
 - `R/relevance.R` — importância D, confiabilidade ρ, lacuna e prioridade dos Impactos.
+- `R/interpretation.R` — leitura em linguagem simples de um cenário (`interpret_scenario()`),
+  comparação entre cenários e gráfico de cobertura; usado pela aba Interpretation
+  (`mod_interpretation_ui()`, saídas em `mod_responses_server()`) e pelo relatório.
 - `R/temporal.R` — simulação por janelas: dev(t+1) = (1 − sr)·dev + B·x + p,
   x = dev + tendência; modos permanent/impulse/window; parada "até neutralizar";
   intensidade das arestas.
@@ -56,7 +59,9 @@ testthat::test_dir("tests/testthat")          # ou: Rscript tests/testthat.R
   cenários salvos).
 - `R/modules/` — `mod_wizard.R` (passos num tabset oculto controlado pelo servidor),
   `mod_data.R` (Start/Model/Nodes/Edges/Review), `mod_graph.R`, `mod_responses.R`
-  (Scenarios; `compute_scenario()`), `mod_metrics.R`, `mod_report.R`.
+  (Scenarios e Interpretation; `compute_scenario()`; "cenário mostrado" único,
+  `shown_source()`, com seletores sincronizados em Results, Temporal e Interpretation),
+  `mod_metrics.R`, `mod_report.R`.
 - `data/` — exemplos (Mangi 2007, Gnanapragasam 2026 com parâmetros e esforço observado,
   porto didático `port_*`, `sample_*`); `data-raw/` — scripts que geram os exemplos (Sri
   Lanka, Mangi, porto, versões "first run") e suas figuras;

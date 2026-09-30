@@ -222,6 +222,7 @@ mod_report_ui <- function(id) {
         h5("Scenarios"),
         p("Select saved scenarios to include (baseline - no response applied - is added automatically)."),
         DTOutput(ns("scenarios_table")),
+        checkboxInput(ns("include_interpretation"), "Include interpretation (plain-language reading and comparison)", value = TRUE),
         checkboxInput(ns("include_temporal_section"), "Include temporal simulation (discrete windows)", value = FALSE)
       )
     ),
@@ -309,6 +310,7 @@ mod_report_server <- function(id, schema, nodes, edges, graph, saved_scenarios, 
           selected_scenario_names = selected_scenario_names,
           include_reproducibility = isTRUE(input$include_reproducibility),
           include_temporal_section = isTRUE(input$include_temporal_section),
+          include_interpretation = !isFALSE(input$include_interpretation),
           metadata = if (is.null(metadata)) NULL else metadata(),
           savepoint_filename = if (is.null(savepoint_filename)) NULL else savepoint_filename()
         ), error = function(e) {

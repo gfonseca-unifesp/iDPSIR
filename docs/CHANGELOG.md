@@ -4264,3 +4264,21 @@ para o cenário atual, restaura o que estava na tela; aplicar um cenário novo v
 para ele. "Save this scenario" continua gravando as configurações da última execução do
 cenário aplicado, nunca as de um salvo revisitado. A caixa agora aparece também só com
 cenários salvos (flag em `reactiveVal`, que só invalida quando o valor muda).
+
+## Aba Interpretation e cenário mostrado único (30/09/2026)
+
+Pedido do usuário: nenhuma aba interpretava a suficiência e a priorização; estender o
+seletor de cenário a elas e levar ao relatório. Avaliação: a aba Scenarios misturava
+configuração e resultados em tabelas técnicas, sem leitura em texto nem comparação de
+suficiência/prioridade entre cenários (o "Compare" só mostrava alcance). Feito:
+`R/interpretation.R` (funções puras, mesmas na tela e no relatório) - `interpret_scenario()`
+dá manchete, mensagens (Impacto a atacar primeiro, efeitos colaterais, Impactos fora do
+alcance, vereditos frágeis 20-80%, gatilhos fechados) e uma frase por Impacto em ordem de
+prioridade; `compare_scenario_interpretations()`; `draw_sufficiency_plot()` (piora ×
+compensação × líquido). Aba nova Interpretation entre Scenarios e Metrics. O seletor da
+simulação temporal virou um "cenário mostrado" único (`shown_source()`) com três seletores
+sincronizados (Results, Temporal, Interpretation); aplicar um cenário mostra-o em todos;
+"Save this scenario" só aparece com o cenário aplicado. "Compare selected scenarios" ganhou
+a tabela de suficiência. Relatório: seção Interpretation (opção marcada por padrão) antes de
+"Response sufficiency". Testado ao vivo com o Mangi (sem aplicar, trocando de cenário nos três
+lugares, aplicando, relatório), sem erros no servidor; `test-interpretation.R` novo.

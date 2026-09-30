@@ -174,6 +174,7 @@ mod_responses_ui <- function(id) {
     box(
       width = 12, title = "Results", status = "primary", solidHeader = TRUE,
       collapsible = TRUE,
+      uiOutput(ns("results_source_ui")),
       uiOutput(ns("sufficiency_result")),
       uiOutput(ns("reach_section")),
       tags$hr(),
@@ -193,6 +194,30 @@ mod_responses_ui <- function(id) {
       DTOutput(ns("saved_scenarios_table")),
       actionButton(ns("compare_scenarios"), "Compare selected scenarios", icon = icon("balance-scale")),
       uiOutput(ns("comparison_result"))
+    )
+  )
+}
+
+# Revisao 2 (30/09): the Interpretation tab. Its outputs live in
+# mod_responses_server() (same namespace: the wizard calls this with the
+# Scenarios module's id), so it shares the scenarios and the shown scenario.
+mod_interpretation_ui <- function(id) {
+  ns <- NS(id)
+  tagList(
+    p("A plain-language reading of whether the response is enough and which Impact to act on first, for any",
+      "applied or saved scenario - and every scenario side by side."),
+    box(
+      width = 12, title = "Scenario", status = "primary", solidHeader = TRUE, collapsible = TRUE,
+      uiOutput(ns("interp_source_ui")),
+      uiOutput(ns("interp_empty"))
+    ),
+    box(
+      width = 12, title = "Reading", status = "primary", solidHeader = TRUE, collapsible = TRUE,
+      uiOutput(ns("interp_body"))
+    ),
+    box(
+      width = 12, title = "All scenarios side by side", status = "primary", solidHeader = TRUE, collapsible = TRUE,
+      uiOutput(ns("interp_compare_ui"))
     )
   )
 }
@@ -403,7 +428,7 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
     # =================================================
 
     output$sufficiency_result <- renderUI({
-      req(current_scenario())
+      req(shown_scenario())
 
       tagList(
         h5("Is the response enough? (sufficiency)"),
@@ -440,7 +465,7 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
     })
 
     output$sufficiency_table <- renderDT({
-      sc <- current_scenario()
+      sc <- shown_scenario()
       req(sc)
 
       display <- format_sufficiency_table(sc$sufficiency_df, sc$active, sc$strengths)
@@ -448,19 +473,19 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
     })
 
     output$prioritization_table <- renderDT({
-      sc <- current_scenario()
+      sc <- shown_scenario()
       req(sc, sc$prioritization)
       datatable(format_prioritization_table(sc$prioritization), rownames = FALSE, options = list(dom = "t", pageLength = 20))
     })
 
     output$prioritization_plot <- renderPlot({
-      sc <- current_scenario()
+      sc <- shown_scenario()
       req(sc, sc$prioritization)
       draw_prioritization_plot(sc$prioritization)
     })
 
     output$prioritization_note <- renderUI({
-      sc <- current_scenario()
+      sc <- shown_scenario()
       req(sc, sc$prioritization)
       if (isTRUE(attr(sc$prioritization, "all_zero"))) {
         div(class = "alert alert-warning", "The pressure scenario does not move any Impact, so importance D is 0 everywhere.")
@@ -470,14 +495,14 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
     output$download_prioritization_csv <- downloadHandler(
       filename = function() paste0("impact_prioritization_", Sys.Date(), ".csv"),
       content = function(file) {
-        sc <- current_scenario()
+        sc <- shown_scenario()
         req(sc, sc$prioritization)
         utils::write.csv(format_prioritization_table(sc$prioritization), file, row.names = FALSE)
       }
     )
 
     output$confidence_skipped_note <- renderUI({
-      sc <- current_scenario()
+      sc <- shown_scenario()
       req(sc)
       m <- sc$sufficiency_confidence_matrix
       note <- skipped_draws_note(attr(m, "skipped"), attr(m, "n_simulations") %||% sc$n_simulations)
@@ -486,7 +511,7 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
     })
 
     output$confidence_matrix_table <- renderDT({
-      sc <- current_scenario()
+      sc <- shown_scenario()
       req(sc)
 
       datatable(format_confidence_matrix(sc$sufficiency_confidence_matrix), rownames = FALSE, options = list(dom = "t", pageLength = 20))
@@ -496,7 +521,7 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
     # active response(s) directly act on (R/reach.R) - always defined,
     # independent of both readings above (sufficiency/temporal).
     output$reach_section <- renderUI({
-      req(current_scenario())
+      req(shown_scenario())
 
       tagList(
         h5("Reach"),
@@ -703,6 +728,9 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
     # "Temporal simulation" box, so it stays easy to find.
     output$save_scenario_section <- renderUI({
       req(current_scenario())
+      if (!is.null(shown_name())) {
+        return(helpText(sprintf("Showing the saved scenario \"%s\". Choose \"Current scenario\" above to save the one applied.", shown_name())))
+      }
       actionButton(ns("save_scenario"), "Save this scenario", icon = icon("save"), class = "btn-outline-primary")
     })
 
@@ -782,42 +810,60 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
     last_run_settings <- reactiveVal(NULL)
     observeEvent(current_scenario(), last_run_settings(NULL))
 
-    # Which scenario the temporal simulation runs: the one applied above
-    # ("current") or any saved scenario - to revisit its tables and charts
-    # without re-applying it. A saved scenario runs with the pressure and
-    # response it was saved with and, when first selected, with its own
-    # temporal settings (the controls are updated to them).
-    temporal_source_name <- reactive({
-      s <- input$temporal_source
-      if (is.null(s) || identical(s, "__current__") || !s %in% names(saved_scenarios$list)) NULL else s
+    # "Scenario shown" - one value for Results, Temporal simulation and the
+    # Interpretation tab: the scenario applied above ("current") or any saved
+    # scenario, to revisit its results without re-applying it. Each place has
+    # its own selector; all three stay in sync with shown_source().
+    shown_source <- reactiveVal("__current__")
+    source_choices <- reactive({
+      saved <- names(saved_scenarios$list)
+      c(if (!is.null(current_scenario())) c("Current scenario (applied)" = "__current__"), setNames(saved, saved))
     })
-    temporal_scenario <- reactive({
-      n <- temporal_source_name()
+    # Keep it valid (a saved scenario was cleared, or only saved ones exist).
+    observe({
+      ch <- source_choices()
+      if (length(ch) > 0 && !isolate(shown_source()) %in% ch) shown_source(unname(ch[[1]]))
+    })
+    shown_name <- reactive({
+      src <- shown_source()
+      if (identical(src, "__current__") || !src %in% names(saved_scenarios$list)) NULL else src
+    })
+    shown_scenario <- reactive({
+      n <- shown_name()
       if (is.null(n)) current_scenario() else saved_scenarios$list[[n]]
     })
-    output$temporal_source_ui <- renderUI({
-      saved <- names(saved_scenarios$list)
-      choices <- c(if (!is.null(current_scenario())) c("Current scenario (applied above)" = "__current__"),
-                   setNames(saved, saved))
-      req(length(choices) > 0)
-      sel <- isolate(input$temporal_source)
-      if (is.null(sel) || !sel %in% choices) sel <- choices[[1]]
-      tagList(
-        selectInput(ns("temporal_source"), "Scenario to simulate", choices = choices, selected = sel, width = "100%"),
-        uiOutput(ns("temporal_source_note"))
-      )
+    temporal_source_name <- shown_name
+    temporal_scenario <- shown_scenario
+    source_selector_ids <- c(results_source = "Scenario shown", temporal_source = "Scenario to simulate",
+                             interp_source = "Scenario to interpret")
+    for (sid in names(source_selector_ids)) local({
+      sid <- sid
+      output[[paste0(sid, "_ui")]] <- renderUI({
+        ch <- source_choices()
+        req(length(ch) > 0)
+        tagList(
+          selectInput(ns(sid), source_selector_ids[[sid]], choices = ch, selected = isolate(shown_source()), width = "100%"),
+          uiOutput(ns(paste0(sid, "_note")))
+        )
+      })
+      output[[paste0(sid, "_note")]] <- renderUI({
+        sc <- shown_scenario()
+        req(sc)
+        lab <- function(ids) { l <- nodes()$label[match(ids, nodes()$id)]; ifelse(is.na(l), ids, l) }
+        txt <- function(ids, st) if (length(ids) == 0) "none" else paste(sprintf("%s at %d%%", lab(ids), round(st[ids])), collapse = ", ")
+        helpText(sprintf("Pressure: %s. Response: %s.", txt(sc$pressure_active, sc$pressure_strengths), txt(sc$active, sc$strengths)))
+      })
+      observeEvent(input[[sid]], {
+        if (!identical(input[[sid]], shown_source())) shown_source(input[[sid]])
+      })
     })
-    output$temporal_source_note <- renderUI({
-      sc <- temporal_scenario()
-      req(sc)
-      lab <- function(ids) { l <- nodes()$label[match(ids, nodes()$id)]; ifelse(is.na(l), ids, l) }
-      txt <- function(ids, st) if (length(ids) == 0) "none" else paste(sprintf("%s at %d%%", lab(ids), round(st[ids])), collapse = ", ")
-      helpText(sprintf("Pressure: %s. Response: %s.", txt(sc$pressure_active, sc$pressure_strengths), txt(sc$active, sc$strengths)))
+    observeEvent(shown_source(), {
+      for (sid in names(source_selector_ids)) {
+        if (!is.null(input[[sid]]) && !identical(input[[sid]], shown_source())) updateSelectInput(session, sid, selected = shown_source())
+      }
     })
-    # Applying a new scenario brings the simulation back to it.
-    observeEvent(current_scenario(), {
-      if (!is.null(isolate(input$temporal_source))) updateSelectInput(session, "temporal_source", selected = "__current__")
-    }, ignoreInit = TRUE)
+    # Applying a new scenario shows it everywhere.
+    observeEvent(current_scenario(), shown_source("__current__"), ignoreInit = TRUE)
 
     # The settings a source runs with the first time it is selected: a saved
     # scenario's own; for "current", what was on screen before leaving it.
@@ -846,7 +892,7 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
       sc <- temporal_scenario()
       req(sc, isTRUE(input$show_temporal))
 
-      src <- input$temporal_source %||% "__current__"
+      src <- shown_source()
       if (!identical(src, last_run_source())) {
         # First run after switching scenario: its own settings, not the
         # controls (their update reaches the server only after this run).
@@ -899,7 +945,7 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
       # Revisao 2, item 3.3: runs on "Run simulation" (and when the
       # disclosure is opened, a new scenario is applied or another scenario
       # is chosen), not on every change of a setting.
-      bindEvent(input$run_temporal, input$show_temporal, current_scenario(), input$temporal_source)
+      bindEvent(input$run_temporal, input$show_temporal, current_scenario(), shown_source())
 
     # Revisao 2, item C3: the same run with the other criterion, for
     # "Compare both".
@@ -1093,7 +1139,7 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
     # Roadmap Fase 9 item 9.2: "reach" is pure graph traversal from what the
     # active response(s) directly act on (R/reach.R).
     output$reach_summary <- renderUI({
-      sc <- current_scenario()
+      sc <- shown_scenario()
       req(sc)
 
       if (sc$reach$total == 0) {
@@ -1123,7 +1169,7 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
 
     # Revisao 2, item C4: State triggers table.
     output$triggers_section <- renderUI({
-      sc <- current_scenario()
+      sc <- shown_scenario()
       req(sc, !is.null(sc$gates_pressure), nrow(sc$gates_pressure) > 0)
       tagList(
         h5("State triggers"),
@@ -1140,13 +1186,13 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
     })
 
     output$triggers_table <- renderDT({
-      sc <- current_scenario()
+      sc <- shown_scenario()
       req(sc, nrow(sc$gates_pressure) > 0)
       datatable(format_triggers_table(graph(), sc$gates_pressure, sc$gates_net), rownames = FALSE, options = list(dom = "t"))
     })
 
     output$reach_table <- renderDT({
-      sc <- current_scenario()
+      sc <- shown_scenario()
       req(sc, sc$reach$total > 0)
 
       g <- graph()
@@ -1159,6 +1205,107 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
 
       datatable(df, rownames = FALSE, options = list(dom = "t", pageLength = 10))
     })
+
+    # =================================================
+    # INTERPRETATION TAB (mod_interpretation_ui)
+    # =================================================
+    #
+    # A plain-language reading of the shown scenario (R/interpretation.R) and
+    # every scenario side by side. Same functions as the report.
+    shown_interpretation <- reactive({
+      sc <- shown_scenario()
+      req(sc, graph())
+      interpret_scenario(graph(), sc)
+    })
+    all_scenarios_for_comparison <- reactive({
+      out <- saved_scenarios$list
+      if (!is.null(current_scenario())) out <- c(list("Current scenario (applied)" = current_scenario()), out)
+      out
+    })
+    interp_status_style <- c(
+      neutralized = "background:#e7f4ea; border-left:4px solid #1b8a3a;",
+      partial = "background:#fff6e0; border-left:4px solid #e0a100;",
+      not_covered = "background:#fdecea; border-left:4px solid #c0392b;",
+      worsened_by_response = "background:#fdecea; border-left:4px solid #c0392b;",
+      improved = "background:#f4f6f8; border-left:4px solid #7a8793;",
+      not_affected = "background:#f4f6f8; border-left:4px solid #7a8793;"
+    )
+    interp_status_label <- c(
+      neutralized = "Neutralized", partial = "Partly covered", not_covered = "Not covered",
+      worsened_by_response = "Worsened by the response", improved = "Improved", not_affected = "Not affected"
+    )
+    output$interp_empty <- renderUI({
+      if (length(source_choices()) == 0) {
+        div(class = "alert alert-secondary", "Apply a scenario (or load a savepoint with saved scenarios) in the Scenarios tab first.")
+      }
+    })
+    output$interp_body <- renderUI({
+      it <- shown_interpretation()
+      imp <- it$impacts
+      req(nrow(imp) > 0)
+      n_plot <- sum(imp$worsening > 1e-9 | abs(imp$mitigation) > 1e-9)
+      tagList(
+        h4(it$headline),
+        if (length(it$messages) > 0) tags$ul(lapply(it$messages, tags$li)),
+        h5("Impact by impact, in priority order"),
+        lapply(seq_len(nrow(imp)), function(k) {
+          r <- imp[k, ]
+          div(style = paste("padding:8px 12px; margin-bottom:8px; border-radius:4px;", interp_status_style[[r$status]]),
+              tags$strong(paste0(if (!is.na(r$rank)) paste0(r$rank, ". ") else "", r$node)),
+              tags$span(style = "margin-left:8px; font-size:12px; color:#555;",
+                        paste0(interp_status_label[[r$status]],
+                               if (!is.na(r$priority)) sprintf(" | priority %.2f", r$priority) else "")),
+              tags$p(style = "margin:4px 0 0 0;", r$text))
+        }),
+        h5("How much of the worsening the response covers"),
+        p(class = "text-muted",
+          "Red: the pressure's worsening of each Impact (dark red, when present: worsening added by the response",
+          "itself). Green: what the response offsets. Diamond: the net effect - green when at or below zero (neutralized)."),
+        plotOutput(ns("interp_coverage_plot"), height = paste0(140 + 60 * max(1, n_plot), "px")),
+        plot_download_row(ns, "interp_coverage"),
+        h5("Relevance and priority"),
+        p(class = "text-muted", "Bars: how much each Impact matters (value v x importance D x reliability). Diamonds: priority,",
+          "the relevance times the share of the worsening left uncovered - the Impact to act on first has the largest."),
+        plotOutput(ns("interp_priority_plot"), height = "320px"),
+        tags$p(class = "text-muted", style = "font-size: 12px; margin-top: 6px;", PRIORITIZATION_METHOD_NOTE)
+      )
+    })
+    output$interp_coverage_plot <- renderPlot(draw_sufficiency_plot(shown_interpretation()$impacts))
+    output$interp_priority_plot <- renderPlot({
+      sc <- shown_scenario()
+      req(sc, sc$prioritization)
+      draw_prioritization_plot(sc$prioritization)
+    })
+    output$download_interp_coverage_png <- downloadHandler(
+      filename = function() paste0("coverage_", Sys.Date(), ".png"),
+      content = function(file) render_plot_png(function() draw_sufficiency_plot(shown_interpretation()$impacts), file, width = 1000, height = 160 + 70 * nrow(shown_interpretation()$impacts))
+    )
+    output$download_interp_coverage_svg <- downloadHandler(
+      filename = function() paste0("coverage_", Sys.Date(), ".svg"),
+      content = function(file) render_plot_svg(function() draw_sufficiency_plot(shown_interpretation()$impacts), file, width = 10, height = 1.8 + 0.8 * nrow(shown_interpretation()$impacts))
+    )
+    interp_comparison_df <- reactive({
+      req(graph())
+      compare_scenario_interpretations(graph(), all_scenarios_for_comparison())
+    })
+    output$interp_compare_ui <- renderUI({
+      df <- interp_comparison_df()
+      if (nrow(df) == 0) return(helpText("Apply or save scenarios to compare them here."))
+      tagList(
+        p(class = "text-muted",
+          "Every scenario against its own pressure scenario: for each Impact, whether the response neutralizes it,",
+          "what share of the worsening it covers, or whether it worsens it; and the Impact to act on first."),
+        DTOutput(ns("interp_compare_table")),
+        downloadButton(ns("download_interp_compare_csv"), "Download CSV", class = "btn-sm")
+      )
+    })
+    output$interp_compare_table <- renderDT({
+      datatable(interp_comparison_df(), rownames = FALSE, options = list(dom = "t", pageLength = 50, scrollX = TRUE))
+    })
+    output$download_interp_compare_csv <- downloadHandler(
+      filename = function() paste0("scenario_comparison_", Sys.Date(), ".csv"),
+      content = function(file) utils::write.csv(interp_comparison_df(), file, row.names = FALSE)
+    )
 
     # =================================================
     # SAVE AND COMPARE SCENARIOS
@@ -1342,6 +1489,9 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
 
       tagList(
         tags$hr(),
+        h5("Sufficiency per scenario"),
+        p(class = "text-muted", "For each Impact: neutralized, the share of the worsening covered, or worsened by the response (see the Interpretation tab)."),
+        DTOutput(ns("comparison_sufficiency_table")),
         h5("Reach per scenario"),
         p(
           class = "text-muted",
@@ -1349,6 +1499,11 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
         ),
         DTOutput(ns("comparison_reach_table"))
       )
+    })
+
+    output$comparison_sufficiency_table <- renderDT({
+      saved <- saved_scenarios$list[selected_scenario_names()]
+      datatable(compare_scenario_interpretations(graph(), saved), rownames = FALSE, options = list(dom = "t", scrollX = TRUE))
     })
 
     output$comparison_reach_table <- renderDT({
