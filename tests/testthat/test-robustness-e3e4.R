@@ -90,3 +90,18 @@ test_that("E4.2: the rank distribution behind the figure sums to 1 per Impact an
   render_plot_png(function() draw_rank_stability_plot(r), f)
   expect_gt(file.size(f), 1000)
 })
+
+test_that("a draw whose triggers raise rho above 1 is skipped, not an error (found by the simulated networks)", {
+  source("../../analysis/sim_networks/generate.R")
+  net <- generate_dpsir_network(1036)
+  found <- FALSE
+  for (r in 1:20) {
+    e <- draw_strength_edges(net, 100000 * 36 + r)
+    g2 <- sim_graph(net$nodes, e, keep = "thresholds")
+    ids <- igraph::V(g2)$name
+    pD <- setNames(rep(0, length(ids)), ids); pD[names(net$pressure)] <- 1
+    out <- expect_no_error(prediction_reliability(g2, pD, n_simulations = 300))
+    if (!is.null(attr(out, "skipped")) && attr(out, "skipped") > 0) found <- TRUE
+  }
+  expect_true(found)
+})

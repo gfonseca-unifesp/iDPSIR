@@ -82,6 +82,8 @@ run_network <- function(i, R = 20, n_rho = 100, n_conf = 100, spec = sim_spec_de
   props <- network_properties(net, g0, rho0)
   counts <- data.frame(network = net$seed, raw_excluded = rho0 >= 1 - 1e-9, draws_rejected = 0L, temporal_diverged = 0L)
   if (counts$raw_excluded) return(list(results = NULL, network = props, counts = counts))
+  failed <- 0L
+  safe <- function(expr) tryCatch(expr, error = function(e) { failed <<- failed + 1L; NULL })
   tag <- function(df, cond, r, rho_B, mode) {
     if (is.null(df) || nrow(df) == 0) return(NULL)
     if (!"diverges" %in% names(df)) df$diverges <- FALSE
@@ -98,11 +100,11 @@ run_network <- function(i, R = 20, n_rho = 100, n_conf = 100, spec = sim_spec_de
     g3 <- sim_graph(net$nodes, e, keep = c("thresholds", "growth"))
     rho_B <- spectral_radius(effect_matrix(g1))
     out <- c(out, list(
-      tag(static_rows(g1, net, n_rho), "C1", r, rho_B, mode),
-      tag(static_rows(g2, net, n_rho), "C2", r, rho_B, mode)
+      tag(safe(static_rows(g1, net, n_rho)), "C1", r, rho_B, mode),
+      tag(safe(static_rows(g2, net, n_rho)), "C2", r, rho_B, mode)
     ))
-    t2 <- temporal_rows(g2, net); t3 <- temporal_rows(g3, net)
-    counts$temporal_diverged <- counts$temporal_diverged + as.integer(any(t2$diverges)) + as.integer(any(t3$diverges))
+    t2 <- safe(temporal_rows(g2, net)); t3 <- safe(temporal_rows(g3, net))
+    counts$temporal_diverged <- counts$temporal_diverged + as.integer(any(t2$diverges %in% TRUE)) + as.integer(any(t3$diverges %in% TRUE))
     out <- c(out, list(tag(t2, "C2t", r, rho_B, mode), tag(t3, "C3", r, rho_B, mode)))
     # C4 (secondary): confidence of the planned scenario, with and without
     # structural uncertainty, on the C1 reading.
@@ -116,6 +118,7 @@ run_network <- function(i, R = 20, n_rho = 100, n_conf = 100, spec = sim_spec_de
                      stringsAsFactors = FALSE)
     out <- c(out, list(tag(c4, "C4", r, rho_B, mode)))
   }
+  counts$conditions_failed <- failed
   res <- do.call(rbind, lapply(out, function(d) {
     if (is.null(d)) return(NULL)
     for (k in c("confidence", "confidence_structural")) if (!k %in% names(d)) d[[k]] <- NA_real_

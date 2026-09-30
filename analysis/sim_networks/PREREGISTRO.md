@@ -161,3 +161,10 @@ network × draw × condition × Impact to `out/results.csv.gz` and the network p
 3. Priority and rank exist only in the static conditions (C0, C1, C2): the temporal reading
    has no prioritization. H5 and the top-priority outcome compare C0 with C1, as planned.
 4. The timing run (50 networks) writes to `out_timing/`, not `out/`, and is not analysed.
+   Measured: 4.0 min for 50 networks on 20 processes (about 80 min for 1000).
+5. The timing run found one case the plan did not foresee: closing a State trigger zeroes
+   edges, and in a signed matrix removing an edge can raise rho above 1 (it removes a
+   cancellation). The app's resampling now skips such draws, as it does for rho(B) >= 1
+   (fixed in the app, with a test). In the experiment, a condition whose base reading
+   cannot be computed for this reason is counted (`conditions_failed` in `counts.csv`) and
+   left out of the comparisons that use it; the rest of the network is kept.

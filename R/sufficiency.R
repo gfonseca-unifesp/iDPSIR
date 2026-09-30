@@ -289,10 +289,13 @@ sufficiency_confidence <- function(g, p_D, p_R, n_simulations = 300, seed = 42, 
       if (spectral_radius(B_sim) >= 1 - 1e-9) next
       # Revisao 2, item C2: the gates are re-evaluated in every draw.
       net_sim <- if (gated) {
-        propagate(gated_effect_matrix(g_sim, p_net, B_sim), p_net)[impact_ids]
+        # Closing a trigger can raise rho in a signed matrix (see
+        # prediction_reliability()); such a draw is skipped.
+        tryCatch(propagate(gated_effect_matrix(g_sim, p_net, B_sim), p_net)[impact_ids], error = function(e) NULL)
       } else {
         propagate(B_sim, p_D)[impact_ids] + propagate(B_sim, p_R)[impact_ids]
       }
+      if (is.null(net_sim)) next
       matches[sim, ] <- as.integer(net_sim <= threshold)
     }
   })

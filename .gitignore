@@ -41,3 +41,6 @@ manuscrito*/
 MANUSCRIPT_*.docx
 /*.pdf
 /revisao_*.xlsx
+
+# Simulated networks: timing run (not analysed)
+analysis/sim_networks/out_timing/

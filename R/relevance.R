@@ -82,7 +82,11 @@ prediction_reliability <- function(g, p_D, n_simulations = 300, seed = 42, thres
       E(g_sim)$weight <- draws[sim, ]
       B <- effect_matrix(g_sim)
       if (spectral_radius(B) >= 1 - 1e-9) next
-      d <- propagate(gated_effect_matrix(g_sim, p_D, B), p_D)[impact_ids]
+      # Revisao 3 (found by the simulated networks): closing a trigger zeroes
+      # edges, and in a signed matrix removing an edge can RAISE rho (it
+      # removes a cancellation) - such a draw is skipped like rho(B) >= 1.
+      d <- tryCatch(propagate(gated_effect_matrix(g_sim, p_D, B), p_D)[impact_ids], error = function(e) NULL)
+      if (is.null(d)) next
       s <- ifelse(abs(d) <= threshold, 0, sign(d))
       matches[sim, ] <- as.integer(s == base_sign)
     }
