@@ -28,6 +28,29 @@
 # Two independent pushes (built with build_press_vector()): p_D, the pressure
 # scenario, and p_R, the response scenario. Phi is linear in p, so the two are
 # computed separately and summed.
+#
+# Units (Revisao 3, E1.1). Every factor is measured in its own standard
+# deviations (SD): a strength of 100% is a push of 1 SD, so p = strength / 100
+# (mod_responses.R, compute_scenario()); a push given in the factor's own
+# units is converted with p = units / sd (effective_strength()). Worsening,
+# mitigation and net are therefore in SD of each Impact, and "neutralized"
+# (net <= 0) compares the two pushes' effects in the same unit.
+# press_units_note() reports each push in SD and, when the factor has an sd,
+# in its own units (shown in the report).
+#
+# Convergence and stability (E1.3). The path-sum expansion converges when
+# rho(B) < 1, and (I - B) is then invertible. That implies -(I - B) - the
+# Levins community matrix with self-regulation 1 on every node - is stable;
+# the converse does not hold.
+#
+# Static and temporal readings (E1.2). The temporal simulation (R/temporal.R)
+# settles, without growth or triggers, at dev* = (S - B)^-1 p with
+# S = diag(self_regulation). With S = I this is (I - B)^-1 p = Phi(p) + p: the
+# static reading is the temporal equilibrium with self-regulation 1 on every
+# node (tested in test-equivalence.R). With other self-regulation the two
+# differ; self_regulation_sensitivity() reports whether a verdict depends on
+# it. The equilibrium is reached only if rho((I - S) + B) < 1; otherwise the
+# simulation diverges and no equilibrium is reported.
 
 # Kept as an alias while callers move to effect_matrix() (Fase 4 removes it).
 
@@ -293,7 +316,7 @@ sufficiency_confidence <- function(g, p_D, p_R, n_simulations = 300, seed = 42, 
 # is a single response (multiplying a ratio by "the" current strength only
 # makes sense when there's one number to multiply by); a combined scenario
 # shows the ratio itself as a multiplier instead.
-format_sufficiency_table <- function(suff_df, active_ids, strengths_pct) {
+format_sufficiency_table <- function(suff_df, active_ids, strengths_pct, sr_sensitivity = NULL) {
   single_response <- length(active_ids) == 1
 
   strength_display <- if (single_response && nrow(suff_df) > 0) {
@@ -326,7 +349,14 @@ format_sufficiency_table <- function(suff_df, active_ids, strengths_pct) {
     `Strength needed` = strength_display,
     check.names = FALSE,
     stringsAsFactors = FALSE
-  )
+  ) -> out
+  # Revisao 3, E1.4: does the verdict hold for self-regulation 0.25-1?
+  if (!is.null(sr_sensitivity) && nrow(sr_sensitivity) > 0) {
+    txt <- format_sr_sensitivity(sr_sensitivity)
+    rng <- range(attr(sr_sensitivity, "s_grid"))
+    out[[sprintf("Holds for self-regulation %s-%s", rng[1], rng[2])]] <- txt[match(suff_df$id, sr_sensitivity$id)]
+  }
+  out
 }
 
 # Revisao 2, items 2.1/2.2: the confidence matrix for display - percentages
@@ -351,4 +381,113 @@ skipped_draws_note <- function(skipped, n_simulations) {
   }
   sprintf("%d of %d resampled draws were skipped because the feedback loops would amplify (spectral radius >= 1); the percentages use the remaining %d.",
           skipped, n_simulations, n_simulations - skipped)
+}
+
+# =====================================================
+# Revisao 3, E1.1 - each push in SD and in its own units
+# =====================================================
+# One row per pushed factor: the push in standard deviations (what the
+# engine uses) and, when the factor has a typical variation (sd), in its own
+# units (push x sd).
+press_units_note <- function(g, p) {
+  ids <- igraph::V(g)$name
+  p <- align_press_vector(p, ids, "push")
+  on <- which(p != 0)
+  if (length(on) == 0) {
+    return(data.frame(id = character(), factor = character(), push_sd = numeric(), push_units = numeric(),
+                      stringsAsFactors = FALSE))
+  }
+  lab <- igraph::V(g)$label
+  if (is.null(lab)) lab <- ids
+  sd <- suppressWarnings(as.numeric(igraph::vertex_attr(g, "sd")))
+  if (length(sd) == 0) sd <- rep(NA_real_, length(ids))
+  data.frame(id = ids[on], factor = lab[on], push_sd = unname(p[on]),
+             push_units = ifelse(is.na(sd[on]), NA_real_, unname(p[on]) * sd[on]),
+             stringsAsFactors = FALSE)
+}
+
+# Plain text for the report: "Coastal population: 1 SD (= 2.5 million)".
+format_press_units_note <- function(g, p) {
+  d <- press_units_note(g, p)
+  if (nrow(d) == 0) return("none")
+  num <- function(x) trimws(format(signif(x, 4), big.mark = ",", scientific = FALSE, drop0trailing = TRUE))
+  paste(sprintf("%s: %s SD%s", d$factor, vapply(d$push_sd, num, ""),
+                ifelse(is.na(d$push_units), "", sprintf(" (= %s in its own units)", vapply(d$push_units, function(u) if (is.na(u)) "" else num(u), "")))),
+        collapse = "; ")
+}
+
+# =====================================================
+# Revisao 3, E1.2/E1.4 - equilibrium with self-regulation S
+# =====================================================
+# The temporal update without growth or triggers,
+#   dev(t+1) = (I - S) dev(t) + B dev(t) + p,
+# settles at dev* = (S - B)^-1 p when rho((I - S) + B) < 1; otherwise it
+# diverges and there is no equilibrium (converges = FALSE). `s`: one value
+# for every node (a uniform S), or NULL for each node's own self-regulation.
+temporal_equilibrium <- function(g, p, s = NULL, B = effect_matrix(g)) {
+  ids <- rownames(B)
+  n <- length(ids)
+  p <- align_press_vector(p, ids, "push")
+  sr <- if (is.null(s)) -self_regulation_diagonal(g)[ids] else rep(s, n)
+  S <- diag(as.numeric(sr), n)
+  rho <- spectral_radius(diag(n) - S + B)
+  if (rho >= 1 - 1e-9) {
+    return(list(converges = FALSE, rho = rho, equilibrium = setNames(rep(NA_real_, n), ids)))
+  }
+  list(converges = TRUE, rho = rho, equilibrium = setNames(as.numeric(solve(S - B, p)), ids))
+}
+
+# Verdict of each Impact at equilibrium for a grid of uniform
+# self-regulation values and for the self-regulation set on the nodes. The
+# static reading is the s = 1 column (Phi(p) + p, and Impacts are never
+# pushed). State triggers are kept open or closed as in the static reading
+# (gated_effect_matrix() of each push), so the s = 1 column always matches
+# sufficiency(); only the self-regulation varies.
+#   verdict: "Neutralized", "Not neutralized", "Not affected", or
+#   "Diverges" (no equilibrium for that s).
+self_regulation_sensitivity <- function(g, p_D, p_R, s_grid = c(0.25, 0.5, 0.75, 1), threshold = 1e-9) {
+  ids <- igraph::V(g)$name
+  p_D <- align_press_vector(p_D, ids, "pressure scenario")
+  p_R <- align_press_vector(p_R, ids, "response scenario")
+  impact_ids <- ids[has_role(g, "impact")]
+  lab <- igraph::V(g)$label[match(impact_ids, ids)]
+  if (length(impact_ids) == 0) return(data.frame())
+  B <- effect_matrix(g)
+  gated <- has_state_thresholds(g)
+  B_D <- if (gated) gated_effect_matrix(g, p_D, B) else B
+  B_N <- if (gated) gated_effect_matrix(g, p_D + p_R, B) else B
+  verdict_for <- function(s) {
+    eD <- temporal_equilibrium(g, p_D, s, B_D)
+    if (!eD$converges) return(rep("Diverges", length(impact_ids)))
+    eN <- temporal_equilibrium(g, p_D + p_R, s, B_N)
+    if (!eN$converges) return(rep("Diverges", length(impact_ids)))
+    w <- eD$equilibrium[impact_ids]
+    n <- eN$equilibrium[impact_ids]
+    ifelse(w <= threshold, "Not affected", ifelse(n <= threshold, "Neutralized", "Not neutralized"))
+  }
+  out <- data.frame(id = impact_ids, node = lab, stringsAsFactors = FALSE)
+  for (s in s_grid) out[[paste0("s=", s)]] <- verdict_for(s)
+  out$configured <- verdict_for(NULL)
+  cols <- c(paste0("s=", s_grid), "configured")
+  out$depends_on_s <- apply(out[, cols, drop = FALSE], 1, function(v) length(unique(v[v != "Diverges"])) > 1)
+  out$diverges <- apply(out[, cols, drop = FALSE], 1, function(v) any(v == "Diverges"))
+  attr(out, "s_grid") <- s_grid
+  attr(out, "note") <- if (gated) "State triggers are kept as in the reading above." else NULL
+  out
+}
+
+# One word per Impact for the sufficiency table: does the verdict hold for
+# every self-regulation in the grid?
+format_sr_sensitivity <- function(sens) {
+  if (is.null(sens) || nrow(sens) == 0) return(character())
+  g <- attr(sens, "s_grid")
+  cols <- paste0("s=", g)
+  vapply(seq_len(nrow(sens)), function(i) {
+    v <- unlist(sens[i, cols])
+    ok <- v[v != "Diverges"]
+    if (length(ok) == 0) return("diverges")
+    if (length(unique(ok)) == 1) return(if (any(v == "Diverges")) "yes (some s diverge)" else "yes")
+    groups <- split(g, factor(v, levels = unique(v)))
+    paste0("no: ", paste(sprintf("%s at s = %s", tolower(names(groups)), vapply(groups, paste, "", collapse = ", ")), collapse = "; "))
+  }, character(1))
 }

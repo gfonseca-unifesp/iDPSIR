@@ -12,8 +12,12 @@
 #   Phi(p) = (I - B)^-1 p - p
 # (products of beta along each path, summed over paths), with no global
 # discount c: a distant response is attenuated by the product of beta < 1
-# along its path. It is well defined whenever rho(B) < 1, which is checked
-# when the graph is built. See ROADMAP_REVISAO2_iDPSIR.md, Fase 1 and Anexo X2.
+# along its path. The path-sum expansion converges when rho(B) < 1, and
+# (I - B) is then invertible - checked when the graph is built. This implies
+# that -(I - B), the Levins community matrix with self-regulation 1 on every
+# node, is stable; the converse does not hold (a stable Levins matrix can have
+# rho(B) >= 1). See ROADMAP_REVISAO2_iDPSIR.md, Fase 1 and Anexo X2, and
+# ROADMAP_REVISAO3_iDPSIR.md, E1.3.
 
 # Qualitative classes for users without data (D18). `low`/`high` are the
 # default uncertainty band of an edge in that class.

@@ -260,19 +260,25 @@ build_full_report_html <- function(
 
       scenario_def <- scenario_definition_text(sc)
 
-      suff_table <- format_sufficiency_table(sc$sufficiency_df, sc$active, sc$strengths)
+      suff_table <- format_sufficiency_table(sc$sufficiency_df, sc$active, sc$strengths, sc$sr_sensitivity)
 
       tagList(
         tags$h4(scenario_name),
         tags$p(
           tags$strong("Pressure: "), scenario_def$pressure, tags$br(),
-          tags$strong("Response: "), scenario_def$response
+          tags$strong("Response: "), scenario_def$response,
+          # Revisao 3, E1.1: the pushes in the engine's unit (SD) and in the
+          # factors' own units when they have an sd.
+          if (!is.null(sc$p_D) && !is.null(sc$press)) tagList(
+            tags$br(), tags$strong("Pressure pushes: "), format_press_units_note(graph, sc$p_D),
+            tags$br(), tags$strong("Response pushes: "), format_press_units_note(graph, sc$press)
+          )
         ),
         report_html_table(suff_table),
         caption_tag(
           "Table", next_table_n(),
           sprintf(
-            "For \"%s\": how much the pressure scenario worsens each Impact, how much the response scenario mitigates it, and whether that mitigation is enough to neutralize the worsening.",
+            "For \"%s\": how much the pressure scenario worsens each Impact, how much the response scenario mitigates it, and whether that mitigation is enough to neutralize the worsening, in standard deviations of each Impact. Last column: whether the verdict is the same with every factor's self-regulation set to 0.25, 0.5, 0.75 and 1 (the reading shown equals 1; State triggers kept as in that reading).",
             scenario_name
           )
         ),

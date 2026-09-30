@@ -81,6 +81,8 @@ compute_scenario <- function(g, response_nodes_df, name, active_ids, strengths,
   gates_pressure <- state_gates(g, p_D)
   gates_net <- state_gates(g, p_D + press)
   reach_effective <- effective_response_reach(g, active_ids, gates_net$id[!gates_net$open])
+  # Revisao 3, E1.4: does each verdict hold for other self-regulation?
+  sr_sensitivity <- tryCatch(self_regulation_sensitivity(g, p_D, press), error = function(e) NULL)
   # Revisao 2, item B7: relevance and priority of each Impact.
   progress(0.1, "Impact prioritization")
   prioritization <- impact_prioritization(g, p_D, suff_df, n_simulations = n_simulations)
@@ -90,7 +92,7 @@ compute_scenario <- function(g, response_nodes_df, name, active_ids, strengths,
     pressure_active = pressure_active_ids, pressure_strengths = pressure_strengths, p_D = p_D,
     sufficiency_df = suff_df, sufficiency_confidence_matrix = conf, n_simulations = n_simulations,
     prioritization = prioritization, gates_pressure = gates_pressure, gates_net = gates_net,
-    reach_effective = reach_effective
+    reach_effective = reach_effective, sr_sensitivity = sr_sensitivity
   )
 }
 
@@ -438,6 +440,7 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
           "and whether the mitigation is enough to neutralize the worsening."
         ),
         DTOutput(ns("sufficiency_table")),
+        uiOutput(ns("sr_sensitivity_note")),
         h5("How confident is that, response by response?"),
         p(
           class = "text-muted",
@@ -464,11 +467,28 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
       )
     })
 
+    # Revisao 3, E1.1/E1.4.
+    output$sr_sensitivity_note <- renderUI({
+      sc <- shown_scenario()
+      req(sc)
+      sens <- sc$sr_sensitivity
+      tagList(
+        helpText(
+          "Strengths are pushes in standard deviations of each factor (100% = 1 SD); worsening, mitigation and net",
+          "are in SD of each Impact.",
+          if (!is.null(sens) && nrow(sens) > 0) paste(
+            "The last column repeats the verdict with every factor's self-regulation set to 0.25, 0.5, 0.75 and 1",
+            "(the reading above equals 1): \"yes\" means the verdict does not depend on it.",
+            attr(sens, "note") %||% "")
+        )
+      )
+    })
+
     output$sufficiency_table <- renderDT({
       sc <- shown_scenario()
       req(sc)
 
-      display <- format_sufficiency_table(sc$sufficiency_df, sc$active, sc$strengths)
+      display <- format_sufficiency_table(sc$sufficiency_df, sc$active, sc$strengths, sc$sr_sensitivity)
       datatable(display, rownames = FALSE, options = list(dom = "t", pageLength = 10))
     })
 

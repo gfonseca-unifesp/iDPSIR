@@ -443,10 +443,14 @@ has four tabs:
 - **Scenarios** — build two independent "pushes": a **pressure scenario** (which
   Drivers/Pressures are worsening, and how strongly) and a **response scenario**
   (which Responses are active, and how strongly). Applying them runs the primary,
-  always-well-defined **sufficiency** reading (`R/sufficiency.R`): for each Impact, how
+  **sufficiency** reading (`R/sufficiency.R`; the path-sum expansion converges when the
+  effect matrix's spectral radius is below 1, checked when the graph is built): for each Impact, how
   much the pressure scenario worsens it, how much the response scenario mitigates (or
   worsens) it, and whether that mitigation is enough to neutralize the worsening (an
-  Impact the pressure does not reach is reported as **Not affected**, not neutralized) —
+  Impact the pressure does not reach is reported as **Not affected**, not neutralized;
+  all in standard deviations of each factor, 100% = a push of 1 SD; a last column says
+  whether the verdict holds for self-regulation 0.25–1, the reading itself being the
+  temporal equilibrium with self-regulation 1) —
   plus a confidence check (% of simulations, resampling every edge's strength within
   its uncertainty band, in which the verdict holds; one row for the scenario as set with
   the sliders, one per response alone at 100%) and an **Impact prioritization**:

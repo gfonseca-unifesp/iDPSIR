@@ -582,3 +582,35 @@ edge_intensity_table <- function(g, tr) {
   for (t in seq_len(nrow(m))) df[[paste("Window", t)]] <- round(m[t, ], 3)
   df
 }
+
+# =====================================================
+# Revisao 3, E1.2 - the static reading as a temporal equilibrium
+# =====================================================
+# Runs simulate_temporal_pair() with every node's self-regulation set to `s`,
+# no growth and no thresholds, pressure `p` added every window, until the
+# deviation stops changing (|change| < tol) or `max_windows`. Returns the
+# equilibrium of every node, the window at which it converged and whether it
+# converged at all. Checks rho((1 - s) I + B) < 1 first: when it fails the
+# simulation diverges and nothing is run. With s = 1 the equilibrium equals
+# propagate(B, p) + p, the static reading (test-equivalence.R).
+static_equivalent_windows <- function(g, p, s = 1, tol = 1e-9, max_windows = 2000) {
+  B <- effect_matrix(g)
+  ids <- rownames(B)
+  p <- align_press_vector(p, ids, "push")
+  rho <- spectral_radius((1 - s) * diag(length(ids)) + B)
+  if (rho >= 1 - 1e-9) {
+    return(list(converged = FALSE, rho = rho, window = NA_integer_, equilibrium = setNames(rep(NA_real_, length(ids)), ids)))
+  }
+  g2 <- g
+  igraph::V(g2)$self_regulation <- s
+  igraph::V(g2)$growth_rate <- 0
+  igraph::V(g2)$threshold_level <- NA_real_
+  tr <- simulate_temporal_pair(g2, p, setNames(rep(0, length(ids)), ids), windows = max_windows,
+                               stop_rule = "fixed", mode_D = "permanent", mode_R = "permanent",
+                               trends_outside = FALSE)
+  h <- tr$baseline
+  change <- apply(abs(diff(h)), 1, max)
+  k <- which(change < tol)[1]
+  list(converged = !is.na(k), rho = rho, window = if (is.na(k)) NA_integer_ else as.integer(k),
+       equilibrium = setNames(as.numeric(h[nrow(h), ids]), ids))
+}
