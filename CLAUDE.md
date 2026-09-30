@@ -58,7 +58,8 @@ testthat::test_dir("tests/testthat")          # ou: Rscript tests/testthat.R
   `mod_data.R` (Start/Model/Nodes/Edges/Review), `mod_graph.R`, `mod_responses.R`
   (Scenarios; `compute_scenario()`), `mod_metrics.R`, `mod_report.R`.
 - `data/` — exemplos (Mangi 2007, Gnanapragasam 2026 com parâmetros e esforço observado,
-  `sample_*`); `data-raw/` — scripts que geram o exemplo do Sri Lanka e suas figuras;
+  porto didático `port_*`, `sample_*`); `data-raw/` — scripts que geram os exemplos do Sri
+  Lanka e do porto e suas figuras;
   `docs/` — tutorial, savepoints de exemplo, figuras; `legacy/` — código fora de uso;
   `tests/testthat/` — suíte (fixtures de formatos antigos em `fixtures/`).
 

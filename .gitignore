@@ -15,6 +15,7 @@ exports/
 *.png
 # ...exceto as figuras do exemplo didatico versionadas para o tutorial (docs/)
 !docs/example_gnanapragasam_*.png
+!docs/example_port_*.png
 
 # Sistema operacional
 .DS_Store

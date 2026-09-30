@@ -103,7 +103,7 @@ iDPSIR/
 │   └── server_main.R           # top-level server (ina_server)
 ├── data/                      # example data (sample_nodes.csv, sample_edges.csv, mangi2007_*.csv, gnanapragasam2026_*.csv incl. parameters and observed effort)
 ├── data-raw/                  # scripts that build the Sri Lanka example (tables, savepoint, figures)
-├── docs/                      # getting-started tutorial (tutorial.html) and three example savepoints (example_fisheries/mangi/gnanapragasam.idpsir.json, see Example networks below)
+├── docs/                      # getting-started tutorial (tutorial.html) and four example savepoints (example_fisheries/mangi/gnanapragasam/port.idpsir.json, see Example networks below)
 ├── legacy/                    # code no longer used by the app (equilibrium engine, older scenario/plot code), kept for reference - not sourced
 ├── tests/
 │   ├── testthat.R             # test runner: Rscript tests/testthat.R
@@ -183,7 +183,7 @@ configurable, so this order and vocabulary can be adjusted per project.
 `Coral cover`, not `Fish stock decline`/`Coral degradation`. The direction (is more of
 it good or bad) belongs on the edges (`interaction_type`), not baked into the node's
 name — naming a State after the problem it's usually associated with quietly assumes
-a sign that can drift out of sync with the actual edges. All three example networks
+a sign that can drift out of sync with the actual edges. All the example networks
 follow this (with one documented, internally-consistent exception in the
 Gnanapragasam network). The app never checks this for you — see the tutorial's
 [Modeling convention](docs/tutorial.html#conventions) section for the full sign table,
@@ -281,8 +281,20 @@ explanation of each; the short version:
   [`data/gnanapragasam2026_nodes.csv`](data/gnanapragasam2026_nodes.csv) /
   [`data/gnanapragasam2026_edges.csv`](data/gnanapragasam2026_edges.csv).
 
+- **Port operations (didactic)** — 15 nodes, 20 edges, one window per season. Dredging
+  clouds the water (fauna behaviour, primary production) while the cargo terminal's
+  runoff carries metals (seafood contamination, CONAMA water-quality class). The Impacts
+  weigh differently (class and value v), and the **Impact prioritization** points to one
+  response at a time: runoff treatment first (seafood contamination has the top
+  priority), then a work window for the dredging campaign — which the temporal
+  simulation shows is needed only during the campaign, while the runoff treatment must
+  start early because the biota accumulates metals. Comes with four saved scenarios.
+  [`docs/example_port.idpsir.json`](docs/example_port.idpsir.json) or
+  [`data/port_nodes.csv`](data/port_nodes.csv) / [`data/port_edges.csv`](data/port_edges.csv);
+  built by [`data-raw/port_build.R`](data-raw/port_build.R).
+
 Load any of them from the wizard's Start step (Load savepoint), or via CSV import for
-the two that have plain tables.
+the three that have plain tables.
 
 ### Sri Lanka example: how it was parametrized
 

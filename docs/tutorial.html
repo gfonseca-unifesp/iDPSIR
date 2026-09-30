@@ -563,8 +563,9 @@
         <li><a href="#self-regulation">5 · Self-regulation</a></li>
         <li><a href="#examples">6 · Example networks</a></li>
         <li><a href="#worked-example">7 · Worked example</a></li>
-        <li><a href="#savepoint">8 · Saving your work</a></li>
-        <li><a href="#glossary">9 · Glossary</a></li>
+        <li><a href="#port-example">8 · Worked example: which response, and when?</a></li>
+        <li><a href="#savepoint">9 · Saving your work</a></li>
+        <li><a href="#glossary">10 · Glossary</a></li>
       </ol>
     </nav>
 
@@ -1108,12 +1109,13 @@ P1,S1,negative,0.55,,monitoring</pre>
 
       <!-- ============ EXAMPLE NETWORKS ============ -->
       <section class="block" id="examples">
-        <div class="kicker">Three networks, three sizes</div>
+        <div class="kicker">Four networks, four purposes</div>
         <h2>Example networks</h2>
-        <p class="lead">Three ready-to-load networks ship with the app, each making a
+        <p class="lead">Four ready-to-load networks ship with the app, each making a
           different point. Start with whichever matches what you need right now — a
-          five-minute orientation, a real published network, or the deepest example in
-          the app (covered in full in the next section).</p>
+          five-minute orientation, a real published network, the deepest example in the app,
+          or a didactic case on prioritizing responses (the last two are covered in full in
+          their own sections).</p>
 
         <h3>Fisheries — the smallest possible loop</h3>
         <p>Five nodes, five edges, one closed feedback loop:
@@ -1209,6 +1211,26 @@ P1,S1,negative,0.55,,monitoring</pre>
             <p class="muted">The same network as plain CSV.</p>
             <pre><a href="../data/gnanapragasam2026_nodes.csv" download>gnanapragasam2026_nodes.csv</a></pre>
             <pre><a href="../data/gnanapragasam2026_edges.csv" download>gnanapragasam2026_edges.csv</a></pre>
+          </div>
+        </div>
+
+        <h3>Port operations — prioritizing responses (didactic)</h3>
+        <p>15 factors, 20 links, one window per season: a port where dredging clouds the
+          water and the cargo terminal's runoff carries metals. Built to show how the
+          <strong>relevance</strong> of the Impacts, not just the size of the damage, points to
+          which response to fund first — and that one response is only needed during the
+          dredging campaign. Full walkthrough in <a href="#port-example">its own section</a>.</p>
+        <div class="code-cluster two">
+          <div class="code-card">
+            <h4>Download the example</h4>
+            <p class="muted">Comes with four saved scenarios to compare.</p>
+            <pre><a href="example_port.idpsir.json" download>example_port.idpsir.json</a></pre>
+          </div>
+          <div class="code-card">
+            <h4>Or the underlying tables</h4>
+            <p class="muted">The same network as plain CSV.</p>
+            <pre><a href="../data/port_nodes.csv" download>port_nodes.csv</a></pre>
+            <pre><a href="../data/port_edges.csv" download>port_edges.csv</a></pre>
           </div>
         </div>
       </section>
@@ -1376,6 +1398,113 @@ P1,S1,negative,0.55,,monitoring</pre>
           stays open; with anti-poaching too it reaches about 345 kt, right at the threshold.
           The paper's own conclusion — a modest cut is a start, the MEY cut restores the
           stock — comes out of the model.</p>
+      </section>
+
+      <!-- ============ PORT EXAMPLE ============ -->
+      <section class="block" id="port-example">
+        <div class="kicker">See it in action</div>
+        <h2>Worked example: which response, and when?</h2>
+        <p class="lead">A port has three things going on at once, and a limited budget. This
+          didactic network shows how the app turns that into a decision: the
+          <strong>prioritization</strong> says which Impact to deal with first — weighing how much
+          each one matters, not only how much it worsens — and the <strong>temporal
+          simulation</strong> says when each response has to be active.</p>
+
+        <div class="code-cluster">
+          <div class="code-card">
+            <h4>Download the example</h4>
+            <p class="muted">Load it on the Start step (<strong>Load savepoint</strong>). Scenario 1 is set
+              up, and four scenarios are already saved (they are rebuilt when you build the graph).</p>
+            <pre><a href="example_port.idpsir.json" download>example_port.idpsir.json</a></pre>
+          </div>
+        </div>
+
+        <div class="callout warn">
+          <span class="dot"></span>
+          <div><strong>Illustrative, not a real assessment.</strong> The structure comes from a
+          port environmental impact table; every strength is a class (weak, moderate, strong),
+          so the numbers are qualitative. The relevance values are examples of what a
+          stakeholder elicitation (swing weights) might give.</div>
+        </div>
+
+        <h3>The story</h3>
+        <p>Two groups of Impacts run through the same port:</p>
+        <ul>
+          <li><strong>Turbidity</strong> — maintenance dredging and ship traffic put sediment back
+            in suspension, the water turns turbid, fauna changes its behaviour and phytoplankton
+            loses light (primary production). Turbidity clears within a season or two
+            (self-regulation 0.7).</li>
+          <li><strong>Metals</strong> — rain washes the cargo terminal, and the runoff carries
+            dissolved zinc and copper, which contaminate fish and shellfish and push the water
+            out of its CONAMA quality class. Metals persist (0.2) and biota accumulates them
+            (0.1).</li>
+        </ul>
+        <p>Three responses are available: a <strong>runoff treatment system</strong> (acts on
+          the metals), an <strong>environmental work window</strong> that restricts dredging to the
+          least sensitive period (acts on turbidity), and generic <strong>best practices</strong>
+          (a little of both, weakly). Dredging happens in a campaign (windows 3 to 5); runoff and
+          traffic never stop.</p>
+        <figure class="figure">
+          <img src="example_port_network.png" alt="Network diagram: three Drivers (maintenance dredging, cargo terminal, vessel traffic), two Pressures (surface runoff, sediment resuspension), three States (turbidity, dissolved Zn, dissolved Cu), four Impacts and three Responses.">
+          <figcaption><strong>Figure 3.</strong> The port network. Green links increase their target, red ones decrease it.</figcaption>
+        </figure>
+
+        <h3>Not all Impacts weigh the same</h3>
+        <p>Each Impact has a class and a value v (Nodes step; <strong>Elicit values (swing
+          weights)</strong> helps set it):</p>
+        <div class="table-wrap">
+          <table class="fields">
+            <tr><th>Impact</th><th>Class</th><th>Value v</th><th>Why</th></tr>
+            <tr><td class="key">Biota contamination (seafood)</td><td>welfare</td><td>1.0</td><td>people eat it</td></tr>
+            <tr><td class="key">Behavioral alterations of fauna</td><td>ecological</td><td>1 (always)</td><td>ecological endpoints count in full</td></tr>
+            <tr><td class="key">Water quality loss (CONAMA classes)</td><td>welfare</td><td>0.6</td><td>legal compliance</td></tr>
+            <tr><td class="key">Loss of primary production</td><td>service</td><td>0.4</td><td>a supporting service, partly compensated elsewhere</td></tr>
+          </table>
+        </div>
+
+        <h3>Step by step: follow the priority</h3>
+        <p>Open <strong>Scenarios</strong> and click <strong>Apply scenario</strong>. The pressure is
+          all three Drivers at 100%; the response is only <em>best practices</em>. Look at
+          <strong>Impact prioritization</strong>: priority = relevance × the share of the worsening
+          the response leaves uncovered.</p>
+        <div class="table-wrap">
+          <table class="fields">
+            <tr><th>Responses applied</th><th>Top priority (value)</th><th>What it points to</th></tr>
+            <tr><td class="key">1. Best practices only</td><td>Biota contamination (0.90), then fauna behaviour (0.52)</td><td>the metals: add the runoff treatment</td></tr>
+            <tr><td class="key">2. + Runoff treatment</td><td>Fauna behaviour (0.43)</td><td>the turbidity: add the work window</td></tr>
+            <tr><td class="key">3. + Work window</td><td>none — all four Impacts neutralized</td><td>—</td></tr>
+          </table>
+        </div>
+        <p>Change the response scenario to match each row and apply again. Two things to
+          notice. First, primary production is worsened as much as fauna behaviour (0.90 each)
+          but is always last (0.21 in step 1): with v = 0.4, it matters less to the people who
+          set the values. Second, each step points to a <em>different</em> response, because each
+          response reaches a different group of Impacts — the prioritization is what connects an
+          Impact to the response that covers it.</p>
+
+        <h3>When: one response has a season, the other has no end</h3>
+        <p>Open <strong>Temporal simulation</strong>, tick <strong>Show temporal simulation</strong>
+          and click <strong>Run simulation</strong>. Pressure and response run <em>For a number of
+          windows</em>: dredging in windows 3–5, runoff and traffic always. Compare the saved
+          scenarios on the <strong>Report</strong> tab (include the temporal simulation):</p>
+        <ul>
+          <li><strong>3. + Work window during dredging</strong> — the work window is active only in
+            windows 3–5, yet fauna behaviour peaks at 0.29 instead of 1.55 without any response,
+            and returns to zero after the campaign. Keeping it all year only pushes the factors
+            "beyond neutral": effort with no remaining problem to solve.</li>
+          <li><strong>4. Runoff treatment starts late</strong> — the same responses, but the runoff
+            treatment only from window 6. The seafood contamination climbs to about 10 and stays
+            there (about 0.1 when the treatment starts in window 1): contamination accumulates in
+            the biota, so this response has to start early and never stop.</li>
+        </ul>
+        <figure class="figure">
+          <img src="example_port_temporal_4.png" alt="Four panels, one per Impact, over 12 windows. Fauna behaviour and primary production rise in the dredging campaign and fall back with the work window; seafood contamination keeps rising until the late runoff treatment starts and then levels off around 10.">
+          <figcaption><strong>Figure 4.</strong> Scenario 4 (runoff treatment from window 6): the dashed line is the pressure alone, the solid line pressure and responses together. The turbidity Impacts are controlled by the work window during the campaign; the seafood contamination, left untreated until window 6, never comes back down.</figcaption>
+        </figure>
+        <p>The lesson the network gives, in one line: <strong>fund the runoff treatment first and
+          keep it running; add the work window only for the dredging campaigns</strong> — and
+          leave primary production as the last concern, not because it is small, but because it
+          weighs less.</p>
       </section>
 
       <!-- ============ SAVEPOINT ============ -->
