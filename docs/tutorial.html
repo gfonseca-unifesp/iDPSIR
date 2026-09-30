@@ -1340,9 +1340,13 @@ P1,S1,negative,0.55,,monitoring</pre>
           <span class="dot"></span>
           <div><strong>The lesson for a first model.</strong> Start with the structure and the signs —
           they already tell you <em>which</em> responses reach <em>which</em> Impacts, and often
-          whether they are enough. Then parametrize what you have evidence for, in this order of
-          payoff: thresholds and growth (they can reverse a verdict), link classes where the
-          evidence says "main" or "minor" (they change the sizes, and can change priorities), and last the temporal settings.
+          whether they are enough. Then parametrize what you have evidence for. In 1000 simulated
+          DPSIR networks (<code>analysis/sim_networks/</code>), giving the links their strengths changed
+          16% of the verdicts and adding State thresholds 19%, while growth trends changed only 4% —
+          they move the run with and without the response alike, so they matter for <em>when</em>, rarely
+          for <em>whether</em>. Verdicts close to neutralization in the first run are the ones that flip
+          (5 times more often), and the priority order is more sensitive than the verdicts (the top
+          Impact changed in 35% of the networks) — check the <strong>Rank stability</strong>.
           Compare with the first run to see which conclusions depend on what you added.</div>
         </div>
 

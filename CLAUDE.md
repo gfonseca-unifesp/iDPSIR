@@ -146,6 +146,14 @@ registradas no roadmap).
   pressão também some). Variante do Sri Lanka sem auxílio → frota
   (`example_gnanapragasam_noaidfleet`): alcance do auxílio 1/5, estoque nunca abaixo de
   B_MSY, esforço RMSE 6.152 (NSE −4,9) contra 658 — os dados sustentam a hipótese.
+- **E5.3–E5.5 (redes simuladas, 1000 × 20):** H1 confirmada (forças mudam 15,9% dos
+  vereditos); H2 refutada (limiares 18,9%, mas crescimento só 4,3% — move linha de base e
+  cenário juntos); H3 refutada (ciclos mudam *menos*, OR 0,79); H4 confirmada (perto da
+  neutralização, OR 5,4); H5 refutada (τ médio 0,64; topo da prioridade muda em 35%).
+  Trocar a leitura estática → temporal muda 17,8%. **Consequência para o texto:** a ordem
+  "limiares e crescimento primeiro" do tutorial/manuscrito não se sustenta — limiares e
+  forças importam parecido, crescimento pouco para o veredito; e a prioridade é mais
+  sensível à parametrização que o veredito. Resultados em `analysis/sim_networks/out/`.
 - **E6 (teste de usabilidade): fora do plano** por decisão do autor — não há coleta com
   participantes, nada depende de CEP.
 - **E4:** forma aditiva opcional; justificativa do produto (perda esperada evitável);

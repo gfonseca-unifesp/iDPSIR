@@ -169,7 +169,8 @@ manuscript_numbers <- function(root = ".", with_sim = TRUE) {
     h <- utils::read.csv(hyp, stringsAsFactors = FALSE)
     for (i in seq_len(nrow(h))) {
       key <- gsub("[^A-Za-z0-9]+", "_", h$hypothesis[i])
-      put(sprintf("sim.%s.estimate", key), h$estimate[i]); put(sprintf("sim.%s.result", key), h$result[i])
+      if (!is.na(h$estimate[i])) put(sprintf("sim.%s.estimate", key), h$estimate[i])
+      put(sprintf("sim.%s.result", key), h$result[i])
     }
   }
   num

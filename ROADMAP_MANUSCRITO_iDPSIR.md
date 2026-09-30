@@ -237,6 +237,15 @@ Para cada caso: estrutura e fontes → cenários → suficiência e prioridade (
 - **(M-d) Teste da hipótese causal:** sem as ligações auxílio → frota, o alcance cai e a reversão desaparece.
 
 ### 4.4 (nova) O que a parametrização acrescenta
+
+> **Atualização (Revisão 3, E5):** o experimento com 1000 redes simuladas contradiz parte
+> da ordem abaixo. Forças mudam 15,9% dos vereditos, limiares 18,9%, crescimento só 4,3%
+> (ele move a linha de base e o cenário juntos), e trocar a leitura estática pela temporal
+> muda 17,8%. A prioridade é **mais** sensível que o veredito (τ = 0,64; topo muda em 35%).
+> Reescrever a mensagem: "comece pela estrutura; parametrize forças e limiares onde há
+> evidência — eles mudam vereditos na mesma medida —, confira a prioridade com a
+> estabilidade do rank; o crescimento importa para o *quando*, raramente para o veredito".
+> O mesmo vale para o tutorial ("First run") e o README.
 - Tabela-síntese dos dois casos (veredito, prioridade e resultado temporal, cru × parametrizado).
 - Mensagem: **comece pela estrutura e pelos sinais**; depois parametrize na ordem de retorno:
   1. limiares e crescimento (podem inverter um veredito);

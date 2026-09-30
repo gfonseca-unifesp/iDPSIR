@@ -1,0 +1,8 @@
+"hypothesis","statistic","estimate","lo","hi","result"
+"H1","change rate C0->C1",0.158538710480458,0.151387617284562,0.165418342200033,"confirmed"
+"H2 (thresholds)","rate(C1->C2) - rate(C0->C1)",0.0304489401519491,0.0142603469244733,0.0475935621408258,"confirmed"
+"H2 (growth)","rate(C2t->C3) - rate(C0->C1)",-0.116010232767651,-0.123558074767971,-0.1079120891948,"refuted"
+"H2","both H2 differences",NA,NA,NA,"refuted"
+"H3","glmer coef has_cycle",-0.238554689801726,-0.419791100723151,-0.0573182788803012,"refuted"
+"H4","glmer coef near (c < 0.2)",1.69130770519408,1.62543437814307,1.75718103224509,"confirmed"
+"H5","mean Kendall tau C0 vs C1",0.636458790581497,0.619588066988714,0.653779910070947,"refuted"

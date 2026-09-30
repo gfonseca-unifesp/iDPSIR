@@ -78,5 +78,18 @@
   "val.rolling2012.rmse_persistence": 487.823397006198,
   "val.full.beta_R1": 0.342219381114157,
   "val.full.beta_R2": 0.0888246363013468,
-  "val.full.nse": 0.932722346855544
+  "val.full.nse": 0.932722346855544,
+  "sim.H1.estimate": 0.158538710480458,
+  "sim.H1.result": "confirmed",
+  "sim.H2_thresholds_.estimate": 0.0304489401519491,
+  "sim.H2_thresholds_.result": "confirmed",
+  "sim.H2_growth_.estimate": -0.116010232767651,
+  "sim.H2_growth_.result": "refuted",
+  "sim.H2.result": "refuted",
+  "sim.H3.estimate": -0.238554689801726,
+  "sim.H3.result": "refuted",
+  "sim.H4.estimate": 1.69130770519408,
+  "sim.H4.result": "confirmed",
+  "sim.H5.estimate": 0.636458790581497,
+  "sim.H5.result": "refuted"
 }
