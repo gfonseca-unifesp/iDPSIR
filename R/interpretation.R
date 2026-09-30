@@ -12,6 +12,64 @@
 
 INTERPRETATION_CONFIDENT <- 80  # % of simulations for "reliable" / "neutralizes it alone"
 INTERPRETATION_FRAGILE <- c(20, 80)  # a verdict whose confidence falls here is fragile
+# Revisao 3, E5 (H4): verdicts change most often near neutralization. A
+# worsened Impact whose |net| is below this share of the worsening has a
+# "tight" verdict - small changes in the link strengths can flip it.
+INTERPRETATION_TIGHT <- 0.2
+
+# Links on the paths from the pushed factors (pressures and responses of the
+# scenario) to an Impact: the source is reached from a pushed factor and the
+# target reaches the Impact. `assumed` = strength from a class or the default
+# (no value given for that link). With p_D and p_R, `influence` = change in
+# the Impact's net when that link's beta grows 10% (sufficiency() with the
+# triggers), and the links come ordered by it - the ones worth checking first.
+tight_verdict_links <- function(g, impact_id, pushed, p_D = NULL, p_R = NULL, bump = 0.1) {
+  ids <- igraph::V(g)$name
+  pushed <- intersect(pushed, ids)
+  if (length(pushed) == 0 || !impact_id %in% ids) return(data.frame())
+  from_push <- is.finite(apply(igraph::distances(g, v = pushed, to = ids, mode = "out"), 2, min))
+  names(from_push) <- ids
+  to_impact <- is.finite(igraph::distances(g, v = ids, to = impact_id, mode = "out")[, 1])
+  names(to_impact) <- ids
+  el <- igraph::as_edgelist(g, names = TRUE)
+  keep <- which(from_push[el[, 1]] & to_impact[el[, 2]])
+  if (length(keep) == 0) return(data.frame())
+  src <- igraph::E(g)$weight_source
+  if (is.null(src)) src <- rep(NA_character_, nrow(el))
+  out <- data.frame(from = el[keep, 1], to = el[keep, 2], weight = igraph::E(g)$weight[keep],
+                    assumed = is.na(src[keep]) | src[keep] %in% c("class", "default"),
+                    influence = NA_real_, stringsAsFactors = FALSE)
+  if (!is.null(p_D) && !is.null(p_R)) {
+    net_of <- function(gg) {
+      s <- tryCatch(sufficiency(gg, p_D, p_R), error = function(e) NULL)
+      if (is.null(s)) NA_real_ else s$net[s$id == impact_id]
+    }
+    base <- net_of(g)
+    w <- igraph::E(g)$weight
+    out$influence <- vapply(keep, function(e) {
+      gg <- g
+      ww <- w; ww[e] <- ww[e] * (1 + bump)
+      igraph::E(gg)$weight <- ww
+      abs(net_of(gg) - base)
+    }, numeric(1))
+    out <- out[order(-ifelse(is.na(out$influence), -Inf, out$influence), !out$assumed), , drop = FALSE]
+  } else {
+    out <- out[order(!out$assumed), , drop = FALSE]
+  }
+  rownames(out) <- NULL
+  out
+}
+
+.tight_links_text <- function(g, links, n_max = 5) {
+  if (nrow(links) == 0) return("")
+  if (!all(is.na(links$influence))) links <- links[!is.na(links$influence) & links$influence > 1e-9, , drop = FALSE]
+  if (nrow(links) == 0) return("")
+  lab <- sprintf("%s -> %s%s", .interp_label(g, links$from), .interp_label(g, links$to),
+                 ifelse(links$assumed, " (assumed)", ""))
+  more <- length(lab) - n_max
+  if (more > 0) lab <- lab[seq_len(n_max)]
+  paste0(paste(lab, collapse = "; "), if (more > 0) sprintf(" (the %d that move it most, of %d)", n_max, n_max + more) else "")
+}
 
 .interp_label <- function(g, ids) {
   l <- igraph::V(g)$label[match(ids, igraph::V(g)$name)]
@@ -63,6 +121,19 @@ interpret_scenario <- function(g, sc, threshold = 1e-9) {
                           ifelse(m < -threshold, "partial", ifelse(m > threshold, "worsened_by_response", "not_covered"))))
   coverage <- ifelse(w > threshold, pmax(0, -m) / w, NA_real_)
   confidence <- vapply(s$node, conf_of, numeric(1))
+  tight <- w > threshold & abs(n) < INTERPRETATION_TIGHT * w
+  pushed <- unique(c(names(sc$p_D)[sc$p_D != 0], names(sc$press)[sc$press != 0]))
+  tight_links <- lapply(seq_len(nrow(s)), function(i) {
+    if (!tight[i] || length(pushed) == 0) return(data.frame())
+    tight_verdict_links(g, s$id[i], pushed, sc$p_D, sc$press)
+  })
+  tight_text <- vapply(seq_len(nrow(s)), function(i) {
+    if (!tight[i]) return("")
+    lk <- tight_links[[i]]
+    paste0(sprintf(" Tight verdict: the net is within %.0f%% of the worsening, so it depends on the link strengths - worth checking the values",
+                   100 * INTERPRETATION_TIGHT),
+           { lt <- .tight_links_text(g, lk); if (nzchar(lt)) paste0(" of the links involved: ", lt, ".") else " of the links involved." })
+  }, character(1))
 
   text <- vapply(seq_len(nrow(s)), function(i) {
     base <- switch(status[i],
@@ -91,13 +162,14 @@ interpret_scenario <- function(g, sc, threshold = 1e-9) {
       else ""
     } else ""
     a_txt <- if (w[i] > threshold && !s$neutralized[i]) alone_text(s$node[i]) else ""
-    paste0(base, c_txt, a_txt)
+    paste0(base, c_txt, tight_text[i], a_txt)
   }, character(1))
 
   df <- data.frame(
     id = s$id, node = s$node, status = status, worsening = w, mitigation = m, net = n,
     coverage = coverage, neutralized = s$neutralized, strength_needed = s$strength_to_neutralize,
     confidence = unname(confidence), relevance = relevance, priority = priority,
+    tight = tight, n_assumed_links = vapply(tight_links, function(l) if (nrow(l)) sum(l$assumed) else 0L, integer(1)),
     text = text, stringsAsFactors = FALSE
   )
   worsened <- df$worsening > threshold
@@ -128,6 +200,13 @@ interpret_scenario <- function(g, sc, threshold = 1e-9) {
                   df$confidence >= INTERPRETATION_FRAGILE[1] & df$confidence <= INTERPRETATION_FRAGILE[2]]
   if (length(fr) > 0) msgs <- c(msgs, sprintf("Fragile verdicts (confidence between %d%% and %d%%): %s - narrowing the uncertainty of the links involved would settle them.",
                                              INTERPRETATION_FRAGILE[1], INTERPRETATION_FRAGILE[2], paste(fr, collapse = ", ")))
+  ti <- df$node[df$tight]
+  if (length(ti) > 0) {
+    na <- sum(df$n_assumed_links[df$tight])
+    msgs <- c(msgs, sprintf("Tight verdicts (net within %.0f%% of the worsening): %s - small changes in the link strengths can flip them; check the values of the links involved%s.",
+                            100 * INTERPRETATION_TIGHT, paste(ti, collapse = ", "),
+                            if (na > 0) ", first those marked (assumed), whose strength comes from a class or the default" else ""))
+  }
   rob <- sc$priority_robustness
   if (!is.null(rob) && nrow(rob) >= 2 && !is.null(attr(rob, "top_stable")) && attr(rob, "top_stable") < 0.8) {
     msgs <- c(msgs, sprintf("The top priority depends on the values v and on how the index is combined: it stays first in only %.0f%% of the variations tested.",

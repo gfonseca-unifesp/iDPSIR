@@ -241,6 +241,16 @@ Para cada caso: estrutura e fontes → cenários → suficiência e prioridade (
 > (In-Cognitive tem incerteza Monte Carlo), e reformular a novidade: não "a primeira avaliação
 > de suficiência", mas "a primeira ferramenta aberta, sem instalação, que lê suficiência
 > propagando efeitos numa rede causal com evidência e incerteza por ligação".
+> **Ramos-Quintana et al. (2018)** (lido): precursor mais próximo — rede causal DPSIR com
+> tendências combinadas por produto ao longo do caminho e soma entre caminhos (como o efeito
+> total do iDPSIR), um único estado global com regiões de risco fuzzy e ações de gestão com
+> pesos ordinais (1/2). Sem software, sem ciclos, sem incerteza reamostrada, sem leitura por
+> Impacto: citar na Introdução e entrar na Tabela 1 como método sem software.
+
+> **Aviso de veredito apertado (Revisão 3, após E5/H4):** a Interpretação e o relatório
+> marcam o Impacto piorado cujo saldo fica a menos de 20% da piora e listam as 5 ligações
+> que mais movem esse saldo (β + 10%), indicando as de força assumida (classe ou padrão).
+> Citar na seção de interpretação como consequência direta de H4.
 
 ### 4.4 (nova) O que a parametrização acrescenta
 

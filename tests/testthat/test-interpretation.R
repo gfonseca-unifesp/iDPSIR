@@ -15,7 +15,7 @@ interp_scenario <- function(g, resp) {
   cm <- as.data.frame(t(conf$neutralized_pct)); names(cm) <- conf$node
   cm <- cbind(Response = "Planned scenario (as set)", cm)
   list(sufficiency_df = s, prioritization = impact_prioritization(g, pD, s, n_simulations = 100),
-       sufficiency_confidence_matrix = cm, active = names(resp), strengths = resp * 100)
+       sufficiency_confidence_matrix = cm, active = names(resp), strengths = resp * 100, p_D = pD, press = pR)
 }
 
 test_that("interpretation: statuses, order and headline follow the sufficiency numbers", {
@@ -53,4 +53,30 @@ test_that("interpretation: comparison has one row per scenario and one column pe
   expect_equal(unname(unlist(cmp[2, c("Declining catch per fisher", "Livelihood benefits compromised", "Exclusion and conflicts")])), rep("Neutralized", 3))
   expect_match(cmp[1, "Declining catch per fisher"], "% covered$")
   expect_equal(cmp[["Top priority left"]][2], "-")
+})
+
+test_that("interpretation: tight verdicts name the links on the paths to the Impact", {
+  g <- interp_graph()
+  sc <- interp_scenario(g, c(R1 = 1, R2 = 1, R3 = 1))
+  it <- interpret_scenario(g, sc)$impacts
+  expected <- it$worsening > 1e-9 & abs(it$net) < INTERPRETATION_TIGHT * it$worsening
+  expect_equal(it$tight, expected)
+  # Force one: shrink the net of the first worsened Impact.
+  sc$sufficiency_df$net[sc$sufficiency_df$id == "I1"] <- 0.05 * sc$sufficiency_df$worsening[sc$sufficiency_df$id == "I1"]
+  out <- interpret_scenario(g, sc)
+  row <- out$impacts[out$impacts$id == "I1", ]
+  expect_true(row$tight)
+  expect_match(row$text, "Tight verdict")
+  expect_match(row$text, "links involved: ")
+  expect_true(any(grepl("^Tight verdicts", out$messages)))
+  # The links: source reached from a pushed factor, target reaching I1.
+  lk <- tight_verdict_links(g, "I1", c("D1", "R1"))
+  expect_gt(nrow(lk), 0)
+  reach_I1 <- is.finite(igraph::distances(g, v = lk$to, to = "I1", mode = "out")[, 1])
+  expect_true(all(reach_I1))
+  expect_equal(nrow(tight_verdict_links(g, "I1", character())), 0)
+  # With the pushes, the links come ordered by how much they move the net.
+  lk2 <- tight_verdict_links(g, "I1", c("D1", "R1"), sc$p_D, sc$press)
+  expect_false(is.unsorted(rev(lk2$influence[!is.na(lk2$influence)])))
+  expect_gt(max(lk2$influence, na.rm = TRUE), 0)
 })

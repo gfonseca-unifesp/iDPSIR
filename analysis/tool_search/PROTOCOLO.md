@@ -81,16 +81,18 @@ manuscript's Table 1 and text:
 4. **Web tools exist for neighbouring methods:** DAGitty (causal DAGs, browser), shinyBN
    (Bayesian networks, Shiny, online), Insight Maker (system dynamics, browser). None is
    DPSIR-structured or reads response sufficiency.
-5. **To read in full before submission:** Ramos-Quintana et al. (2018), *Quantitative-qualitative
-   assessments of environmental causal networks to support the DPSIR framework in the
-   decision-making process*, Environmental Impact Assessment Review 69, 42–60,
-   doi:10.1016/j.eiar.2017.11.004 - closest in aim (DPSIR + causal networks + decisions);
-   whether it released software decides whether it is a row of Table 1 or a citation in the
-   Introduction.
+5. **Ramos-Quintana et al. (2018)** (read in full, 2026-09-30), Environmental Impact
+   Assessment Review 69, 42–60, doi:10.1016/j.eiar.2017.11.004 - the closest precursor: a
+   DPSIR causal network whose relations are indicator trends, combined **by product and
+   addition along paths** from one Driver into a single "global environmental state",
+   classified by fuzzy risk regions; weighted management actions shift that state one or two
+   regions (Morelos, Mexico). No released software, no loops, no resampled uncertainty, no
+   per-Impact reading. It belongs in the Introduction (products along paths, as iDPSIR's total
+   effects) and in Table 1 as a method row without software.
 
 ## 5. Still to do
 
 - Run strings A and B in WoS, Scopus, Scholar and the four journals; fill the flow counts.
-- Read in full: Bryhn et al. 2026, Ramos-Quintana et al. 2018, Ahtiainen et al. (volume/year).
+- Read in full: Bryhn et al. 2026, Ahtiainen et al. (volume/year).
 - Revise Table 1 with the rows and cells above; add Supplement S5 (this protocol, the flow and
   `tabela_ferramentas.csv`).

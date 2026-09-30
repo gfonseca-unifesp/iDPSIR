@@ -532,7 +532,7 @@ has four tabs:
   or any saved scenario: how many worsened Impacts are neutralized, one sentence per
   Impact in priority order (neutralized, % of the worsening covered and how much
   stronger the response would have to be, not covered, worsened by the response),
-  key messages (the Impact to act on first, side effects, fragile verdicts), a coverage
+  key messages (the Impact to act on first, side effects, fragile verdicts, tight verdicts with the links worth checking), a coverage
   chart and every scenario side by side. The same scenario is shown in the Scenarios
   results, the temporal simulation and this tab (one selector in each, kept in sync);
   the report opens its scenario part with the same reading.
