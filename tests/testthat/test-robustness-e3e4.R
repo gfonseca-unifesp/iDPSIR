@@ -76,3 +76,17 @@ test_that("E4.2: priority robustness - a clear order is stable, a near tie is no
   expect_lt(attr(rt, "top_stable"), 0.9)
   expect_identical(priority_robustness(clear, n = 50, seed = 1), priority_robustness(clear, n = 50, seed = 1))
 })
+
+test_that("E4.2: the rank distribution behind the figure sums to 1 per Impact and matches keeps_rank", {
+  prio <- data.frame(id = c("a", "b", "c"), node = c("a", "b", "c"), value_v = c(1, 0.6, 0.4), D = c(1, 0.9, 0.9), rho = 1,
+                     gap = c(0.9, 0.8, 0.8), affected = TRUE, stringsAsFactors = FALSE)
+  prio$priority <- prio$value_v * prio$D * prio$rho * prio$gap
+  r <- priority_robustness(prio, n = 200)
+  share <- attr(r, "rank_share")
+  expect_equal(unname(rowSums(share)), rep(1, 3))
+  base <- attr(r, "base_rank")
+  expect_equal(unname(share[cbind(1:3, base[rownames(share)])]), r$keeps_rank)
+  f <- tempfile(fileext = ".png"); on.exit(unlink(f))
+  render_plot_png(function() draw_rank_stability_plot(r), f)
+  expect_gt(file.size(f), 1000)
+})

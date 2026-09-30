@@ -470,6 +470,8 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
         ),
         DTOutput(ns("prioritization_table")),
         plotOutput(ns("prioritization_plot"), height = "320px"),
+        # Revisao 3, E4.2.
+        plotOutput(ns("rank_stability_plot"), height = "300px"),
         downloadButton(ns("download_prioritization_csv"), "Download CSV", class = "btn-sm"),
         tags$p(class = "text-muted", style = "font-size: 12px; margin-top: 6px;", PRIORITIZATION_METHOD_NOTE),
         uiOutput(ns("prioritization_note"))
@@ -511,6 +513,12 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
       sc <- shown_scenario()
       req(sc, sc$prioritization)
       draw_prioritization_plot(sc$prioritization)
+    })
+
+    output$rank_stability_plot <- renderPlot({
+      sc <- shown_scenario()
+      req(sc, sc$priority_robustness)
+      draw_rank_stability_plot(sc$priority_robustness)
     })
 
     output$prioritization_note <- renderUI({
@@ -1299,10 +1307,28 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
         p(class = "text-muted", "Bars: how much each Impact matters (value v x importance D x reliability). Diamonds: priority,",
           "the relevance times the share of the worsening left uncovered - the Impact to act on first has the largest."),
         plotOutput(ns("interp_priority_plot"), height = "320px"),
+        h5("How stable is that order?"),
+        p(class = "text-muted", "Each bar: in what share of 500 variations (values v changed by up to 20%, index as a product or a sum)",
+          "the Impact ended 1st, 2nd, 3rd... The tick marks its rank above. One colour = a stable rank; two = a near tie."),
+        plotOutput(ns("interp_rank_plot"), height = "300px"),
+        plot_download_row(ns, "interp_rank"),
         tags$p(class = "text-muted", style = "font-size: 12px; margin-top: 6px;", PRIORITIZATION_METHOD_NOTE)
       )
     })
     output$interp_coverage_plot <- renderPlot(draw_sufficiency_plot(shown_interpretation()$impacts))
+    output$interp_rank_plot <- renderPlot({
+      sc <- shown_scenario()
+      req(sc, sc$priority_robustness)
+      draw_rank_stability_plot(sc$priority_robustness)
+    })
+    output$download_interp_rank_png <- downloadHandler(
+      filename = function() paste0("rank_stability_", Sys.Date(), ".png"),
+      content = function(file) render_plot_png(function() draw_rank_stability_plot(shown_scenario()$priority_robustness), file, width = 1000, height = 420)
+    )
+    output$download_interp_rank_svg <- downloadHandler(
+      filename = function() paste0("rank_stability_", Sys.Date(), ".svg"),
+      content = function(file) render_plot_svg(function() draw_rank_stability_plot(shown_scenario()$priority_robustness), file, width = 10, height = 4.4)
+    )
     output$interp_priority_plot <- renderPlot({
       sc <- shown_scenario()
       req(sc, sc$prioritization)

@@ -226,6 +226,12 @@ priority_robustness <- function(prio, n = 500, seed = 42, spread = 0.2, weights 
     stringsAsFactors = FALSE
   )
   base_top <- which(base_rank == 1)
+  # Share of draws at each rank, per Impact (rows in `out` order), for the
+  # rank-stability figure (draw_rank_stability_plot()).
+  share <- t(vapply(seq_len(nrow(df)), function(j) tabulate(ranks[, j], nbins = nrow(df)) / n, numeric(nrow(df))))
+  dimnames(share) <- list(df$id, seq_len(nrow(df)))
+  attr(out, "rank_share") <- share
+  attr(out, "base_rank") <- setNames(base_rank, df$id)
   attr(out, "kendall_tau") <- mean(taus, na.rm = TRUE)
   attr(out, "top_stable") <- mean(apply(ranks, 1, function(r) all(which(r == 1) %in% base_top)))
   attr(out, "n") <- n

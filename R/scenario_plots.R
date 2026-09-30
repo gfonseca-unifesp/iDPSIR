@@ -220,3 +220,37 @@ draw_prioritization_plot <- function(prio_df) {
   graphics::legend("bottomright", bty = "n", cex = 0.8, pch = c(15, 23), col = c("#c9d7e8", "#1f2937"),
                    pt.bg = c("#c9d7e8", "#1f2937"), legend = c("relevance = v x D x reliability", "priority = relevance x gap"))
 }
+
+# Revisao 3, E4.2: rank stability of the Impact priority. One horizontal bar
+# per worsened Impact (in base priority order, top first), split by the
+# share of the robustness variations (priority_robustness()) in which it
+# ended at each rank - dark = 1st, lighter = lower. The black tick marks the
+# rank in the reading shown; a bar that is one colour is a stable rank, a
+# bar split between two colours is a near tie.
+draw_rank_stability_plot <- function(rob) {
+  share <- if (is.null(rob)) NULL else attr(rob, "rank_share")
+  if (is.null(share) || nrow(share) == 0) {
+    graphics::plot.new()
+    graphics::text(0.5, 0.5, "No worsened Impact to rank.")
+    return(invisible())
+  }
+  base <- attr(rob, "base_rank")[rownames(share)]
+  ord <- order(base, decreasing = TRUE)          # barplot draws bottom-up
+  share <- share[ord, , drop = FALSE]
+  labels <- rob$node[match(rownames(share), rob$id)]
+  k <- ncol(share)
+  cols <- grDevices::colorRampPalette(c("#08306b", "#c6dbef"))(max(k, 2))[seq_len(k)]
+  old <- graphics::par(mar = c(4, max(8, max(nchar(labels)) * 0.55), 3, 1), xpd = NA)
+  on.exit(graphics::par(old))
+  y <- graphics::barplot(t(share) * 100, horiz = TRUE, names.arg = labels, las = 1, col = cols, border = "white",
+                         xlim = c(0, 100), xlab = "% of variations (values v +/- 20%, product or sum)", cex.names = 0.85)
+  pos <- base[ord]
+  # Tick at the middle of the segment of the base rank.
+  left <- vapply(seq_along(pos), function(i) sum(share[i, seq_len(pos[i] - 1)]) * 100, numeric(1))
+  mid <- left + share[cbind(seq_along(pos), pos)] * 50
+  graphics::points(mid, y, pch = 124, cex = 1.6, col = "black")
+  graphics::legend("top", inset = c(0, -0.12), horiz = TRUE, bty = "n", cex = 0.8, fill = cols, border = "white",
+                   legend = paste0(seq_len(k), c("st", "nd", "rd", rep("th", max(0, k - 3)))[seq_len(k)]), title = NULL)
+  graphics::mtext(sprintf("Top priority unchanged in %.0f%% of variations; mean Kendall's tau %.2f",
+                          100 * attr(rob, "top_stable"), attr(rob, "kendall_tau")), side = 3, line = 1.8, cex = 0.8)
+}

@@ -312,6 +312,11 @@ build_full_report_html <- function(
             tags$h5("Impact prioritization"),
             report_html_table(format_prioritization_table(sc$prioritization, sc$priority_robustness)),
             priority_robustness_note(sc$priority_robustness, function(x) tags$p(x)),
+            if (!is.null(sc$priority_robustness) && nrow(sc$priority_robustness) > 0) tagList(
+              tags$img(src = plot_to_data_uri(function() draw_rank_stability_plot(sc$priority_robustness), width = 800, height = 340), style = "max-width: 100%;"),
+              caption_tag("Figure", next_figure_n(), sprintf(
+                "For \"%s\": share of 500 variations (values v changed by up to 20%%, index as a product or a sum) in which each Impact ended at each rank; the tick marks its rank in the reading above.", scenario_name))
+            ),
             caption_tag(
               "Table", next_table_n(),
               sprintf("For \"%s\": relevance of each Impact (value v x importance D x reliability) and priority (relevance x the share of the worsening the response leaves uncovered). %s", scenario_name, PRIORITIZATION_METHOD_NOTE)
