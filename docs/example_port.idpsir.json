@@ -1,0 +1,878 @@
+{
+  "format_version": "1.0",
+  "metadata": {
+    "project_name": "Example: port operations - which response, and when?",
+    "author": "iDPSIR examples",
+    "created_at": "2026-09-30 10:08:21.092221",
+    "notes": "Didactic example. One window = one season; maintenance dredging campaign in windows 3-5.",
+    "updated_at": "2026-09-30 10:08:21.092221",
+    "weight_mode": "structural"
+  },
+  "schema": [
+    {
+      "name": "Driver",
+      "order": 1,
+      "color": "#0072B2",
+      "shape": "square",
+      "role": null
+    },
+    {
+      "name": "Pressure",
+      "order": 2,
+      "color": "#D55E00",
+      "shape": "triangle",
+      "role": null
+    },
+    {
+      "name": "State",
+      "order": 3,
+      "color": "#009E73",
+      "shape": "dot",
+      "role": null
+    },
+    {
+      "name": "Impact",
+      "order": 4,
+      "color": "#E69F00",
+      "shape": "diamond",
+      "role": null
+    },
+    {
+      "name": "Response",
+      "order": 5,
+      "color": "#CC79A7",
+      "shape": "star",
+      "role": "feedback"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "D1",
+      "label": "Maintenance dredging",
+      "dpsir_category": "Driver",
+      "subsystem": "Port operation",
+      "self_regulation": 1,
+      "endpoint_class": null,
+      "value_v": null,
+      "descriptor": "Periodic dredging campaigns to keep the access channel navigable.",
+      "growth_rate": 0,
+      "reference_value": null,
+      "growth_cap": null,
+      "sd": null,
+      "threshold_level": null,
+      "threshold_direction": null
+    },
+    {
+      "id": "D2",
+      "label": "Cargo terminal (land site)",
+      "dpsir_category": "Driver",
+      "subsystem": "Port operation",
+      "self_regulation": 1,
+      "endpoint_class": null,
+      "value_v": null,
+      "descriptor": "Cargo terminal and industrial plant on land; its paved area drains to the bay.",
+      "growth_rate": 0,
+      "reference_value": null,
+      "growth_cap": null,
+      "sd": null,
+      "threshold_level": null,
+      "threshold_direction": null
+    },
+    {
+      "id": "D3",
+      "label": "Vessel traffic and operation",
+      "dpsir_category": "Driver",
+      "subsystem": "Port operation",
+      "self_regulation": 1,
+      "endpoint_class": null,
+      "value_v": null,
+      "descriptor": "Ship traffic and berthing operations in the port.",
+      "growth_rate": 0,
+      "reference_value": null,
+      "growth_cap": null,
+      "sd": null,
+      "threshold_level": null,
+      "threshold_direction": null
+    },
+    {
+      "id": "P1",
+      "label": "Surface runoff",
+      "dpsir_category": "Pressure",
+      "subsystem": "Water",
+      "self_regulation": 1,
+      "endpoint_class": null,
+      "value_v": null,
+      "descriptor": "Rainwater runoff from the terminal, carrying metals.",
+      "growth_rate": 0,
+      "reference_value": null,
+      "growth_cap": null,
+      "sd": null,
+      "threshold_level": null,
+      "threshold_direction": null
+    },
+    {
+      "id": "P2",
+      "label": "Sediment resuspension",
+      "dpsir_category": "Pressure",
+      "subsystem": "Water",
+      "self_regulation": 1,
+      "endpoint_class": null,
+      "value_v": null,
+      "descriptor": "Fine sediment put back in suspension by dredging and ship propellers.",
+      "growth_rate": 0,
+      "reference_value": null,
+      "growth_cap": null,
+      "sd": null,
+      "threshold_level": null,
+      "threshold_direction": null
+    },
+    {
+      "id": "S1",
+      "label": "Water turbidity",
+      "dpsir_category": "State",
+      "subsystem": "Water",
+      "self_regulation": 0.7,
+      "endpoint_class": null,
+      "value_v": null,
+      "descriptor": "Water turbidity (clears within weeks once resuspension stops).",
+      "growth_rate": 0,
+      "reference_value": null,
+      "growth_cap": null,
+      "sd": null,
+      "threshold_level": null,
+      "threshold_direction": null
+    },
+    {
+      "id": "S2",
+      "label": "Dissolved Zn in water",
+      "dpsir_category": "State",
+      "subsystem": "Water",
+      "self_regulation": 0.2,
+      "endpoint_class": null,
+      "value_v": null,
+      "descriptor": "Dissolved zinc in the water column (persists; slow to clear).",
+      "growth_rate": 0,
+      "reference_value": null,
+      "growth_cap": null,
+      "sd": null,
+      "threshold_level": null,
+      "threshold_direction": null
+    },
+    {
+      "id": "S3",
+      "label": "Dissolved Cu in water",
+      "dpsir_category": "State",
+      "subsystem": "Water",
+      "self_regulation": 0.2,
+      "endpoint_class": null,
+      "value_v": null,
+      "descriptor": "Dissolved copper in the water column (persists; slow to clear).",
+      "growth_rate": 0,
+      "reference_value": null,
+      "growth_cap": null,
+      "sd": null,
+      "threshold_level": null,
+      "threshold_direction": null
+    },
+    {
+      "id": "I1",
+      "label": "Behavioral alterations of fauna",
+      "dpsir_category": "Impact",
+      "subsystem": "Ecosystem",
+      "self_regulation": 0.8,
+      "endpoint_class": "ecological",
+      "value_v": 1,
+      "descriptor": "Changes in fish and invertebrate behaviour under turbid water (reversible).",
+      "growth_rate": 0,
+      "reference_value": null,
+      "growth_cap": null,
+      "sd": null,
+      "threshold_level": null,
+      "threshold_direction": null
+    },
+    {
+      "id": "I2",
+      "label": "Biota contamination (seafood)",
+      "dpsir_category": "Impact",
+      "subsystem": "Human welfare",
+      "self_regulation": 0.1,
+      "endpoint_class": "welfare",
+      "value_v": 1,
+      "descriptor": "Metal accumulation in fish and shellfish eaten by people (bioaccumulates; slow to reverse).",
+      "growth_rate": 0,
+      "reference_value": null,
+      "growth_cap": null,
+      "sd": null,
+      "threshold_level": null,
+      "threshold_direction": null
+    },
+    {
+      "id": "I3",
+      "label": "Water quality loss (CONAMA classes)",
+      "dpsir_category": "Impact",
+      "subsystem": "Human welfare",
+      "self_regulation": 0.5,
+      "endpoint_class": "welfare",
+      "value_v": 0.6,
+      "descriptor": "Loss of the water-quality class set by CONAMA Resolution 357 (legal compliance).",
+      "growth_rate": 0,
+      "reference_value": null,
+      "growth_cap": null,
+      "sd": null,
+      "threshold_level": null,
+      "threshold_direction": null
+    },
+    {
+      "id": "I4",
+      "label": "Loss of primary production",
+      "dpsir_category": "Impact",
+      "subsystem": "Ecosystem service",
+      "self_regulation": 0.5,
+      "endpoint_class": "service",
+      "value_v": 0.4,
+      "descriptor": "Loss of phytoplankton primary production when turbidity blocks light.",
+      "growth_rate": 0,
+      "reference_value": null,
+      "growth_cap": null,
+      "sd": null,
+      "threshold_level": null,
+      "threshold_direction": null
+    },
+    {
+      "id": "R1",
+      "label": "Runoff treatment system",
+      "dpsir_category": "Response",
+      "subsystem": "Management",
+      "self_regulation": 1,
+      "endpoint_class": null,
+      "value_v": null,
+      "descriptor": "Collection and treatment of the terminal's runoff before it reaches the bay.",
+      "growth_rate": 0,
+      "reference_value": null,
+      "growth_cap": null,
+      "sd": null,
+      "threshold_level": null,
+      "threshold_direction": null
+    },
+    {
+      "id": "R4",
+      "label": "Environmental work window",
+      "dpsir_category": "Response",
+      "subsystem": "Management",
+      "self_regulation": 1,
+      "endpoint_class": null,
+      "value_v": null,
+      "descriptor": "Dredging restricted to the environmentally least sensitive period.",
+      "growth_rate": 0,
+      "reference_value": null,
+      "growth_cap": null,
+      "sd": null,
+      "threshold_level": null,
+      "threshold_direction": null
+    },
+    {
+      "id": "R5",
+      "label": "Best practices adoption",
+      "dpsir_category": "Response",
+      "subsystem": "Management",
+      "self_regulation": 1,
+      "endpoint_class": null,
+      "value_v": null,
+      "descriptor": "General good practices (dredging methods, speed limits, housekeeping).",
+      "growth_rate": 0,
+      "reference_value": null,
+      "growth_cap": null,
+      "sd": null,
+      "threshold_level": null,
+      "threshold_direction": null
+    }
+  ],
+  "edges": [
+    {
+      "from": "D1",
+      "to": "P2",
+      "strength_class": "strong",
+      "interaction_type": "positive",
+      "evidence_type": "expert_assessment",
+      "reference": "EIA",
+      "weight": 0.8,
+      "weight_low": 0.6,
+      "weight_high": 1,
+      "weight_source": "class",
+      "confidence": 0.5
+    },
+    {
+      "from": "D3",
+      "to": "P2",
+      "strength_class": "moderate",
+      "interaction_type": "positive",
+      "evidence_type": "expert_assessment",
+      "reference": "EIA",
+      "weight": 0.45,
+      "weight_low": 0.3,
+      "weight_high": 0.6,
+      "weight_source": "class",
+      "confidence": 0.3333
+    },
+    {
+      "from": "D2",
+      "to": "P1",
+      "strength_class": "strong",
+      "interaction_type": "positive",
+      "evidence_type": "expert_assessment",
+      "reference": "EIA",
+      "weight": 0.8,
+      "weight_low": 0.6,
+      "weight_high": 1,
+      "weight_source": "class",
+      "confidence": 0.5
+    },
+    {
+      "from": "P1",
+      "to": "S1",
+      "strength_class": "weak",
+      "interaction_type": "positive",
+      "evidence_type": "expert_assessment",
+      "reference": "",
+      "weight": 0.15,
+      "weight_low": 0,
+      "weight_high": 0.3,
+      "weight_source": "class",
+      "confidence": 0
+    },
+    {
+      "from": "P1",
+      "to": "S2",
+      "strength_class": "strong",
+      "interaction_type": "positive",
+      "evidence_type": "expert_assessment",
+      "reference": "",
+      "weight": 0.8,
+      "weight_low": 0.6,
+      "weight_high": 1,
+      "weight_source": "class",
+      "confidence": 0.5
+    },
+    {
+      "from": "P1",
+      "to": "S3",
+      "strength_class": "strong",
+      "interaction_type": "positive",
+      "evidence_type": "expert_assessment",
+      "reference": "",
+      "weight": 0.8,
+      "weight_low": 0.6,
+      "weight_high": 1,
+      "weight_source": "class",
+      "confidence": 0.5
+    },
+    {
+      "from": "P2",
+      "to": "S1",
+      "strength_class": "strong",
+      "interaction_type": "positive",
+      "evidence_type": "expert_assessment",
+      "reference": "",
+      "weight": 0.8,
+      "weight_low": 0.6,
+      "weight_high": 1,
+      "weight_source": "class",
+      "confidence": 0.5
+    },
+    {
+      "from": "P2",
+      "to": "S2",
+      "strength_class": "weak",
+      "interaction_type": "positive",
+      "evidence_type": "expert_assessment",
+      "reference": "",
+      "weight": 0.15,
+      "weight_low": 0,
+      "weight_high": 0.3,
+      "weight_source": "class",
+      "confidence": 0
+    },
+    {
+      "from": "P2",
+      "to": "S3",
+      "strength_class": "weak",
+      "interaction_type": "positive",
+      "evidence_type": "expert_assessment",
+      "reference": "",
+      "weight": 0.15,
+      "weight_low": 0,
+      "weight_high": 0.3,
+      "weight_source": "class",
+      "confidence": 0
+    },
+    {
+      "from": "S1",
+      "to": "I1",
+      "strength_class": "strong",
+      "interaction_type": "positive",
+      "evidence_type": "expert_assessment",
+      "reference": "",
+      "weight": 0.8,
+      "weight_low": 0.6,
+      "weight_high": 1,
+      "weight_source": "class",
+      "confidence": 0.5
+    },
+    {
+      "from": "S1",
+      "to": "I4",
+      "strength_class": "strong",
+      "interaction_type": "positive",
+      "evidence_type": "expert_assessment",
+      "reference": "",
+      "weight": 0.8,
+      "weight_low": 0.6,
+      "weight_high": 1,
+      "weight_source": "class",
+      "confidence": 0.5
+    },
+    {
+      "from": "S1",
+      "to": "I3",
+      "strength_class": "weak",
+      "interaction_type": "positive",
+      "evidence_type": "expert_assessment",
+      "reference": "",
+      "weight": 0.15,
+      "weight_low": 0,
+      "weight_high": 0.3,
+      "weight_source": "class",
+      "confidence": 0
+    },
+    {
+      "from": "S2",
+      "to": "I2",
+      "strength_class": "moderate",
+      "interaction_type": "positive",
+      "evidence_type": "expert_assessment",
+      "reference": "",
+      "weight": 0.45,
+      "weight_low": 0.3,
+      "weight_high": 0.6,
+      "weight_source": "class",
+      "confidence": 0.3333
+    },
+    {
+      "from": "S2",
+      "to": "I3",
+      "strength_class": "moderate",
+      "interaction_type": "positive",
+      "evidence_type": "expert_assessment",
+      "reference": "",
+      "weight": 0.45,
+      "weight_low": 0.3,
+      "weight_high": 0.6,
+      "weight_source": "class",
+      "confidence": 0.3333
+    },
+    {
+      "from": "S3",
+      "to": "I2",
+      "strength_class": "strong",
+      "interaction_type": "positive",
+      "evidence_type": "expert_assessment",
+      "reference": "",
+      "weight": 0.8,
+      "weight_low": 0.6,
+      "weight_high": 1,
+      "weight_source": "class",
+      "confidence": 0.5
+    },
+    {
+      "from": "S3",
+      "to": "I3",
+      "strength_class": "moderate",
+      "interaction_type": "positive",
+      "evidence_type": "expert_assessment",
+      "reference": "",
+      "weight": 0.45,
+      "weight_low": 0.3,
+      "weight_high": 0.6,
+      "weight_source": "class",
+      "confidence": 0.3333
+    },
+    {
+      "from": "R1",
+      "to": "P1",
+      "strength_class": "strong",
+      "interaction_type": "negative",
+      "evidence_type": "expert_assessment",
+      "reference": "",
+      "weight": 0.8,
+      "weight_low": 0.6,
+      "weight_high": 1,
+      "weight_source": "class",
+      "confidence": 0.5
+    },
+    {
+      "from": "R4",
+      "to": "P2",
+      "strength_class": "strong",
+      "interaction_type": "negative",
+      "evidence_type": "expert_assessment",
+      "reference": "",
+      "weight": 0.8,
+      "weight_low": 0.6,
+      "weight_high": 1,
+      "weight_source": "class",
+      "confidence": 0.5
+    },
+    {
+      "from": "R5",
+      "to": "D1",
+      "strength_class": "moderate",
+      "interaction_type": "negative",
+      "evidence_type": "expert_assessment",
+      "reference": "",
+      "weight": 0.45,
+      "weight_low": 0.3,
+      "weight_high": 0.6,
+      "weight_source": "class",
+      "confidence": 0.3333
+    },
+    {
+      "from": "R5",
+      "to": "D3",
+      "strength_class": "moderate",
+      "interaction_type": "negative",
+      "evidence_type": "expert_assessment",
+      "reference": "",
+      "weight": 0.45,
+      "weight_low": 0.3,
+      "weight_high": 0.6,
+      "weight_source": "class",
+      "confidence": 0.3333
+    }
+  ],
+  "positions": {},
+  "scenario_state": {
+    "pressure": [
+      {
+        "id": "D1",
+        "strength": 100
+      },
+      {
+        "id": "D2",
+        "strength": 100
+      },
+      {
+        "id": "D3",
+        "strength": 100
+      }
+    ],
+    "response": [
+      {
+        "id": "R5",
+        "strength": 100
+      }
+    ],
+    "temporal_mode_pressure": "window",
+    "temporal_mode_response": "window",
+    "temporal_stop_rule": "fixed",
+    "temporal_max_windows": 50,
+    "temporal_windows": 12,
+    "temporal_tol_rel": 5,
+    "baseline_without_response": false,
+    "temporal_gate_mode": "state_level",
+    "temporal_trends_outside": true,
+    "temporal_continue_after": 0,
+    "temporal_schedule": [
+      {
+        "id": "D1",
+        "start": 3,
+        "duration": 3
+      },
+      {
+        "id": "D2",
+        "start": 1,
+        "duration": 12
+      },
+      {
+        "id": "D3",
+        "start": 1,
+        "duration": 12
+      },
+      {
+        "id": "R5",
+        "start": 1,
+        "duration": 12
+      }
+    ]
+  },
+  "saved_scenarios": [
+    {
+      "name": "1. Best practices only",
+      "response": [
+        {
+          "id": "R5",
+          "strength": 100
+        }
+      ],
+      "pressure": [
+        {
+          "id": "D1",
+          "strength": 100
+        },
+        {
+          "id": "D2",
+          "strength": 100
+        },
+        {
+          "id": "D3",
+          "strength": 100
+        }
+      ],
+      "n_simulations": 300,
+      "temporal_mode_pressure": "window",
+      "temporal_mode_response": "window",
+      "temporal_stop_rule": "fixed",
+      "temporal_max_windows": 50,
+      "temporal_windows": 12,
+      "temporal_tol_rel": 5,
+      "baseline_without_response": false,
+      "temporal_gate_mode": "state_level",
+      "temporal_trends_outside": true,
+      "temporal_continue_after": 0,
+      "temporal_schedule": [
+        {
+          "id": "D1",
+          "start": 3,
+          "duration": 3
+        },
+        {
+          "id": "D2",
+          "start": 1,
+          "duration": 12
+        },
+        {
+          "id": "D3",
+          "start": 1,
+          "duration": 12
+        },
+        {
+          "id": "R5",
+          "start": 1,
+          "duration": 12
+        }
+      ]
+    },
+    {
+      "name": "2. + Runoff treatment",
+      "response": [
+        {
+          "id": "R5",
+          "strength": 100
+        },
+        {
+          "id": "R1",
+          "strength": 100
+        }
+      ],
+      "pressure": [
+        {
+          "id": "D1",
+          "strength": 100
+        },
+        {
+          "id": "D2",
+          "strength": 100
+        },
+        {
+          "id": "D3",
+          "strength": 100
+        }
+      ],
+      "n_simulations": 300,
+      "temporal_mode_pressure": "window",
+      "temporal_mode_response": "window",
+      "temporal_stop_rule": "fixed",
+      "temporal_max_windows": 50,
+      "temporal_windows": 12,
+      "temporal_tol_rel": 5,
+      "baseline_without_response": false,
+      "temporal_gate_mode": "state_level",
+      "temporal_trends_outside": true,
+      "temporal_continue_after": 0,
+      "temporal_schedule": [
+        {
+          "id": "D1",
+          "start": 3,
+          "duration": 3
+        },
+        {
+          "id": "D2",
+          "start": 1,
+          "duration": 12
+        },
+        {
+          "id": "D3",
+          "start": 1,
+          "duration": 12
+        },
+        {
+          "id": "R5",
+          "start": 1,
+          "duration": 12
+        },
+        {
+          "id": "R1",
+          "start": 1,
+          "duration": 12
+        }
+      ]
+    },
+    {
+      "name": "3. + Work window during dredging",
+      "response": [
+        {
+          "id": "R5",
+          "strength": 100
+        },
+        {
+          "id": "R1",
+          "strength": 100
+        },
+        {
+          "id": "R4",
+          "strength": 100
+        }
+      ],
+      "pressure": [
+        {
+          "id": "D1",
+          "strength": 100
+        },
+        {
+          "id": "D2",
+          "strength": 100
+        },
+        {
+          "id": "D3",
+          "strength": 100
+        }
+      ],
+      "n_simulations": 300,
+      "temporal_mode_pressure": "window",
+      "temporal_mode_response": "window",
+      "temporal_stop_rule": "fixed",
+      "temporal_max_windows": 50,
+      "temporal_windows": 12,
+      "temporal_tol_rel": 5,
+      "baseline_without_response": false,
+      "temporal_gate_mode": "state_level",
+      "temporal_trends_outside": true,
+      "temporal_continue_after": 0,
+      "temporal_schedule": [
+        {
+          "id": "D1",
+          "start": 3,
+          "duration": 3
+        },
+        {
+          "id": "D2",
+          "start": 1,
+          "duration": 12
+        },
+        {
+          "id": "D3",
+          "start": 1,
+          "duration": 12
+        },
+        {
+          "id": "R5",
+          "start": 1,
+          "duration": 12
+        },
+        {
+          "id": "R1",
+          "start": 1,
+          "duration": 12
+        },
+        {
+          "id": "R4",
+          "start": 3,
+          "duration": 3
+        }
+      ]
+    },
+    {
+      "name": "4. Runoff treatment starts late",
+      "response": [
+        {
+          "id": "R5",
+          "strength": 100
+        },
+        {
+          "id": "R1",
+          "strength": 100
+        },
+        {
+          "id": "R4",
+          "strength": 100
+        }
+      ],
+      "pressure": [
+        {
+          "id": "D1",
+          "strength": 100
+        },
+        {
+          "id": "D2",
+          "strength": 100
+        },
+        {
+          "id": "D3",
+          "strength": 100
+        }
+      ],
+      "n_simulations": 300,
+      "temporal_mode_pressure": "window",
+      "temporal_mode_response": "window",
+      "temporal_stop_rule": "fixed",
+      "temporal_max_windows": 50,
+      "temporal_windows": 12,
+      "temporal_tol_rel": 5,
+      "baseline_without_response": false,
+      "temporal_gate_mode": "state_level",
+      "temporal_trends_outside": true,
+      "temporal_continue_after": 0,
+      "temporal_schedule": [
+        {
+          "id": "D1",
+          "start": 3,
+          "duration": 3
+        },
+        {
+          "id": "D2",
+          "start": 1,
+          "duration": 12
+        },
+        {
+          "id": "D3",
+          "start": 1,
+          "duration": 12
+        },
+        {
+          "id": "R5",
+          "start": 1,
+          "duration": 12
+        },
+        {
+          "id": "R1",
+          "start": 6,
+          "duration": 7
+        },
+        {
+          "id": "R4",
+          "start": 3,
+          "duration": 3
+        }
+      ]
+    }
+  ]
+}

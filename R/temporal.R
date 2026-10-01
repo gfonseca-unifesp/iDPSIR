@@ -23,6 +23,17 @@
 #
 #   x_i(t+1) = x_i(t) + growth_rate_i * x_i(t) + sum_j gate_ji(t) * (lambda*W)[i,j] * x_j(t) + p_i(t)
 #
+# REVISAO 2, FASE D (D9, D10, D24) - this equation is superseded:
+#   dev_i(t+1) = (1 - sr_i) * dev_i(t) + sum_j gate_ji(t) * B[i,j] * x_j(t) + p_i(t)
+#   x_i(t)     = dev_i(t) + trend_i(t)
+#   trend_i(t) = (base_i(t) - ref_i) / DP_i,  base_i(t) = ref_i * (1 + g_i)^t
+#                (optionally held at growth_cap_i, the ceiling in own units)
+# Self-regulation acts only on the deviation the network causes; growth is
+# only the trend of the factor's base level, the same in the baseline and
+# the scenario runs. Edges transmit x, so the influence of a growing factor
+# grows in proportion (1 + g) without double counting. The notes below
+# describe the older engine and are kept as history.
+#
 # `lambda*W` (nao o W bruto de build_interaction_matrix()) - ver o
 # comentario dentro de simulate_temporal_pair() pra por que: sem esse
 # fator de contracao, uma rede cujo raio espectral de W passe de 1
@@ -136,144 +147,313 @@ apply_threshold_gate <- function(W, x, threshold_matrix, reference_values) {
 # Um passo discreto da equacao no topo do arquivo. `W` aqui e o interaction
 # matrix JA CONTRAIDO (ver `contraction_c` em simulate_temporal_pair() logo
 # abaixo) - nao o W bruto de build_interaction_matrix().
-temporal_step <- function(x, W, growth_rate, threshold_matrix, reference_values, p) {
-  gated_W <- apply_threshold_gate(W, x, threshold_matrix, reference_values)
-  x + growth_rate * x + as.numeric(gated_W %*% x) + p
+# Revisao 2, item C3: the State gates come from R/triggers.R (threshold as a
+# level with a direction, D23; criterion "state_level" or "load", D11).
+# Returns the new state and which gates were open in this window.
+temporal_step <- function(dev, trend_next, trend_now, W, th, g, gate_mode, p) {
+  # Revisao 2, Fase D (D24): the gate and the edges see the level x = dev +
+  # trend; self-regulation (the diagonal of W, -sr) acts on dev only.
+  x <- dev + trend_now
+  gated <- temporal_gate_matrix(W, x, th, g, gate_mode)
+  B <- gated$W
+  sr <- -diag(B)
+  diag(B) <- 0
+  new_dev <- (1 - sr) * dev + as.numeric(B %*% x) + p
+  list(dev = new_dev, x = new_dev + trend_next, open = gated$open, B = B, x_used = x)
 }
 
-# Roda duas rodadas lado a lado - baseline (so p_D) e cenario (p_D+p_R) -
-# por `windows` janelas discretas, cada perturbacao podendo ser "impulse"
-# (ativa so na janela 1) ou "permanent" (ativa em toda janela). Devolve o
-# historico completo (janela x no) das duas rodadas, comecando de x=0 na
-# janela 0 - quem quiser so os nos de Impacto ou so a ultima janela filtra
-# depois (ver format_temporal_table() abaixo).
+# Revisao 2, Fase D (D24, D10): the base-level trend of every node, in the
+# engine's units (standard deviations), for windows 0..n_windows.
+#   base(t) = ref * (1 + g)^t, held at growth_cap (own units) when set;
+#   trend(t) = (base(t) - ref) / DP.
+# ref blank -> 1. DP = sd when given; without sd, DP = ref, so the trend is
+# a fraction of the base level (roadmap D1). g <= -1 is rejected upstream.
+build_trend_matrix <- function(g, n_windows, growth_rate = NULL, active = NULL) {
+  ids <- V(g)$name
+  n <- length(ids)
+  num <- function(attr, default) {
+    v <- igraph::vertex_attr(g, attr)
+    if (is.null(v)) return(rep(default, n))
+    v <- suppressWarnings(as.numeric(v))
+    v
+  }
+  gr <- if (is.null(growth_rate)) build_growth_rate_vector(g) else growth_rate[ids]
+  gr[is.na(gr)] <- 0
+  ref <- num("reference_value", NA_real_)
+  sd <- num("sd", NA_real_)
+  cap <- num("growth_cap", NA_real_)
+  ref_eff <- ifelse(is.na(ref) | ref <= 0, 1, ref)
+  dp <- ifelse(is.na(sd) | sd <= 0, ref_eff, sd)
+  if (!is.null(active)) gr[!ids %in% active] <- 0
+  tt <- 0:n_windows
+  M <- matrix(0, nrow = length(tt), ncol = n, dimnames = list(NULL, ids))
+  for (i in which(gr != 0)) {
+    base <- ref_eff[i] * (1 + gr[i])^tt
+    if (!is.na(cap[i])) base <- if (gr[i] > 0) pmin(base, max(cap[i], ref_eff[i])) else pmax(base, min(cap[i], ref_eff[i]))
+    M[, i] <- (base - ref_eff[i]) / dp[i]
+  }
+  M
+}
+
+# Revisao 2, Fase D: the scale (one model unit, in the factor's own units)
+# of each node: its SD when given; otherwise its initial level when it has a
+# growth trend (the trend is then a fraction of the base level, roadmap D1);
+# otherwise 1 (the model's own units, as for thresholds - Fase C).
+node_scale <- function(g) {
+  ids <- V(g)$name
+  num <- function(attr) {
+    v <- igraph::vertex_attr(g, attr)
+    if (is.null(v)) rep(NA_real_, length(ids)) else suppressWarnings(as.numeric(v))
+  }
+  sd <- num("sd"); ref <- num("reference_value")
+  gr <- build_growth_rate_vector(g)[ids]
+  out <- ifelse(!is.na(sd) & sd > 0, sd, ifelse(gr != 0 & !is.na(ref) & ref > 0, ref, 1))
+  setNames(out, ids)
+}
+
+# Revisao 2, Fase D: is node i pushed in window t?
+#   permanent: every window; impulse: window 1 only;
+#   window: from `start` for `duration` windows (per node, `schedule`).
+push_active <- function(mode, t, ids, schedule = NULL) {
+  if (mode == "permanent") return(rep(TRUE, length(ids)))
+  if (mode == "impulse") return(rep(t == 1, length(ids)))
+  start <- rep(1, length(ids)); dur <- rep(1, length(ids))
+  if (!is.null(schedule) && nrow(schedule) > 0) {
+    k <- match(ids, schedule$id)
+    has <- !is.na(k)
+    start[has] <- suppressWarnings(as.numeric(schedule$start[k[has]]))
+    dur[has] <- suppressWarnings(as.numeric(schedule$duration[k[has]]))
+  }
+  start[is.na(start)] <- 1; dur[is.na(dur)] <- 1
+  t >= start & t < start + dur
+}
+
+# Audit: a "for a number of windows" push that never acts in the run
+# (duration <= 0, or it starts after the last window) used to do nothing
+# silently. One note per such factor; character() when all is well.
+schedule_notes <- function(g, p_D, p_R, mode_D, mode_R, schedule, ran) {
+  out <- character()
+  check <- function(p, mode) {
+    if (!identical(mode, "window")) return(character())
+    ids <- names(p)[!is.na(p) & p != 0]
+    if (length(ids) == 0) return(character())
+    active_any <- vapply(ids, function(id) any(vapply(seq_len(max(1, ran)), function(t) push_active("window", t, id, schedule), logical(1))), logical(1))
+    labs <- V(g)$label[match(ids, V(g)$name)]
+    labs <- ifelse(is.na(labs), ids, labs)
+    if (any(!active_any)) sprintf("'%s' is set to act for a number of windows, but its period (start/duration) falls outside the %d windows run, so it never acts.", labs[!active_any], ran) else character()
+  }
+  c(out, check(p_D, mode_D), check(p_R, mode_R))
+}
+
+# Runs two rounds side by side - baseline (p_D only) and scenario
+# (p_D + p_R) - window by window, each push either "impulse" (window 1 only)
+# or "permanent" (every window). Returns the full history (window x node)
+# of both rounds, starting from x = 0 at window 0.
 #
-# `on_step`, opcional (Revisao 1, Fase 6): callback chamado a cada janela
-# como `on_step(t, windows)`, ANTES de qualquer dependencia de Shiny entrar
-# neste arquivo - este motor continua puro/testavel sem shiny carregado.
-# mod_responses.R passa uma funcao que chama shiny::incProgress() aqui, pra
-# a UI mostrar "Simulando janela X de N" em vez de parecer travada - default
-# NULL (no-op), comportamento identico a antes desta mudanca.
+# Revisao 2, Fase A (decisions D1/D2 revised on 29/09):
+# - mode_R defaults to "permanent", like mode_D.
+# - stop_rule: "until_neutralized" (default) runs until the response
+#   neutralizes the Impacts it reaches, up to max_windows (default 50);
+#   "fixed" runs exactly `windows`. Passing `windows` without `stop_rule`
+#   keeps the older fixed-length behaviour (existing callers and tests).
+#   The stop criterion (audit, user decision 30/09): every considered Impact
+#   is at or below zero (net <= tol_abs) OR within `tol_rel` of its
+#   baseline (net <= tol_rel * baseline) - the same "Neutralized
+#   (relative)" rule as format_temporal_table(), so the table and the stop
+#   always agree. tol_rel = 0 keeps the strict absolute criterion. Impacts
+#   considered: those reached by the active responses that are worsened in
+#   the baseline OR in the scenario in that window - an Impact only the
+#   response worsens (baseline <= 0) must also come back before stopping.
+# - baseline_without_response: the baseline round ignores every edge
+#   arriving at a Response node (Impact -> Response links), so it is a true
+#   "no response at all" baseline. Off by default (older behaviour).
+# - Item 2.5: no more stability_cap rescaling. Edge strengths are
+#   standardized coefficients (data, Fase 1), not free to be shrunk; the
+#   warning for a loop that outgrows its self-regulation stays.
+#
+# `on_step(t, windows)` (Revisao 1, Fase 6) is an optional progress
+# callback, so this engine stays Shiny-free.
 simulate_temporal_pair <- function(g, p_D, p_R, windows = 5,
-                                    mode_D = c("permanent", "impulse"),
-                                    mode_R = c("impulse", "permanent"),
+                                    mode_D = c("permanent", "impulse", "window"),
+                                    mode_R = c("permanent", "impulse", "window"),
+                                    stop_rule = c("until_neutralized", "fixed"),
+                                    max_windows = 50,
+                                    tol_abs = 1e-9,
+                                    tol_rel = 0,
+                                    baseline_without_response = FALSE,
+                                    gate_mode = c("state_level", "load"),
                                     growth_rate = NULL,
-                                    threshold_matrix = NULL,
-                                    reference_values = NULL,
-                                    stability_cap = 0.9,
+                                    schedule = NULL,
+                                    trends_outside = TRUE,
+                                    continue_after = 0,
                                     on_step = NULL) {
   stopifnot(inherits(g, "igraph"))
-  stopifnot(windows >= 1)
-  stopifnot(stability_cap > 0, stability_cap < 1)
+  if (missing(stop_rule) && !missing(windows)) stop_rule <- "fixed"
   mode_D <- match.arg(mode_D)
   mode_R <- match.arg(mode_R)
+  stop_rule <- match.arg(stop_rule)
+  gate_mode <- match.arg(gate_mode)
+  n_windows <- if (stop_rule == "fixed") windows else max_windows
+  continue_after <- max(0, as.integer(continue_after %||% 0))
+  if (stop_rule == "until_neutralized") n_windows <- n_windows + continue_after
+  stopifnot(n_windows >= 1)
 
   W <- build_interaction_matrix(g)
   node_names <- rownames(W)
   n <- nrow(W)
 
-  # Real bug, confirmed against a generated report (rede do Mangi): the raw
-  # interaction matrix's spectral radius can be well above 1 (rho(W)~4 for
-  # Mangi's own network) - since each window's update is x + growth*x +
-  # W%*%x + p, an UNSCALED W with rho(W)>1 makes the propagated term
-  # amplify every single window (roughly rho(W)-fold), independent of
-  # growth_rate or self_regulation, which is baked into W's diagonal and
-  # gets swamped by the same unscaled off-diagonal terms it's supposed to
-  # counteract. That's not a modeled dynamic, it's the discrete recursion
-  # blowing up numerically - confirmed by hand: Mangi's Impacts grew ~5x
-  # per window, matching rho(W)~4 almost exactly.
-  #
-  # Deliberately NOT the static reading's "always normalize to a fixed c"
-  # (R/sufficiency.R's propagate()) - that would rescale even networks that
-  # are already perfectly well-behaved (Gnanapragasam's own W has
-  # rho(W)=0.35, comfortably < 1, confirmed by hand before choosing this
-  # design), which would have meant re-deriving every already-verified
-  # number in the tutorial's worked example for no reason other than
-  # matching the static engine's habit. Instead this ONLY intervenes when
-  # the network would actually diverge: `lambda = min(1, stability_cap /
-  # rho(W))` when rho(W) > 0, so a network with rho(W) <= stability_cap is
-  # left completely untouched (lambda=1, identical to before this fix),
-  # and only a genuinely unstable one gets scaled down - by just enough to
-  # cap the per-window gain at `stability_cap` (< 1, so it now decays
-  # instead of exploding), never further. `stability_cap` is a fixed
-  # numerical-safety margin, not a user-facing modeling choice like the
-  # static reading's "how far to trace the effect" (effect_horizon) -
-  # deliberately NOT reusing that slider here, since conflating "how far
-  # an effect should be trusted to propagate" (a modeling question) with
-  # "how much to dampen so the numbers don't blow up" (a stability
-  # question) would let a user's effect_horizon choice silently change
-  # whether their network diverges, which has nothing to do with what
-  # that slider is supposed to mean. A genuinely nilpotent W (rho(W)=0 -
-  # every network without a feedback cycle, e.g. a pure Driver-to-Impact
-  # chain) can't blow up exponentially through W alone regardless of
-  # scaling (its powers are exactly zero past a finite point, so
-  # (I+W)^t grows only polynomially in t, not geometrically) - left at
-  # lambda=1 too, nothing to fix there.
+  # Warning only (item 2.5): some mode of (I + W) amplifies every window -
+  # a reinforcing loop stronger than the configured self-regulation.
+  # Eigenvalue exactly 1 (a node without self-regulation holding its value)
+  # is the documented "ratchet", not flagged.
   rho_W <- spectral_radius(W)
-  lambda <- if (rho_W > 0) min(1, stability_cap / rho_W) else 1
+  rho_topology <- spectral_radius(diag(n) + W)
+  stability <- list(rho_W = rho_W, lambda = 1, unbounded = rho_topology > 1 + 1e-6)
 
-  # Even after the cap above, a network can still be genuinely unbounded:
-  # for any eigenvalue mu of W with Re(mu) > 0 (a true reinforcing loop -
-  # confirmed present in the Mangi network, dominant eigenvalue
-  # 2.6+3.1i), no positive lambda can bring |1+lambda*mu| below 1 - that's
-  # not a step-size artifact, it's the network's own topology outrunning
-  # its configured self_regulation. rho(I + lambda*W) detects this
-  # directly (spectral_radius() already handles complex eigenvalues via
-  # Mod(), same as everywhere else in this app). Deliberately checks W's
-  # contribution ALONE, excluding growth_rate: growth_rate is an already-
-  # documented, intentional exogenous trend (population growth, etc.) that
-  # legitimately compounds on its own and would make this check fire for
-  # almost any network with growth_rate>0 - noise, not signal, since that
-  # growth isn't the "hidden feedback loop" this warning is meant to catch.
-  #
-  # Threshold is STRICTLY > 1 (with a small numeric tolerance), not >= 1 -
-  # a real distinction, not a rounding nicety. Any node without
-  # self_regulation (an Impact, most Drivers/Pressures) contributes an
-  # eigenvalue of exactly 0 to W, which lands M's eigenvalue at EXACTLY 1 -
-  # that's the already-documented, expected "ratchet, no natural recovery"
-  # behavior (see the self_regulation=0 test in test-temporal.R: an
-  # impulse just holds steady forever, it doesn't grow). >= 1 flagged that
-  # constantly (confirmed: it fired on the plain 5-node test fixture with
-  # NO feedback cycle at all, and even on the self_regulation=2 fixture,
-  # which decays on the node that has it and merely holds steady - never
-  # grows - on the rest) - noise on nearly every network, not signal.
-  # > 1 fires only when some mode of M genuinely amplifies each window,
-  # confirmed against Mangi (1.72, correctly flagged) and Gnanapragasam
-  # (exactly 1.00, correctly NOT flagged - its own growth is entirely
-  # growth_rate-driven and already explained in the tutorial, not a
-  # topology loop).
-  rho_topology <- spectral_radius(diag(n) + lambda * W)
-  stability <- list(rho_W = rho_W, lambda = lambda, unbounded = rho_topology > 1 + 1e-6)
-
-  W <- lambda * W
+  W_baseline <- W
+  if (isTRUE(baseline_without_response)) {
+    response_ids <- node_names[has_role(g, "feedback")]
+    W_baseline[response_ids, ] <- 0
+    W_baseline[cbind(match(response_ids, node_names), match(response_ids, node_names))] <- diag(W)[match(response_ids, node_names)]
+  }
 
   if (is.null(growth_rate)) growth_rate <- build_growth_rate_vector(g)
-  if (is.null(reference_values)) reference_values <- build_reference_values(g)
-  if (is.null(threshold_matrix)) threshold_matrix <- build_threshold_matrix(g)
+  th <- state_thresholds(g)
+  # Revisao 2, Fase D (D10): the trend runs in both rounds; with
+  # trends_outside = FALSE only for the factors in the pressure/response
+  # scenarios.
 
-  p_D <- as.numeric(p_D)
-  p_R <- as.numeric(p_R)
+  # Revisao 2, item 0.3: align by name (R/sufficiency.R), never by position.
+  p_D <- unname(align_press_vector(p_D, node_names, "pressure scenario"))
+  p_R <- unname(align_press_vector(p_R, node_names, "response scenario"))
 
-  x_baseline <- setNames(rep(0, n), node_names)
-  x_scenario <- setNames(rep(0, n), node_names)
+  # Impacts that count for the stop criterion: reached by the active
+  # response(s).
+  impact_ids <- node_names[has_role(g, "impact")]
+  active_responses <- node_names[p_R != 0]
+  reached_impacts <- intersect(response_reach(g, active_responses)$reached_ids, impact_ids)
 
-  hist_baseline <- matrix(0, nrow = windows + 1, ncol = n, dimnames = list(NULL, node_names))
-  hist_scenario <- matrix(0, nrow = windows + 1, ncol = n, dimnames = list(NULL, node_names))
+  trend <- build_trend_matrix(
+    g, n_windows, growth_rate,
+    active = if (isTRUE(trends_outside)) NULL else node_names[p_D != 0 | p_R != 0]
+  )
+  dev_baseline <- setNames(rep(0, n), node_names)
+  dev_scenario <- setNames(rep(0, n), node_names)
+  x_baseline <- dev_baseline + trend[1, ]
+  x_scenario <- dev_scenario + trend[1, ]
 
-  for (t in seq_len(windows)) {
-    p_D_t <- if (mode_D == "impulse" && t > 1) rep(0, n) else p_D
-    p_R_t <- if (mode_R == "impulse" && t > 1) rep(0, n) else p_R
+  # Revisao 2, Fase D (D3): effective intensity of the edges that leave a
+  # growing factor or a thresholded State, B[to, from] * x_from(t), in the
+  # scenario round (gated).
+  from_ids <- unique(c(node_names[growth_rate[node_names] != 0], th$id))
+  edge_ends <- if (igraph::ecount(g) > 0) igraph::ends(g, igraph::E(g), names = TRUE) else matrix(character(), 0, 2)
+  track <- edge_ends[edge_ends[, 1] %in% from_ids, , drop = FALSE]
+  intensity <- matrix(NA_real_, nrow = n_windows, ncol = nrow(track),
+                      dimnames = list(NULL, if (nrow(track) > 0) paste(track[, 1], track[, 2], sep = "->") else NULL))
+  hist_baseline <- matrix(0, nrow = n_windows + 1, ncol = n, dimnames = list(NULL, node_names))
+  hist_scenario <- matrix(0, nrow = n_windows + 1, ncol = n, dimnames = list(NULL, node_names))
 
-    x_baseline <- temporal_step(x_baseline, W, growth_rate, threshold_matrix, reference_values, p_D_t)
-    x_scenario <- temporal_step(x_scenario, W, growth_rate, threshold_matrix, reference_values, p_D_t + p_R_t)
+  neutralized_at <- NA_integer_
+  ran <- n_windows
+  gates_baseline <- matrix(NA, nrow = n_windows, ncol = nrow(th), dimnames = list(NULL, th$id))
+  gates_scenario <- gates_baseline
+
+  for (t in seq_len(n_windows)) {
+    p_D_t <- ifelse(push_active(mode_D, t, node_names, schedule), p_D, 0)
+    p_R_t <- ifelse(push_active(mode_R, t, node_names, schedule), p_R, 0)
+
+    step_b <- temporal_step(dev_baseline, trend[t + 1, ], trend[t, ], W_baseline, th, g, gate_mode, p_D_t)
+    step_s <- temporal_step(dev_scenario, trend[t + 1, ], trend[t, ], W, th, g, gate_mode, p_D_t + p_R_t)
+    dev_baseline <- setNames(step_b$dev, node_names)
+    dev_scenario <- setNames(step_s$dev, node_names)
+    x_baseline <- setNames(step_b$x, node_names)
+    x_scenario <- setNames(step_s$x, node_names)
+    if (nrow(th) > 0) {
+      gates_baseline[t, ] <- step_b$open
+      gates_scenario[t, ] <- step_s$open
+    }
 
     hist_baseline[t + 1, ] <- x_baseline
     hist_scenario[t + 1, ] <- x_scenario
 
-    if (!is.null(on_step)) on_step(t, windows)
+    if (!is.null(on_step)) on_step(t, n_windows)
+
+    if (is.na(neutralized_at) && length(reached_impacts) > 0) {
+      xb <- x_baseline[reached_impacts]
+      xs <- x_scenario[reached_impacts]
+      considered <- xb > tol_abs | xs > tol_abs
+      ok <- xs <= tol_abs | (tol_rel > 0 & xb > tol_abs & xs <= tol_rel * xb)
+      if (any(considered) && all(ok[considered])) {
+        neutralized_at <- t
+        if (stop_rule == "until_neutralized" && continue_after == 0) {
+          ran <- t
+          break
+        }
+      }
+    }
+    # Revisao 2, item D4: "continue N more windows" after neutralizing -
+    # with a growing trend the neutralization may be temporary.
+    if (stop_rule == "until_neutralized" && !is.na(neutralized_at) && t >= neutralized_at + continue_after) {
+      ran <- t
+      break
+    }
+    if (stop_rule == "until_neutralized" && is.na(neutralized_at) && t >= n_windows - continue_after) {
+      ran <- t
+      break
+    }
   }
 
-  list(baseline = hist_baseline, scenario = hist_scenario, windows = windows, stability = stability)
+  # Intensity at window t = gated B[to, from] * x_from(t), from the history.
+  for (t in seq_len(ran)) {
+    if (nrow(track) == 0) break
+    xt <- hist_scenario[t + 1, ]
+    Wg <- temporal_gate_matrix(W, xt, th, g, gate_mode)$W
+    intensity[t, ] <- Wg[track[, c(2, 1), drop = FALSE]] * xt[track[, 1]]
+  }
+
+  list(
+    baseline = hist_baseline[seq_len(ran + 1), , drop = FALSE],
+    scenario = hist_scenario[seq_len(ran + 1), , drop = FALSE],
+    windows = ran,
+    stop_rule = stop_rule,
+    max_windows = if (stop_rule == "until_neutralized") max_windows else NA_integer_,
+    neutralized_at = neutralized_at,
+    tol_rel = tol_rel,
+    schedule_notes = schedule_notes(g, setNames(p_D, node_names), setNames(p_R, node_names), mode_D, mode_R, schedule, ran),
+    reached_impacts = reached_impacts,
+    gate_mode = gate_mode,
+    thresholds = th,
+    gates_baseline = gates_baseline[seq_len(ran), , drop = FALSE],
+    gates_scenario = gates_scenario[seq_len(ran), , drop = FALSE],
+    stability = stability,
+    # Revisao 2, Fase D.
+    trend = trend[seq_len(ran + 1), , drop = FALSE],
+    edge_intensity = intensity[seq_len(ran), , drop = FALSE],
+    continue_after = continue_after,
+    growth_rate = growth_rate[node_names]
+  )
+}
+
+
+# Plain-language line about how the run ended (until_neutralized) - shared
+# by the Scenarios tab and the report.
+temporal_stop_note <- function(tr) {
+  if (!identical(tr$stop_rule, "until_neutralized")) {
+    if (is.na(tr$neutralized_at)) return(NULL)
+    return(sprintf("The response neutralizes the Impacts it reaches at window %d.", tr$neutralized_at))
+  }
+  if (length(tr$reached_impacts) == 0) {
+    return(sprintf("The active response(s) reach no Impact, so there is nothing to neutralize - ran all %d windows.", tr$max_windows))
+  }
+  if (is.na(tr$neutralized_at)) {
+    return(sprintf("Not neutralized within %d windows.", tr$max_windows))
+  }
+  tol <- tr$tol_rel %||% 0
+  if (tol > 0) {
+    return(sprintf("Neutralized at window %d: every Impact the response reaches is at or below zero, or within %s%% of its baseline.",
+                   tr$neutralized_at, format(round(100 * tol, 1))))
+  }
+  sprintf("Neutralized at window %d: every Impact the response reaches is at or below zero.", tr$neutralized_at)
 }
 
 # Plain-language note for temporal_result$stability - NULL when the network
@@ -334,9 +514,15 @@ temporal_stability_note <- function(stability) {
 # "coluna" exposta ao usuario, e' o array interno consumido em ~10 lugares
 # (storyboard antigo, downloads, relatorio); renomear so a saida desta
 # funcao ja resolve a incoerencia de vocabulario com risco bem menor.
-format_temporal_table <- function(g, temporal_result, threshold = 1e-9) {
-  categories <- V(g)$dpsir_category
-  is_impact <- !is.null(categories) & categories == "Impact"
+# Revisao 2, item A3 (revised in the audit, user decision 30/09): `tol_rel`
+# (default 5% of the baseline) labels a positive net value at or below
+# tol_rel x baseline as "Neutralized (relative)". The earlier extra
+# condition "|net| not growing" was dropped: it meant the label almost never
+# appeared (never in the Sri Lanka or Mangi examples, even at 90%). The same
+# rule is the stop criterion of simulate_temporal_pair(). tol_rel = 0 turns
+# it off.
+format_temporal_table <- function(g, temporal_result, threshold = 1e-9, tol_rel = 0.05) {
+  is_impact <- has_role(g, "impact")
   impact_ids <- V(g)$name[is_impact]
 
   empty <- data.frame(
@@ -357,14 +543,23 @@ format_temporal_table <- function(g, temporal_result, threshold = 1e-9) {
   rows <- lapply(seq_len(windows + 1) - 1, function(t) {
     b <- baseline_impact[t + 1, ]
     s <- scenario_impact[t + 1, ]
+    relative_ok <- tol_rel > 0 & s > threshold & b > threshold & s <= tol_rel * b
 
     verdict <- ifelse(
+      # Revisao 2, item 2.1: window 0 has no verdict; an Impact the pressure
+      # has not reached (and the response has not moved) is "Not affected".
+      rep(t == 0, length(s)), "\u2014",
+      ifelse(abs(b) <= threshold & abs(s) <= threshold, "Not affected",
+      ifelse(
       abs(s) <= threshold, "Neutralized",
       ifelse(
         s < -threshold, "Improved beyond neutral",
-        ifelse(s >= b - threshold, "Failure/worsened", "Partial")
+        ifelse(
+          relative_ok, "Neutralized (relative)",
+          ifelse(s >= b - threshold, "Failure/worsened", "Partial")
+        )
       )
-    )
+    )))
 
     data.frame(
       id = impact_ids, node = impact_labels, window = t,
@@ -374,4 +569,48 @@ format_temporal_table <- function(g, temporal_result, threshold = 1e-9) {
   })
 
   do.call(rbind, rows)
+}
+
+# Revisao 2, item D3: the edge-intensity table - one row per tracked edge,
+# one column per window (strength x source level, scenario run).
+edge_intensity_table <- function(g, tr) {
+  m <- tr$edge_intensity
+  if (is.null(m) || ncol(m) == 0) return(data.frame())
+  ends <- do.call(rbind, strsplit(colnames(m), "->", fixed = TRUE))
+  lab <- function(id) V(g)$label[match(id, V(g)$name)]
+  df <- data.frame(Edge = paste(lab(ends[, 1]), "->", lab(ends[, 2])), check.names = FALSE, stringsAsFactors = FALSE)
+  for (t in seq_len(nrow(m))) df[[paste("Window", t)]] <- round(m[t, ], 3)
+  df
+}
+
+# =====================================================
+# Revisao 3, E1.2 - the static reading as a temporal equilibrium
+# =====================================================
+# Runs simulate_temporal_pair() with every node's self-regulation set to `s`,
+# no growth and no thresholds, pressure `p` added every window, until the
+# deviation stops changing (|change| < tol) or `max_windows`. Returns the
+# equilibrium of every node, the window at which it converged and whether it
+# converged at all. Checks rho((1 - s) I + B) < 1 first: when it fails the
+# simulation diverges and nothing is run. With s = 1 the equilibrium equals
+# propagate(B, p) + p, the static reading (test-equivalence.R).
+static_equivalent_windows <- function(g, p, s = 1, tol = 1e-9, max_windows = 2000) {
+  B <- effect_matrix(g)
+  ids <- rownames(B)
+  p <- align_press_vector(p, ids, "push")
+  rho <- spectral_radius((1 - s) * diag(length(ids)) + B)
+  if (rho >= 1 - 1e-9) {
+    return(list(converged = FALSE, rho = rho, window = NA_integer_, equilibrium = setNames(rep(NA_real_, length(ids)), ids)))
+  }
+  g2 <- g
+  igraph::V(g2)$self_regulation <- s
+  igraph::V(g2)$growth_rate <- 0
+  igraph::V(g2)$threshold_level <- NA_real_
+  tr <- simulate_temporal_pair(g2, p, setNames(rep(0, length(ids)), ids), windows = max_windows,
+                               stop_rule = "fixed", mode_D = "permanent", mode_R = "permanent",
+                               trends_outside = FALSE)
+  h <- tr$baseline
+  change <- apply(abs(diff(h)), 1, max)
+  k <- which(change < tol)[1]
+  list(converged = !is.na(k), rho = rho, window = if (is.na(k)) NA_integer_ else as.integer(k),
+       equilibrium = setNames(as.numeric(h[nrow(h), ids]), ids))
 }

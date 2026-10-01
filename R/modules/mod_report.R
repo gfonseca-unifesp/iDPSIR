@@ -83,8 +83,14 @@ mod_report_ui <- function(id) {
       "if (!window.idpsirCaptureHandlerRegistered) {
         window.idpsirCaptureHandlerRegistered = true;
         Shiny.addCustomMessageHandler('idpsir_capture_element', function(msg) {
+          // Revisao 2, item 3.8: every failure is reported back instead of
+          // silently doing nothing.
+          var fail = function(why) {
+            Shiny.setInputValue(msg.inputId + '_error', why, {priority: 'event'});
+          };
           var el = document.getElementById(msg.elementId);
-          if (!el || typeof html2canvas === 'undefined') return;
+          if (!el) { fail('the graph is not on screen'); return; }
+          if (typeof html2canvas === 'undefined') { fail('the image library (html2canvas) is not loaded'); return; }
 
           var widget = (typeof HTMLWidgets !== 'undefined') ? HTMLWidgets.find('#' + msg.elementId) : null;
           var upscale = 2.5;
@@ -174,12 +180,15 @@ mod_report_ui <- function(id) {
               if (canvas.width > 0 && canvas.height > 0) {
                 var finalCanvas = cropToContent(canvas, 40);
                 Shiny.setInputValue(msg.inputId, finalCanvas.toDataURL('image/png'), {priority: 'event'});
+              } else {
+                fail('the captured image was empty (is the Graph tab visible?)');
               }
               restoreHidden();
               resizeTo(origRect.width, origRect.height);
               el.style.width = origWidth;
               el.style.height = origHeight;
-            }).catch(function() {
+            }).catch(function(err) {
+              fail(String((err && err.message) || err));
               restoreHidden();
               resizeTo(origRect.width, origRect.height);
               el.style.width = origWidth;
@@ -200,12 +209,17 @@ mod_report_ui <- function(id) {
         checkboxInput(ns("include_centralities"), "Centralities", value = FALSE),
         checkboxInput(ns("include_descriptors"), "DPSIR descriptors", value = FALSE),
         checkboxInput(ns("include_references"), "Edge references", value = FALSE),
-        checkboxInput(ns("include_reproducibility"), "Reproducibility info (session, package versions, analysis parameters)", value = FALSE)
+        checkboxInput(ns("include_reproducibility"), "Reproducibility info (session, package versions, analysis parameters)", value = FALSE),
+        selectInput(ns("figure_res"), "Figure quality", choices = c("Screen (96 dpi, smaller file)" = 96, "Print (300 dpi)" = 300), selected = 96)
       ),
       column(
         width = 4,
         h5("Graph images"),
-        p("Select saved snapshots to include (save one from the Graph tab's \"Save current view\" button)."),
+        checkboxInput(ns("include_static_network"), "Network figure drawn for print (by DPSIR level, sign legend)", value = TRUE),
+        conditionalPanel(sprintf("input['%s']", ns("include_static_network")),
+          selectInput(ns("network_layout"), "Network layout", choices = NETWORK_LAYOUT_CHOICES, selected = "columns"),
+          selectInput(ns("network_edge_style"), "Network links", choices = NETWORK_EDGE_CHOICES, selected = "color")),
+        p("Saved views of the interactive graph (save one from the Graph tab's \"Save current view\" button):"),
         DTOutput(ns("graph_snapshots_table"))
       ),
       column(
@@ -213,6 +227,7 @@ mod_report_ui <- function(id) {
         h5("Scenarios"),
         p("Select saved scenarios to include (baseline - no response applied - is added automatically)."),
         DTOutput(ns("scenarios_table")),
+        checkboxInput(ns("include_interpretation"), "Include interpretation (plain-language reading and comparison)", value = TRUE),
         checkboxInput(ns("include_temporal_section"), "Include temporal simulation (discrete windows)", value = FALSE)
       )
     ),
@@ -283,7 +298,10 @@ mod_report_server <- function(id, schema, nodes, edges, graph, saved_scenarios, 
         sel <- sort(input$scenarios_table_rows_selected)
         selected_scenario_names <- if (length(sel) > 0) names(saved)[sel] else character()
 
-        page <- build_full_report_html(
+        # Revisao 2, item 0.5: a failure while building the report used to
+        # surface only as a broken browser download. Tell the user, and still
+        # hand them a small HTML file that says what went wrong.
+        page <- tryCatch(build_full_report_html(
           schema = schema(),
           graph = graph(),
           graph_snapshots = snaps,
@@ -297,9 +315,20 @@ mod_report_server <- function(id, schema, nodes, edges, graph, saved_scenarios, 
           selected_scenario_names = selected_scenario_names,
           include_reproducibility = isTRUE(input$include_reproducibility),
           include_temporal_section = isTRUE(input$include_temporal_section),
+          include_interpretation = !isFALSE(input$include_interpretation),
           metadata = if (is.null(metadata)) NULL else metadata(),
-          savepoint_filename = if (is.null(savepoint_filename)) NULL else savepoint_filename()
-        )
+          savepoint_filename = if (is.null(savepoint_filename)) NULL else savepoint_filename(),
+          figure_res = as.numeric(input$figure_res %||% 96),
+          include_static_network = !isFALSE(input$include_static_network),
+          network_layout = input$network_layout %||% "columns",
+          network_edge_style = input$network_edge_style %||% "color"
+        ), error = function(e) {
+          showNotification(paste("Could not build the report:", conditionMessage(e)), type = "error", duration = NULL)
+          htmltools::tags$html(htmltools::tags$body(
+            htmltools::tags$h2("The iDPSIR report could not be built"),
+            htmltools::tags$p(conditionMessage(e))
+          ))
+        })
 
         htmltools::save_html(page, file)
       }

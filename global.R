@@ -11,7 +11,7 @@
 
 required_packages <- c(
   "shiny", "bs4Dash", "visNetwork", "igraph", "DT", "dplyr",
-  "data.table", "htmlwidgets", "shinyWidgets", "glue", "purrr", "scales", "jsonlite"
+  "data.table", "htmlwidgets", "shinyWidgets", "glue", "purrr", "scales", "jsonlite", "htmltools"
 )
 
 missing_packages <- required_packages[!vapply(required_packages, requireNamespace, logical(1), quietly = TRUE)]
@@ -74,9 +74,15 @@ source("R/pathways.R")
 source("R/responses.R")
 source("R/reach.R")
 source("R/loop_analysis.R")
+source("R/structural.R")
 source("R/sufficiency.R")
+source("R/triggers.R")
+source("R/relevance.R")
+source("R/interpretation.R")
+source("R/data_needs.R")
 source("R/temporal.R")
 source("R/scenario_plots.R")
+source("R/figure_export.R")
 source("R/report.R")
 source("R/io.R")
 

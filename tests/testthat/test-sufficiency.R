@@ -2,7 +2,8 @@
 # TESTS - R/sufficiency.R (Revisao 1: "two pushes" model)
 # =====================================================
 #
-# Primary fixture: the Mangi et al. 2007 network (data/mangi2007_*.csv), a
+# Primary fixture: the first Mangi et al. 2007 network (fixtures/mangi2007_v1_*.csv,
+# replaced as the published example on 30/09/2026 by a rebuild from the article), a
 # real, cited network - not a hand-built toy. Every expected number below
 # was independently computed in scratchpad/test_sufficiency.R before being
 # hardcoded here, and closely reproduces (within rounding) the worked
@@ -17,12 +18,14 @@
 # revision is that sufficiency()'s mitigation for that same scenario comes
 # out negative (correctly "helps").
 
+# Revisao 2, item 1.6: fixtures/mangi2007_v1_edges.csv holds standardized
+# strengths (beta) - the older weights converted with beta = lambda * w
+# (c = 0.5), rounded to 3 decimals. The numbers below, from the Revisao 1
+# static reading, therefore still hold within the 1e-3 tolerance.
 mangi_graph <- function() {
-  nodes <- data.table::fread("../../data/mangi2007_nodes.csv", data.table = FALSE)
-  edges <- data.table::fread("../../data/mangi2007_edges.csv", data.table = FALSE)
-  nodes <- normalize_dpsir_nodes(nodes)
-  edges <- normalize_dpsir_edges(edges)
-  build_igraph(nodes, edges, get_default_dpsir_schema())
+  nodes <- data.table::fread("fixtures/mangi2007_v1_nodes.csv", data.table = FALSE)
+  edges <- data.table::fread("fixtures/mangi2007_v1_edges.csv", data.table = FALSE)
+  build_igraph(normalize_dpsir_nodes(nodes), normalize_dpsir_edges(edges), get_default_dpsir_schema())
 }
 
 zero_press <- function(g) {
@@ -31,15 +34,15 @@ zero_press <- function(g) {
 
 test_that("build_signed_matrix always has a zero diagonal, even with a legacy self_regulation attribute", {
   g <- mangi_graph()
-  A <- build_signed_matrix(g)
+  A <- effect_matrix(g)
   expect_true(all(diag(A) == 0))
 
   # A savepoint from before this revision could still carry self_regulation
-  # on the graph - build_signed_matrix() must ignore it silently, with no
+  # on the graph - effect_matrix() must ignore it silently, with no
   # special-case code, by zeroing the diagonal regardless of what
   # build_interaction_matrix() filled in.
   V(g)$self_regulation <- "high"
-  A2 <- build_signed_matrix(g)
+  A2 <- effect_matrix(g)
   expect_true(all(diag(A2) == 0))
 })
 
@@ -47,7 +50,7 @@ test_that("spectral_radius returns 0 for a graph with no edges, not NaN or an er
   nodes <- data.frame(id = c("A", "B"), stringsAsFactors = FALSE)
   edges <- data.frame(from = character(), to = character(), stringsAsFactors = FALSE)
   g <- graph_from_data_frame(edges, vertices = nodes, directed = TRUE)
-  W <- build_signed_matrix(g)
+  W <- effect_matrix(g)
 
   expect_equal(spectral_radius(W), 0)
 })
@@ -62,17 +65,17 @@ test_that("propagate() gives a non-zero effect on a purely acyclic network, not 
   # verified against scratchpad/verify_propagate_fix.R before hardcoding.
   nodes <- data.frame(id = c("A", "B", "C"), dpsir_category = c("Driver", "Pressure", "State"), stringsAsFactors = FALSE)
   edges <- data.frame(
-    from = c("A", "B"), to = c("B", "C"), weight = 1, confidence = 1,
+    from = c("A", "B"), to = c("B", "C"), weight = 0.5, confidence = 1,
     interaction_type = "positive", stringsAsFactors = FALSE
   )
   g <- graph_from_data_frame(edges, vertices = nodes, directed = TRUE)
 
-  W <- build_signed_matrix(g)
+  W <- effect_matrix(g)
   expect_equal(spectral_radius(W), 0) # nilpotent, not edge-less
   expect_false(all(W == 0)) # confirms it's the nilpotent case, not the truly empty one
 
   press <- setNames(c(1, 0, 0), c("A", "B", "C"))
-  effect <- propagate(W, press, c = 0.5)
+  effect <- propagate(W, press)
 
   expect_equal(unname(effect["A"]), 0)
   expect_equal(unname(effect["B"]), 0.5)
@@ -89,9 +92,9 @@ test_that("propagate never fails - not even on the network already known to be s
   edges <- normalize_dpsir_edges(edges)
   g <- build_igraph(nodes, edges, get_default_dpsir_schema())
 
-  W <- build_signed_matrix(g)
+  W <- effect_matrix(g)
   press <- build_press_vector(g, active_ids = V(g)$name[1], strengths = setNames(1, V(g)$name[1]))
-  result <- propagate(W, press, c = 0.5)
+  result <- propagate(W, press)
 
   expect_false(any(is.na(result)))
 })
@@ -100,7 +103,7 @@ test_that("sufficiency fixes the real sign-inversion bug: R2 (Gear restrictions)
   g <- mangi_graph()
   p_R2 <- build_press_vector(g, active_ids = "R2", strengths = c(R2 = 1))
 
-  suff <- sufficiency(g, p_D = zero_press(g), p_R = p_R2, c = 0.5)
+  suff <- sufficiency(g, p_D = zero_press(g), p_R = p_R2)
   reef <- suff[suff$id == "I2", ]
 
   expect_lt(reef$mitigation, 0) # negative = helps, the correct sign
@@ -111,7 +114,7 @@ test_that("sufficiency on the Mangi worked example (R1/AMP vs D1+D3 pressure) ma
   p_D <- build_press_vector(g, active_ids = c("D1", "D3"), strengths = c(D1 = 1, D3 = 1))
   p_R1 <- build_press_vector(g, active_ids = "R1", strengths = c(R1 = 1))
 
-  suff <- sufficiency(g, p_D, p_R1, c = 0.5)
+  suff <- sufficiency(g, p_D, p_R1)
   rownames(suff) <- suff$id
 
   expect_equal(suff["I1", "worsening"], 0.1096, tolerance = 1e-3)
@@ -135,7 +138,7 @@ test_that("sufficiency reports NA strength_to_neutralize when the response doesn
   p_D <- build_press_vector(g, active_ids = c("D1", "D3"), strengths = c(D1 = 1, D3 = 1))
   p_R2 <- build_press_vector(g, active_ids = "R2", strengths = c(R2 = 1))
 
-  suff <- sufficiency(g, p_D, p_R2, c = 0.5)
+  suff <- sufficiency(g, p_D, p_R2)
   rownames(suff) <- suff$id
 
   # R2 only acts on P2, which doesn't feed I1 (Catch decline) at all in this
@@ -144,13 +147,14 @@ test_that("sufficiency reports NA strength_to_neutralize when the response doesn
   expect_true(is.na(suff["I1", "strength_to_neutralize"]))
 })
 
-test_that("sufficiency_confidence gives exactly 100% when every edge has confidence = 1", {
+test_that("sufficiency_confidence gives exactly 100% when every edge's uncertainty band is a single value", {
   g <- mangi_graph()
-  E(g)$confidence <- 1
+  E(g)$weight_low <- E(g)$weight
+  E(g)$weight_high <- E(g)$weight
   p_D <- build_press_vector(g, active_ids = c("D1", "D3"), strengths = c(D1 = 1, D3 = 1))
   p_R1 <- build_press_vector(g, active_ids = "R1", strengths = c(R1 = 1))
 
-  sc <- sufficiency_confidence(g, p_D, p_R1, c = 0.5, n_simulations = 20)
+  sc <- sufficiency_confidence(g, p_D, p_R1, n_simulations = 20)
 
   expect_true(all(sc$neutralized_pct == 100))
 })
@@ -161,7 +165,7 @@ test_that("sufficiency_confidence reproduces the revision's Table 2 pattern: R1 
 
   check_one <- function(response_id) {
     p_r <- build_press_vector(g, active_ids = response_id, strengths = setNames(1, response_id))
-    sc <- sufficiency_confidence(g, p_D, p_r, c = 0.5, n_simulations = 300)
+    sc <- sufficiency_confidence(g, p_D, p_r, n_simulations = 300)
     setNames(sc$neutralized_pct, sc$id)
   }
 
@@ -183,21 +187,11 @@ test_that("sufficiency_confidence with the default seed is reproducible across r
   p_R4 <- build_press_vector(g, active_ids = "R4", strengths = c(R4 = 1))
 
   set.seed(999)
-  a <- sufficiency_confidence(g, p_D, p_R4, c = 0.5, n_simulations = 100)
+  a <- sufficiency_confidence(g, p_D, p_R4, n_simulations = 100)
   set.seed(1)
-  b <- sufficiency_confidence(g, p_D, p_R4, c = 0.5, n_simulations = 100)
+  b <- sufficiency_confidence(g, p_D, p_R4, n_simulations = 100)
 
   expect_identical(a, b)
-})
-
-test_that("sufficiency_reach_over_c flags no boundary cases when every verdict is unanimous", {
-  g <- mangi_graph()
-  p_D <- build_press_vector(g, active_ids = c("D1", "D3"), strengths = c(D1 = 1, D3 = 1))
-  p_R1 <- build_press_vector(g, active_ids = "R1", strengths = c(R1 = 1))
-
-  src <- sufficiency_reach_over_c(g, p_D, p_R1)
-
-  expect_false(any(src$flips))
 })
 
 test_that("sufficiency and sufficiency_confidence return an empty data.frame, not an error, when the graph has no Impact nodes", {
@@ -214,7 +208,7 @@ test_that("format_sufficiency_table shows an absolute strength for a single resp
   g <- mangi_graph()
   p_D <- build_press_vector(g, active_ids = c("D1", "D3"), strengths = c(D1 = 1, D3 = 1))
   p_R1 <- build_press_vector(g, active_ids = "R1", strengths = c(R1 = 1))
-  suff <- sufficiency(g, p_D, p_R1, c = 0.5)
+  suff <- sufficiency(g, p_D, p_R1)
 
   single <- format_sufficiency_table(suff, "R1", c(R1 = 66))
   i1_row <- single[single$Impact == "Catch decline (reduced CPUE)", ]
@@ -226,16 +220,82 @@ test_that("format_sufficiency_table shows an absolute strength for a single resp
   expect_match(i1_row_combined[["Strength needed"]], "^x[0-9.]+$")
 })
 
-test_that("format_reach_over_c_table never produces an empty column name (the real DT crash found live)", {
+# Revisao 2, item 0.3: press vectors are aligned by factor name, never by
+# position - a saved scenario whose vector is out of order, or that predates
+# a node added later, must give the right numbers (or a clear error).
+test_that("sufficiency() aligns press vectors by name: shuffled order gives identical results", {
   g <- mangi_graph()
-  p_D <- build_press_vector(g, active_ids = c("D1", "D3"), strengths = c(D1 = 1, D3 = 1))
-  p_R1 <- build_press_vector(g, active_ids = "R1", strengths = c(R1 = 1))
-  src <- sufficiency_reach_over_c(g, p_D, p_R1)
+  p_D <- zero_press(g); p_D[c("D1", "D3")] <- 1
+  p_R <- zero_press(g); p_R["R1"] <- 1
 
-  display <- format_reach_over_c_table(src)
+  base <- sufficiency(g, p_D, p_R)
+  shuffled <- sufficiency(g, rev(p_D), sample(p_R))
 
-  expect_true(all(nzchar(names(display))))
-  expect_equal(names(display)[1], "Impact")
-  expect_equal(names(display)[length(names(display))], "Verdict")
-  expect_equal(nrow(display), nrow(src))
+  expect_equal(shuffled, base)
+})
+
+test_that("sufficiency() treats factors missing from a named press vector as 0 (scenario saved before a node was added)", {
+  g <- mangi_graph()
+  p_D_full <- zero_press(g); p_D_full[c("D1", "D3")] <- 1
+  p_R_full <- zero_press(g); p_R_full["R1"] <- 1
+
+  expect_equal(
+    sufficiency(g, p_D_full[c("D1", "D3")], p_R_full["R1"]),
+    sufficiency(g, p_D_full, p_R_full)
+  )
+})
+
+test_that("sufficiency() stops with a clear message when a press vector names a factor not in the network", {
+  g <- mangi_graph()
+  p_D <- zero_press(g); p_D["D1"] <- 1
+  p_R <- c(p_D * 0, R_removed = 1)
+
+  expect_error(sufficiency(g, p_D, p_R), "not in the network: R_removed")
+})
+
+test_that("align_press_vector() rejects an unnamed vector of the wrong length instead of recycling it", {
+  expect_error(align_press_vector(c(1, 0), c("A", "B", "C")), "has 2 values but the network has 3")
+  expect_equal(align_press_vector(c(1, 0, 0), c("A", "B", "C")), c(A = 1, B = 0, C = 0))
+})
+
+# Revisao 2, Fase 1 (structural mode): the total effect is the path-analysis
+# product of betas, with no reach factor c - worked example of Anexo X2.4,
+# verified in R (prototipos_revisao2/modo_estrutural.R).
+structural_example <- function(beta_rp1 = 0.8) {
+  nodes <- normalize_dpsir_nodes(data.frame(
+    id = c("P1", "P2", "S", "I", "R"), label = c("P1", "P2", "S", "I", "R"),
+    dpsir_category = c("Pressure", "Pressure", "State", "Impact", "Response"), stringsAsFactors = FALSE
+  ))
+  edges <- normalize_dpsir_edges(data.frame(
+    from = c("P1", "P2", "S", "R"), to = c("S", "S", "I", "P1"),
+    weight = c(0.7, 0.5, 0.6, beta_rp1), interaction_type = "negative", stringsAsFactors = FALSE
+  ))
+  build_igraph(nodes, edges, get_default_dpsir_schema())
+}
+
+test_that("structural total effect: P1 -> I is 0.42, R -> I is -0.336, 80% mitigation, 125% to neutralize", {
+  g <- structural_example()
+  p_D <- build_press_vector(g, "P1", c(P1 = 1))
+  p_R <- build_press_vector(g, "R", c(R = 1))
+  suff <- sufficiency(g, p_D, p_R)
+
+  expect_equal(suff$worsening, 0.42, tolerance = 1e-9)
+  expect_equal(suff$mitigation, -0.336, tolerance = 1e-9)
+  expect_equal(suff$strength_to_neutralize, 1.25, tolerance = 1e-9)
+  expect_false(suff$neutralized)
+})
+
+test_that("propagate() and check_effect_matrix() block a network whose loops amplify (rho(B) >= 1), naming the loop edges", {
+  nodes <- normalize_dpsir_nodes(data.frame(
+    id = c("P", "S", "I", "R"), label = c("P", "S", "I", "R"),
+    dpsir_category = c("Pressure", "State", "Impact", "Response"), stringsAsFactors = FALSE
+  ))
+  edges <- normalize_dpsir_edges(data.frame(
+    from = c("P", "S", "I", "R"), to = c("S", "I", "R", "P"),
+    weight = c(1.2, 1, 1, 1), interaction_type = "positive", stringsAsFactors = FALSE
+  ))
+  g <- build_igraph(nodes, edges, get_default_dpsir_schema())
+
+  expect_error(check_effect_matrix(g), "spectral radius 1.05.*P -> S")
+  expect_error(propagate(effect_matrix(g), c(P = 1, S = 0, I = 0, R = 0)), "must be below 1")
 })

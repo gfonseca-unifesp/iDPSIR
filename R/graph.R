@@ -20,7 +20,7 @@ create_empty_graph_edges <- function() {
 }
 
 prepare_nodes_for_graph <- function(nodes, schema) {
-  nodes <- normalize_dpsir_nodes(nodes)
+  nodes <- normalize_dpsir_nodes(nodes, schema)
   nodes <- apply_schema_visual_mapping(nodes, schema)
   nodes
 }
@@ -76,6 +76,10 @@ build_igraph <- function(
     directed = TRUE
   )
 
+  # Revisao 2, item 2.6: the role of each node (driver/pressure/state/
+  # impact/feedback), so the engine never depends on category names.
+  V(g)$dpsir_role <- roles_of(V(g)$dpsir_category, schema)
+
   graph_attr(g, "network_type") <- "DPSIR"
   graph_attr(g, "directed") <- TRUE
   graph_attr(g, "created_at") <- Sys.time()
@@ -127,7 +131,11 @@ compute_layered_layout <- function(nodes, schema, x_spacing = 200, y_spacing = 8
   categories <- schema_categories(schema)
   order_index <- setNames(seq_along(categories), categories)
 
+  if (nrow(nodes) == 0) return(data.frame(id = character(), x = numeric(), y = numeric(), stringsAsFactors = FALSE))
   category_rank <- unname(order_index[nodes$dpsir_category])
+  # A category not in the schema (e.g. for an instant while a new project
+  # loads) goes to an extra column instead of breaking ave() with NA groups.
+  category_rank[is.na(category_rank)] <- length(categories) + 1L
   x <- category_rank * x_spacing
 
   y <- ave(seq_len(nrow(nodes)), category_rank, FUN = function(idx) {
@@ -217,32 +225,58 @@ compute_effective_layout <- function(
 # TOOLTIPS
 # =====================================================
 
+# Revisao 2, item 0.8: every free-text field is HTML-escaped before it goes
+# into the tooltip, which vis.js renders as HTML. A shared savepoint with a
+# label like `<img src=x onerror=...>` used to run script in the viewer's
+# browser - including on the public shinylive demo.
+tooltip_text <- function(x, empty = "-") {
+  x <- as.character(x)
+  out <- htmltools::htmlEscape(ifelse(is.na(x), "", x))
+  ifelse(is.na(x) | trimws(x) == "", empty, out)
+}
+
 build_node_tooltip <- function(nodes) {
-  descriptor_line <- ifelse(
-    is.na(nodes$descriptor) | nodes$descriptor == "",
-    "",
-    paste0("<i>", nodes$descriptor, "</i><br>")
-  )
+  descriptor <- tooltip_text(nodes$descriptor, empty = "")
+  descriptor_line <- ifelse(descriptor == "", "", paste0("<i>", descriptor, "</i><br>"))
+  # Revisao 2, item C0: the State threshold is a level in the factor's units.
+  level <- if ("threshold_level" %in% names(nodes)) suppressWarnings(as.numeric(nodes$threshold_level)) else rep(NA_real_, nrow(nodes))
+  dirn <- if ("threshold_direction" %in% names(nodes)) as.character(nodes$threshold_direction) else rep("auto", nrow(nodes))
+  threshold_text <- ifelse(is.na(level), "-", paste0(signif(level, 4), ifelse(dirn %in% "both", " (either direction)", "")))
+  # Revisao 2, Fase D: growth trend of the base level and its ceiling.
+  gr <- if ("growth_rate" %in% names(nodes)) suppressWarnings(as.numeric(nodes$growth_rate)) else rep(0, nrow(nodes))
+  gcap <- if ("growth_cap" %in% names(nodes)) suppressWarnings(as.numeric(nodes$growth_cap)) else rep(NA_real_, nrow(nodes))
+  growth_text <- ifelse(is.na(gr) | gr == 0, "-", paste0(sprintf("%+.1f%%", 100 * gr), " per window",
+                                                         ifelse(is.na(gcap), "", paste0(", ceiling ", signif(gcap, 4)))))
 
   glue::glue(
-    "<b>{nodes$label}</b><br>",
+    "<b>{tooltip_text(nodes$label)}</b><br>",
     "{descriptor_line}",
-    "Category: {nodes$dpsir_category}<br>",
-    "Subsystem: {ifelse(is.na(nodes$subsystem) | nodes$subsystem == '', '-', nodes$subsystem)}<br>",
-    "Uncertainty: {ifelse(is.na(nodes$uncertainty), '-', round(nodes$uncertainty, 2))}<br>",
-    "Controllability: {ifelse(is.na(nodes$controllability), '-', round(nodes$controllability, 2))}<br>",
-    "Activation threshold: {ifelse(is.na(nodes$activation_threshold), '-', nodes$activation_threshold)}"
+    "Category: {tooltip_text(nodes$dpsir_category)}<br>",
+    "Subsystem: {tooltip_text(nodes$subsystem)}<br>",
+    "Growth: {growth_text}<br>",
+    "Threshold: {threshold_text}"
   )
 }
 
 build_edge_tooltip <- function(edges) {
+  # Revisao 2, Fase 1: shows beta, its band and where the value came from
+  # (class/default/converted), instead of the old weight/confidence pair.
+  src <- if ("weight_source" %in% names(edges)) as.character(edges$weight_source) else rep(NA_character_, nrow(edges))
+  cls <- if ("strength_class" %in% names(edges)) as.character(edges$strength_class) else rep(NA_character_, nrow(edges))
+  strength_note <- ifelse(
+    src %in% c("class", "default"), paste0(" (", tooltip_text(cls), " class", ifelse(src == "default", ", default", ""), ")"),
+    ifelse(src %in% "converted", " (converted from an older file)", "")
+  )
+  lo <- if ("weight_low" %in% names(edges)) as.numeric(edges$weight_low) else rep(NA_real_, nrow(edges))
+  hi <- if ("weight_high" %in% names(edges)) as.numeric(edges$weight_high) else rep(NA_real_, nrow(edges))
+  range_text <- ifelse(is.na(lo) | is.na(hi), "-", sprintf("%.2f to %.2f", lo, hi))
   glue::glue(
-    "{edges$from} &rarr; {edges$to}<br>",
-    "Weight: {ifelse(is.na(edges$weight), '-', edges$weight)}<br>",
-    "Confidence: {ifelse(is.na(edges$confidence), '-', edges$confidence)}<br>",
-    "Interaction: {ifelse(is.na(edges$interaction_type) | edges$interaction_type == '', '-', edges$interaction_type)}<br>",
-    "Evidence: {ifelse(is.na(edges$evidence_type) | edges$evidence_type == '', '-', edges$evidence_type)}<br>",
-    "Reference: {ifelse(is.na(edges$reference) | edges$reference == '', '-', edges$reference)}"
+    "{tooltip_text(edges$from)} &rarr; {tooltip_text(edges$to)}<br>",
+    "Strength (beta): {tooltip_text(round(as.numeric(edges$weight), 3))}{strength_note}<br>",
+    "Uncertainty range: {range_text}<br>",
+    "Interaction: {tooltip_text(edges$interaction_type)}<br>",
+    "Evidence: {tooltip_text(edges$evidence_type)}<br>",
+    "Reference: {tooltip_text(edges$reference)}"
   )
 }
 
@@ -271,7 +305,10 @@ build_edge_legend <- function(confidence_threshold = 0.5) {
   rbind(
     legend,
     data.frame(
-      label = paste0("Low confidence (< ", confidence_threshold, ")"),
+      # Audit (30/09): confidence is derived from the edge's uncertainty
+      # band (1 - band width / strength), so say so in the legend.
+      label = paste0("Wide uncertainty band
+(confidence < ", confidence_threshold, ")"),
       color = "#848484",
       arrows = "to",
       dashes = TRUE,
@@ -313,13 +350,15 @@ size_nodes_by_degree <- function(nodes, graph, node_size_mode = "all", node_size
   nodes
 }
 
-border_by_uncertainty <- function(nodes) {
-  # Linear interpolation between the old categorical vocabulary's three
-  # discrete widths (low=1, medium=2.5, high=4) - uncertainty=0.5 (the
-  # "medium"-equivalent default) lands on exactly 2.5, so a network never
-  # edited since the low/medium/high days looks visually identical.
-  nodes$borderWidth <- 1 + 3 * as.numeric(nodes$uncertainty)
-  nodes$borderWidth[is.na(nodes$borderWidth)] <- 2.5
+border_by_threshold <- function(nodes) {
+  # Revisao 2 (30/09): the border used to show a node's "uncertainty",
+  # removed; now it only marks thresholded States.
+  nodes$borderWidth <- rep(1.5, nrow(nodes))
+  # Revisao 2, item C4: a State with a threshold gets a heavy border.
+  if ("threshold_level" %in% names(nodes)) {
+    has_th <- !is.na(suppressWarnings(as.numeric(nodes$threshold_level)))
+    nodes$borderWidth[has_th] <- 6
+  }
   nodes
 }
 
@@ -431,11 +470,12 @@ build_network_visual <- function(
   layout <- compute_effective_layout(nodes, schema, layout_mode = layout_mode, x_spacing = x_spacing, y_spacing = y_spacing, manual_positions = manual_positions)
   nodes <- merge(nodes, layout, by = "id", sort = FALSE)
 
-  # Circular mode is a precise ring - physics would only distort it, so
-  # every node is excluded from the simulation. Layered mode keeps physics on
-  # by default (so the "avoid overlap" slider still spreads out same-category
-  # nodes) EXCEPT for nodes the user has actually dragged, which get excluded
-  # too so they stop drifting back under the solver.
+  # Revisao 2 (audit, 30/09): every node is excluded from the physics
+  # simulation, in both layouts. Layered mode used to keep physics on so an
+  # "avoid overlap" slider could spread same-category nodes - but with
+  # fixed.x = FALSE (see below) the solver pulled nodes out of their
+  # category columns and collapsed the diagram into a tangle (seen live on
+  # the port example). The layout already spaces each column by y_spacing.
   #
   # Deliberately `physics = FALSE`, not `fixed.x/fixed.y = TRUE`: vis-network's
   # own drag handler snapshots each node's fixed.x/fixed.y at the START of
@@ -453,7 +493,7 @@ build_network_visual <- function(
   manually_placed <- if (!is.null(manual_positions) && nrow(manual_positions) > 0) manual_positions$id else character()
   nodes$`fixed.x` <- FALSE
   nodes$`fixed.y` <- FALSE
-  nodes$physics <- !(identical(layout_mode, "circular") | nodes$id %in% manually_placed)
+  nodes$physics <- FALSE
 
   # ===================================================
   # NODE SIZE (degree, optionally weighted by edge strength)
@@ -465,7 +505,7 @@ build_network_visual <- function(
   # UNCERTAINTY -> BORDER WIDTH
   # ===================================================
 
-  nodes <- border_by_uncertainty(nodes)
+  nodes <- border_by_threshold(nodes)
 
   # ===================================================
   # NODE TOOLTIP AND LABEL FONT SIZE
@@ -586,7 +626,8 @@ build_community_visual <- function(
     layout_mode = "layered",
     manual_positions = NULL,
     show_node_legend = TRUE,
-    show_edge_legend = TRUE
+    show_edge_legend = TRUE,
+    use_shapes = TRUE
 ) {
   req(nodes)
 
@@ -619,7 +660,10 @@ build_community_visual <- function(
   legend_nodes <- build_community_legend(membership)
   community_colors <- setNames(legend_nodes$color, legend_nodes$label)
   nodes$color <- unname(community_colors[nodes$group])
-  nodes$shape <- "dot"
+  # Audit: keep the category shapes, so the DPSIR level stays readable
+  # while the color shows the community.
+  shp <- schema_shapes(schema)[as.character(nodes$dpsir_category)]
+  nodes$shape <- if (isTRUE(use_shapes)) ifelse(is.na(shp), "dot", unname(shp)) else "dot"
 
   # See compute_effective_layout()/build_network_visual() for why manual
   # positions are skipped in circular mode (a position dragged in layered
@@ -634,10 +678,10 @@ build_community_visual <- function(
   manually_placed <- if (!is.null(manual_positions) && nrow(manual_positions) > 0) manual_positions$id else character()
   nodes$`fixed.x` <- FALSE
   nodes$`fixed.y` <- FALSE
-  nodes$physics <- !(identical(layout_mode, "circular") | nodes$id %in% manually_placed)
+  nodes$physics <- FALSE
 
   nodes <- size_nodes_by_degree(nodes, graph, node_size_mode, node_size_weighted)
-  nodes <- border_by_uncertainty(nodes)
+  nodes <- border_by_threshold(nodes)
 
   nodes$title <- build_node_tooltip(nodes)
   nodes$`font.size` <- node_font_size

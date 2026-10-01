@@ -56,8 +56,13 @@ build_full_report_html <- function(
     selected_scenario_names = character(),
     include_reproducibility = FALSE,
     include_temporal_section = FALSE,
+    include_interpretation = TRUE,
     metadata = NULL,
-    savepoint_filename = NULL
+    savepoint_filename = NULL,
+    figure_res = 96,
+    include_static_network = FALSE,
+    network_layout = "columns",
+    network_edge_style = "color"
 ) {
   # Sequential "Figure N"/"Table N" numbering across the whole report, plus
   # a caption paragraph under each - both requested so the report reads like
@@ -70,18 +75,24 @@ build_full_report_html <- function(
     tags$p(class = "report-caption", tags$strong(paste0(prefix, " ", n, ". ")), text)
   }
 
-  # Recaps one scenario's pressure/response/c as text - used both by the
+  # Recaps one scenario's pressure/response as text - used both by the
   # provenance header's "Scenario definitions" table below and by
   # "Response sufficiency"'s own per-scenario line further down, so the two
   # can never describe the same scenario two different ways.
+  # Audit: factor labels, not ids, in the scenario definitions.
+  lab <- function(ids) {
+    l <- V(graph)$label[match(ids, V(graph)$name)]
+    ifelse(is.na(l) | !nzchar(l), ids, l)
+  }
   scenario_definition_text <- function(sc) {
     pressure_text <- if (length(sc$pressure_active) == 0) {
       "none (no pressure scenario)"
     } else {
-      paste(sprintf("%s at %d%%", sc$pressure_active, round(sc$pressure_strengths[sc$pressure_active])), collapse = ", ")
+      paste(sprintf("%s at %d%%", lab(sc$pressure_active), round(sc$pressure_strengths[sc$pressure_active])), collapse = ", ")
     }
-    response_text <- paste(sprintf("%s at %d%%", sc$active, round(sc$strengths[sc$active])), collapse = ", ")
-    list(pressure = pressure_text, response = response_text, c = sc$effect_horizon %||% 0.5)
+    response_text <- if (length(sc$active) == 0) "none" else
+      paste(sprintf("%s at %d%%", lab(sc$active), round(sc$strengths[sc$active])), collapse = ", ")
+    list(pressure = pressure_text, response = response_text)
   }
 
   sections <- list(
@@ -127,7 +138,7 @@ build_full_report_html <- function(
   scenario_def_rows <- if (length(selected_scenario_names) > 0 && length(saved_scenarios) > 0) {
     do.call(rbind, lapply(selected_scenario_names, function(scenario_name) {
       d <- scenario_definition_text(saved_scenarios[[scenario_name]])
-      data.frame(Scenario = scenario_name, Pressure = d$pressure, Response = d$response, c = d$c, stringsAsFactors = FALSE)
+      data.frame(Scenario = scenario_name, Pressure = d$pressure, Response = d$response, stringsAsFactors = FALSE)
     }))
   } else {
     NULL
@@ -139,7 +150,7 @@ build_full_report_html <- function(
       report_html_table(scenario_def_rows),
       caption_tag(
         "Table", next_table_n(),
-        "Definition of each selected scenario: which Drivers/Pressures are pushed (and how strongly), which Responses are applied (and how strongly), and how far the effect is traced (c)."
+        "Definition of each selected scenario: which Drivers/Pressures are pushed (and how strongly), and which Responses are applied (and how strongly). Edge strengths are standardized path coefficients (beta); the effect of a scenario is their product along each causal path, summed over paths."
       )
     ))
   }
@@ -148,7 +159,16 @@ build_full_report_html <- function(
       class = "meta",
       "See \"Reproducibility\" at the end of this report for the R/package versions and the random seed/",
       "simulation count behind every resampling-based number above."
-    )
+    ),
+    # Revisao 2, Fase 4 (checklist, D18): how many strengths are not data.
+    {
+      src <- igraph::E(graph)$weight_source
+      if (is.null(src)) NULL else tags$p(class = "meta", sprintf(
+        "Edge strengths: %d of %d from a class or the default (qualitative), %d converted from an older file, %d given.",
+        sum(src %in% c("class", "default")), length(src), sum(src %in% "converted"),
+        sum(!src %in% c("class", "default", "converted"))
+      ))
+    }
   ))
 
   # C.2 Interpretation legend - always shown, once, right after the header.
@@ -168,6 +188,7 @@ build_full_report_html <- function(
       tags$p(
         tags$strong("Per-window Verdict colors: "),
         tags$span(style = "color: #1b8a3a; font-weight: bold;", "green"), " = improved/neutralized (≤ 0), ",
+        tags$span(style = "color: #5cb85c; font-weight: bold;", "light green"), " = neutralized (relative): still above 0 but within the chosen tolerance of the baseline, ",
         tags$span(style = "color: #e0a100; font-weight: bold;", "amber"), " = partial (helped but still > 0), ",
         tags$span(style = "color: #c0392b; font-weight: bold;", "red"), " = failure (at or above baseline)."
       )
@@ -180,11 +201,66 @@ build_full_report_html <- function(
   # it used to open the report) -> Reproducibility (stays last, it's about
   # the report itself, not the network).
 
+  # Revisao 2 (30/09): plain-language interpretation (R/interpretation.R),
+  # the same reading as the Interpretation tab - first, so the report opens
+  # with what the numbers mean, then the detailed tables below.
+  if (isTRUE(include_interpretation) && length(selected_scenario_names) > 0 && length(saved_scenarios) > 0) {
+    chosen <- saved_scenarios[intersect(selected_scenario_names, names(saved_scenarios))]
+    chosen <- Filter(function(sc) !is.null(sc$sufficiency_df), chosen)
+    if (length(chosen) > 0) {
+      interp_sections <- lapply(names(chosen), function(scenario_name) {
+        sc <- chosen[[scenario_name]]
+        it <- interpret_scenario(graph, sc)
+        imp <- it$impacts
+        n_plot <- sum(imp$worsening > 1e-9 | abs(imp$mitigation) > 1e-9)
+        def <- scenario_definition_text(sc)
+        tagList(
+          tags$h4(scenario_name),
+          tags$p(tags$strong("Pressure: "), def$pressure, tags$br(), tags$strong("Response: "), def$response),
+          tags$p(tags$strong(it$headline)),
+          if (length(it$messages) > 0) tags$ul(lapply(it$messages, tags$li)),
+          tags$ol(lapply(seq_len(nrow(imp)), function(k) tags$li(tags$strong(imp$node[k]), ": ", imp$text[k]))),
+          tags$img(src = plot_to_data_uri(function() draw_sufficiency_plot(imp), width = 900, height = 140 + 60 * max(1, n_plot), res = figure_res),
+                   style = "max-width: 100%;"),
+          caption_tag("Figure", next_figure_n(), sprintf(
+            "For \"%s\": the pressure's worsening of each Impact (red; dark red = added by the response itself), what the response offsets (green, from the worsening back to the net) and the net effect (diamond; in the shaded zone, at or left of zero = neutralized). Impacts in priority order, top first.",
+            scenario_name)),
+          {
+            dn <- data_needs(graph, sc)
+            if (nrow(dn) > 0) tagList(
+              tags$h5("Data needs — what to measure or look up first"),
+              tags$p(DATA_NEEDS_INTRO),
+              report_html_table(format_data_needs(dn)),
+              caption_tag("Table", next_table_n(), sprintf(
+                "For \"%s\": what to measure or look up first, ranked by how likely the data are to change a verdict (static reading).",
+                scenario_name))
+            )
+          }
+        )
+      })
+      cmp <- compare_scenario_interpretations(graph, chosen)
+      sections <- c(sections, list(
+        tags$h2("Interpretation"),
+        tags$p(
+          "A plain-language reading of each selected scenario: whether the response is enough for each Impact,",
+          "in priority order, and what to watch. The tables in the next section hold the numbers behind it."
+        ),
+        tagList(interp_sections),
+        if (nrow(cmp) > 0) tagList(
+          tags$h3("Scenarios side by side"),
+          report_html_table(cmp),
+          caption_tag("Table", next_table_n(),
+            "Each selected scenario against its own pressure scenario: for each Impact, whether the response neutralizes it, the share of the worsening it covers, or whether it worsens it; and the Impact to act on first.")
+        )
+      ))
+    }
+  }
+
   # Revisao 1, Fase 3: the sufficiency reading (R/sufficiency.R), one
   # subsection per selected scenario - the primary reading, matching the
-  # on-screen ordering in mod_responses.R. format_sufficiency_table()/
-  # format_reach_over_c_table() are the exact same functions the Scenarios
-  # tab uses for its own tables, so a number here can never drift from what
+  # on-screen ordering in mod_responses.R. format_sufficiency_table() is
+  # the exact same function the Scenarios
+  # tab uses for its own table, so a number here can never drift from what
   # the user saw live.
   if (length(selected_scenario_names) > 0 && length(saved_scenarios) > 0) {
     sufficiency_scenario_sections <- lapply(selected_scenario_names, function(scenario_name) {
@@ -199,40 +275,73 @@ build_full_report_html <- function(
 
       scenario_def <- scenario_definition_text(sc)
 
-      suff_table <- format_sufficiency_table(sc$sufficiency_df, sc$active, sc$strengths)
-      reach_table <- format_reach_over_c_table(sc$sufficiency_reach_over_c)
+      suff_table <- format_sufficiency_table(sc$sufficiency_df, sc$active, sc$strengths, sc$sr_sensitivity)
 
       tagList(
         tags$h4(scenario_name),
         tags$p(
           tags$strong("Pressure: "), scenario_def$pressure, tags$br(),
-          tags$strong("Response: "), scenario_def$response, tags$br(),
-          tags$strong("How far the effect was traced (c): "), scenario_def$c
+          tags$strong("Response: "), scenario_def$response,
+          # Revisao 3, E1.1: the pushes in the engine's unit (SD) and in the
+          # factors' own units when they have an sd.
+          if (!is.null(sc$p_D) && !is.null(sc$press)) tagList(
+            tags$br(), tags$strong("Pressure pushes: "), format_press_units_note(graph, sc$p_D),
+            tags$br(), tags$strong("Response pushes: "), format_press_units_note(graph, sc$press)
+          )
         ),
         report_html_table(suff_table),
         caption_tag(
           "Table", next_table_n(),
           sprintf(
-            "For \"%s\": how much the pressure scenario worsens each Impact, how much the response scenario mitigates it, and whether that mitigation is enough to neutralize the worsening.",
+            "For \"%s\": how much the pressure scenario worsens each Impact, how much the response scenario mitigates it, and whether that mitigation is enough to neutralize the worsening, in standard deviations of each Impact. Last column: whether the verdict is the same with every factor's self-regulation set to 0.25, 0.5, 0.75 and 1 (the reading shown equals 1; State triggers kept as in that reading).",
             scenario_name
           )
         ),
-        report_html_table(sc$sufficiency_confidence_matrix),
+        report_html_table(format_confidence_matrix(sc$sufficiency_confidence_matrix)),
+        {
+          m <- sc$sufficiency_confidence_matrix
+          note <- skipped_draws_note(attr(m, "skipped"), attr(m, "n_simulations") %||% sc$n_simulations)
+          nw <- not_worsened_note(attr(m, "not_worsened"))
+          tagList(if (!is.null(note)) tags$p(class = "report-warning", note),
+                  if (!is.null(nw)) tags$p(class = "report-note", nw))
+        },
         caption_tag(
           "Table", next_table_n(),
           sprintf(
-            "For \"%s\"'s pressure scenario: every response in the network evaluated alone at full strength (\"neutralization confidence\") - percentage of simulations (resampling each edge's weight within a range set by its confidence) in which that response alone neutralizes each Impact.",
+            "For \"%s\"'s pressure scenario: every response in the network evaluated alone at full strength (\"neutralization confidence\") - percentage of simulations (resampling each edge's strength within its uncertainty range) in which that response alone neutralizes each Impact.",
             scenario_name
           )
         ),
-        report_html_table(reach_table),
-        caption_tag(
-          "Table", next_table_n(),
-          sprintf(
-            "For \"%s\": whether the neutralization verdict for each Impact holds up across different settings of how far the effect is traced (c) - a scenario marked Borderline has a verdict that flips somewhere in that range.",
-            scenario_name
+        # Revisao 2, item C4: State triggers.
+        if (!is.null(sc$gates_pressure) && nrow(sc$gates_pressure) > 0) {
+          tagList(
+            tags$h5("State triggers"),
+            report_html_table(format_triggers_table(graph, sc$gates_pressure, sc$gates_net)),
+            caption_tag("Table", next_table_n(), sprintf(
+              "For \"%s\": each State with a threshold - its deviation (in standard deviations) under the pressure scenario alone and with the response, and whether its trigger is open (it passes its effect on) before and after the response.",
+              scenario_name
+            ))
           )
-        )
+        },
+        # Revisao 2, item B7: Impact prioritization.
+        if (!is.null(sc$prioritization) && nrow(sc$prioritization) > 0) {
+          tagList(
+            tags$h5("Impact prioritization"),
+            report_html_table(format_prioritization_table(sc$prioritization, sc$priority_robustness)),
+            priority_robustness_note(sc$priority_robustness, function(x) tags$p(x)),
+            if (!is.null(sc$priority_robustness) && nrow(sc$priority_robustness) > 0) tagList(
+              tags$img(src = plot_to_data_uri(function() draw_rank_stability_plot(sc$priority_robustness), width = 800, height = 340, res = figure_res), style = "max-width: 100%;"),
+              caption_tag("Figure", next_figure_n(), sprintf(
+                "For \"%s\": share of 500 variations (values v changed by up to 20%%, index as a product or a sum) in which each Impact ended at each rank; the tick marks its rank in the reading above.", scenario_name))
+            ),
+            caption_tag(
+              "Table", next_table_n(),
+              sprintf("For \"%s\": relevance of each Impact (value v x importance D x reliability) and priority (relevance x the share of the worsening the response leaves uncovered). %s", scenario_name, PRIORITIZATION_METHOD_NOTE)
+            ),
+            tags$img(src = plot_to_data_uri(function() draw_prioritization_plot(sc$prioritization), width = 800, height = 380, res = figure_res), style = "max-width: 100%;"),
+            caption_tag("Figure", next_figure_n(), sprintf("For \"%s\": relevance (bars) and priority (markers) of each worsened Impact.", scenario_name))
+          )
+        }
       )
     })
     sufficiency_scenario_sections <- Filter(Negate(is.null), sufficiency_scenario_sections)
@@ -242,7 +351,7 @@ build_full_report_html <- function(
         tags$h2("Response sufficiency"),
         tags$p(
           "For each selected scenario: whether the response is strong enough to neutralize the pressure's",
-          "worsening on each Impact, how confident that verdict is, and whether it holds up across different reach settings."
+          "worsening on each Impact, how confident that verdict is, and which Impact to prioritize."
         ),
         tagList(sufficiency_scenario_sections)
       ))
@@ -264,21 +373,27 @@ build_full_report_html <- function(
   # used throughout this project (e.g. R/responses.R's apply_response()).
   if (length(selected_scenario_names) > 0 && length(saved_scenarios) > 0) {
     total_impacts <- count_impacts_in_graph(graph)
-    reach_row <- function(scenario_name, reach) {
-      reached_impacts_row <- reach$by_category[reach$by_category$category == "Impact", "count"]
+    reach_row <- function(scenario_name, reach, eff = NULL) {
+      reached_impacts_row <- reach$impacts
       reached_impacts <- if (length(reached_impacts_row) == 0) 0L else reached_impacts_row
+      # Audit: the screen also says what the scenario reaches with its
+      # closed triggers (item C5); the report now does too.
+      in_scenario <- if (!is.null(eff) && length(eff$closed) > 0 && eff$total < reach$total) {
+        sprintf("%d (trigger closed: %s)", eff$total, paste(eff$closed_labels, collapse = ", "))
+      } else as.character(reach$total)
       data.frame(
         Scenario = scenario_name,
         `Factors reached` = reach$total,
         `Impacts reached` = sprintf("%d of %d", reached_impacts, total_impacts),
+        `Reached in this scenario` = in_scenario,
         check.names = FALSE,
         stringsAsFactors = FALSE
       )
     }
-    baseline_reach_row <- reach_row("Baseline", list(total = 0L, by_category = data.frame(category = character(), count = integer())))
+    baseline_reach_row <- reach_row("Baseline", list(total = 0L, by_category = data.frame(category = character(), count = integer())), NULL)
     reach_df <- do.call(rbind, c(
       list(baseline_reach_row),
-      lapply(selected_scenario_names, function(scenario_name) reach_row(scenario_name, saved_scenarios[[scenario_name]]$reach))
+      lapply(selected_scenario_names, function(scenario_name) reach_row(scenario_name, saved_scenarios[[scenario_name]]$reach, saved_scenarios[[scenario_name]]$reach_effective))
     ))
 
     sections <- c(sections, list(
@@ -308,9 +423,20 @@ build_full_report_html <- function(
         sc <- saved_scenarios[[scenario_name]]
         tr <- simulate_temporal_pair(
           graph, sc$p_D, sc$press,
-          windows = sc$temporal_windows %||% 5,
+          windows = max(1, sc$temporal_windows %||% 5),
           mode_D = sc$temporal_mode_pressure %||% "permanent",
-          mode_R = sc$temporal_mode_response %||% "impulse"
+          mode_R = sc$temporal_mode_response %||% "permanent",
+          # Revisao 2, item A5.
+          stop_rule = sc$temporal_stop_rule %||% "until_neutralized",
+          max_windows = max(1, sc$temporal_max_windows %||% 50),
+          baseline_without_response = isTRUE(sc$baseline_without_response),
+          gate_mode = if (identical(sc$temporal_gate_mode, "load")) "load" else "state_level",
+          # Revisao 2, Fase D.
+          schedule = sc$temporal_schedule,
+          trends_outside = !isFALSE(sc$temporal_trends_outside),
+          continue_after = sc$temporal_continue_after %||% 0,
+          # Audit: the report used the default tolerance, not the saved one.
+          tol_rel = max(0, sc$temporal_tol_rel %||% 5) / 100
         )
 
         stability_note <- temporal_stability_note(tr$stability)
@@ -320,7 +446,7 @@ build_full_report_html <- function(
         # node/baseline_impact/net_impact/verdict, como
         # format_temporal_table() as devolve) quanto a tabela em HTML
         # (renomeadas pra exibicao logo abaixo).
-        raw_df <- format_temporal_table(graph, tr)
+        raw_df <- format_temporal_table(graph, tr, tol_rel = tr$tol_rel)
 
         table_tag <- if (nrow(raw_df) == 0) {
           tags$p("No Impact factors in this network yet.")
@@ -344,14 +470,75 @@ build_full_report_html <- function(
         }
 
         img_uri <- plot_to_data_uri(
-          function() plot_temporal_storyboard(raw_df, reinforcing_warning = isTRUE(tr$stability$unbounded)),
-          width = 900, height = 700
+          function() plot_temporal_storyboard(raw_df, reinforcing_warning = isTRUE(tr$stability$unbounded), neutralized_at = tr$neutralized_at),
+          width = 900, height = 700, res = figure_res
         )
+
+        # Revisao 2, items A2/C0/C3: how the run ended, the trigger criterion
+        # and the levels in the factors' own units.
+        stop_tag <- tagList(
+          if (!is.null(temporal_stop_note(tr))) tags$p(temporal_stop_note(tr)),
+          lapply(tr$schedule_notes, function(n) tags$p(class = "report-warning", n))
+        )
+        # Revisao 2, Fase 4 (checklist): the settings behind the run.
+        mode_text <- function(m) switch(m %||% "permanent",
+          permanent = "added every window", impulse = "applied once and held", window = "for a set number of windows", m)
+        sched <- sc$temporal_schedule
+        if (is.data.frame(sched) && nrow(sched) > 0) {
+          windowed <- c(if (identical(sc$temporal_mode_pressure, "window")) sc$pressure_active,
+                        if (identical(sc$temporal_mode_response, "window")) sc$active)
+          sched <- sched[sched$id %in% windowed, , drop = FALSE]
+        }
+        sched_text <- if (is.data.frame(sched) && nrow(sched) > 0) {
+          labs <- V(graph)$label[match(sched$id, V(graph)$name)]
+          paste0(" Periods: ", paste(sprintf("%s windows %d-%d", labs, as.integer(sched$start), as.integer(sched$start + sched$duration - 1)), collapse = "; "), ".")
+        } else ""
+        settings_tag <- tags$p(sprintf(
+          "Settings: pressure %s; response %s; %s; neutralization tolerance %s%% of the baseline (labels and stop); growth trends %s.%s",
+          mode_text(sc$temporal_mode_pressure), mode_text(sc$temporal_mode_response),
+          if (identical(sc$temporal_stop_rule, "fixed")) sprintf("%d windows", as.integer(sc$temporal_windows %||% 5))
+          else sprintf("until neutralized (up to %d windows)", as.integer(sc$temporal_max_windows %||% 50)),
+          sc$temporal_tol_rel %||% 5,
+          if (isFALSE(sc$temporal_trends_outside)) "only for factors in the scenario" else "applied to every factor",
+          sched_text
+        ))
+        gate_tag <- if (nrow(tr$thresholds) > 0) {
+          tags$p(sprintf("Trigger criterion: %s.%s", if (identical(tr$gate_mode, "load")) "load arriving at the State in each window" else "accumulated State level",
+                         # Audit: "Compare both" is a screen-only view; the report runs the level criterion.
+                         if (identical(sc$temporal_gate_mode, "compare")) " (\"Compare both\" was selected on screen; the report shows the level criterion - switch to \"load\" and save again to report the other.)" else ""))
+        } else NULL
+        level_df <- temporal_level_table(graph, tr)
+        level_tag <- if (nrow(level_df) > 0) {
+          tagList(
+            report_html_table(level_df),
+            caption_tag("Table", next_table_n(), sprintf(
+              "For \"%s\": level of each factor with an initial value, in its own units, at the last window (initial level + typical variation x deviation), without and with the response.",
+              scenario_name
+            ))
+          )
+        } else NULL
+
+        # Revisao 2, item D3: edge intensity by window.
+        int_df <- edge_intensity_table(graph, tr)
+        int_tag <- if (nrow(int_df) > 0) {
+          tagList(
+            report_html_table(int_df),
+            caption_tag("Table", next_table_n(), sprintf(
+              "For \"%s\": what each edge leaving a growing factor or a thresholded State passes on per window (strength x source level, deviation + growth trend), in the scenario run.",
+              scenario_name
+            ))
+          )
+        } else NULL
 
         tagList(
           tags$h4(scenario_name),
           note_tag,
+          settings_tag,
+          stop_tag,
+          gate_tag,
           table_tag,
+          level_tag,
+          int_tag,
           tags$img(class = "report-graph-image", src = img_uri),
           caption_tag(
             "Figure", next_figure_n(),
@@ -407,6 +594,21 @@ build_full_report_html <- function(
   # appendix heading.
   appendix_sections <- list()
 
+  # Revisao 3: the network drawn for print (DPSIR columns, sign legend).
+  if (isTRUE(include_static_network) && !is.null(graph) && igraph::vcount(graph) > 0) {
+    h_mm <- network_static_height_mm(graph, schema, 190, 8, layout = network_layout, edge_style = network_edge_style)
+    px_w <- 900; px_h <- round(px_w * h_mm / 190)
+    appendix_sections <- c(appendix_sections, list(
+      tags$h3("Network"),
+      tags$img(src = plot_to_data_uri(function() draw_network_static(graph, schema, layout = network_layout, edge_style = network_edge_style),
+                                      width = px_w, height = px_h, res = figure_res), style = "max-width: 100%;"),
+      caption_tag("Figure", next_figure_n(),
+        paste(if (identical(network_layout, "circle")) "The network on a circle, grouped by DPSIR level in the order of the model." else "The network by DPSIR level (columns, in the order of the model).",
+              if (identical(network_edge_style, "linetype")) "Solid links with an arrowhead increase their target, dashed links ending in a bar decrease it; line width shows the strength class (weak, moderate, strong)."
+              else "Green links increase their target, red ones decrease it; line width is proportional to the strength |beta|."))
+    ))
+  }
+
   if (length(selected_snapshot_names) > 0 && length(graph_snapshots) > 0) {
     snapshot_sections <- lapply(selected_snapshot_names, function(snapshot_name) {
       snap <- graph_snapshots[[snapshot_name]]
@@ -427,7 +629,15 @@ build_full_report_html <- function(
       caption_tag(
         "Table", next_table_n(),
         "Network-level metrics (density, diameter, transitivity, modularity, number of connected components) computed over the full built graph."
-      )
+      ),
+      tags$h3("Strength and confidence of the network"),
+      report_html_table((nsc <- network_strength_confidence(graph))$summary),
+      caption_tag(
+        "Table", next_table_n(),
+        "How strong the network is (link classes, explained variance, loop amplification, Driver-to-Impact total effects) and how well founded its strengths are (origin of the strengths, band widths, evidence and references, expected absent links, sign and interval of the total effects under the link bands, 200 draws). Static reading, without State triggers."
+      ),
+      report_html_table(nsc$by_transition),
+      caption_tag("Table", next_table_n(), "The same by transition between categories; least founded first.")
     ))
   }
 
@@ -475,10 +685,7 @@ build_full_report_html <- function(
       tags$p(
         tags$strong("Pressures not covered by Response: "),
         if (length(d$pressures_without_response) == 0) "none" else paste(d$pressures_without_response, collapse = ", ")
-      ),
-      tags$h4("Average uncertainty/controllability by category (0 = low, 1 = high)"),
-      report_html_table(d$averages_by_category),
-      caption_tag("Table", next_table_n(), "Mean uncertainty and controllability score per DPSIR category, on a 0 (low) to 1 (high) scale.")
+      )
     ))
 
     dp <- compute_all_driver_impact_pathways(graph, schema)
@@ -489,18 +696,14 @@ build_full_report_html <- function(
         ""
       }
 
-      pathways_df <- dp$table[, c("nodes", "length", "score")]
-      names(pathways_df) <- c("Pathway", "Length (nodes)", "Score")
+      pathways_df <- format_pathways_table(dp$table)
 
       appendix_sections <- c(appendix_sections, list(
         tags$h4("All Driver-to-Impact pathways"),
         report_html_table(pathways_df),
         caption_tag(
           "Table", next_table_n(),
-          paste0(
-            "Every simple causal chain from a Driver to an Impact in this network, ranked by score ",
-            "(mean edge weight x mean confidence x number of links).", truncated_note
-          )
+          paste0(PATHWAYS_CAPTION, truncated_note)
         )
       ))
     }
@@ -530,9 +733,22 @@ build_full_report_html <- function(
       caption_tag("Table", next_table_n(), "R and package versions used to generate this report."),
       tags$h3("Analysis parameters"),
       tags$p(
-        "\"How confident is that, response by response?\" resamples every edge's weight ",
-        tags$code("n_simulations = 300"), " times within a range set by its confidence and ",
-        tags$code("spread = 0.5"), ", using a fixed random seed (", tags$code("seed = 42"), ") so that",
+        "\"How confident is that, response by response?\" resamples every edge's strength (beta) ",
+        tags$code(sprintf("n_simulations = %s", {
+          sims <- unique(vapply(saved_scenarios[intersect(selected_scenario_names, names(saved_scenarios))],
+                                function(sc) as.character(sc$n_simulations %||% 300), character(1)))
+          if (length(sims) == 0) "300" else paste(sims, collapse = "/")
+        })),
+        " times (as set when each scenario was applied), uniformly within its uncertainty range",
+        {
+          st <- vapply(saved_scenarios[intersect(selected_scenario_names, names(saved_scenarios))],
+                       function(sc) isTRUE(sc$structural_uncertainty), logical(1))
+          if (any(st)) paste0("; with structural uncertainty (", paste(names(st)[st], collapse = ", "),
+                              "), each link is also absent with probability 0.2 (expert assessment, policy or blank), 0.1 (literature, observational) or 0 (definition, regression, calibration, or a strength estimated from data)")
+          else ""
+        },
+        ", ",
+        "using a fixed random seed (", tags$code("seed = 42"), ") so that",
         " regenerating this report from the same savepoint reproduces the exact same numbers."
       )
     ))

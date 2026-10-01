@@ -2,6 +2,21 @@
 # VALIDACAO - NOS E ARESTAS (SCHEMA-DRIVEN)
 # =====================================================
 
+# Revisao 2, item A8 (D20): share of a factor's deviation that fades by
+# itself each window, for nodes that do not say otherwise.
+DEFAULT_SELF_REGULATION <- 0.5
+
+# Revisao 2, item B1: endpoint classes of an Impact (specification V1).
+get_endpoint_classes <- function() c("ecological", "service", "welfare")
+
+# Revisao 2, item B6: sign vocabulary of the relevance specification.
+interaction_type_aliases <- function() {
+  c(
+    increases = "positive", triggers = "positive", improves = "positive", sustains = "positive",
+    reduces = "negative", mitigates = "negative", decreases = "negative"
+  )
+}
+
 get_required_dpsir_node_fields <- function() {
   c("id", "label", "dpsir_category")
 }
@@ -12,13 +27,17 @@ get_required_dpsir_edge_fields <- function() {
 
 get_known_dpsir_node_fields <- function() {
   c(
-    "id", "label", "dpsir_category", "subsystem", "uncertainty", "controllability",
-    "self_regulation", "growth_rate", "reference_value", "activation_threshold", "descriptor"
+    "id", "label", "dpsir_category", "subsystem",
+    "self_regulation", "growth_rate", "reference_value", "activation_threshold", "descriptor",
+    "endpoint_class", "value_v", "sd", "threshold_level", "threshold_direction", "growth_cap"
   )
 }
 
 get_known_dpsir_edge_fields <- function() {
-  c("from", "to", "weight", "confidence", "interaction_type", "evidence_type", "reference")
+  c(
+    "from", "to", "weight", "weight_low", "weight_high", "strength_class", "weight_source",
+    "confidence", "interaction_type", "evidence_type", "reference"
+  )
 }
 
 # =====================================================
@@ -68,10 +87,11 @@ preflight_import_nodes <- function(nodes_raw, schema = get_default_dpsir_schema(
   }
 
   optional_defaults <- c(
-    uncertainty = "0.5", controllability = "0.5",
-    self_regulation = "0", growth_rate = "0", reference_value = "1",
-    activation_threshold = "blank (no threshold)", descriptor = "blank"
+    self_regulation = "0.5 (half of a deviation fades each window)", growth_rate = "0",
+    reference_value = "blank (results in the model's own units)", descriptor = "blank"
   )
+  # Revisao 2, item B1: Impact-only fields - a missing column is normal (not
+  # warned about), every Impact then defaults to ecological / value 1.
   missing_optional <- setdiff(names(optional_defaults), present)
   if (length(missing_optional) > 0) {
     warn <- c(warn, sprintf(
@@ -93,31 +113,9 @@ preflight_import_nodes <- function(nodes_raw, schema = get_default_dpsir_schema(
   }
 
   if (nrow(nodes_raw) > 0) {
-    for (field in c("uncertainty", "controllability")) {
-      if (field %in% present) {
-        raw <- nodes_raw[[field]]
-        legacy_levels <- c("low", "medium", "high") # pre-Revisao-1 vocabulary, still accepted
-        raw_chr <- trimws(as.character(raw))
-        blank <- .pf_is_blank(raw)
-        is_legacy <- raw_chr %in% legacy_levels
-        numeric_vals <- suppressWarnings(as.numeric(raw))
-        bad_type <- which(!blank & !is_legacy & is.na(numeric_vals))
-        if (length(bad_type) > 0) {
-          blocking <- c(blocking, sprintf(
-            "Nodes file, row %d: %s '%s' is not a number.",
-            bad_type + 1, field, raw_chr[bad_type]
-          ))
-        }
-        bad_range <- which(!blank & !is_legacy & !is.na(numeric_vals) & (numeric_vals < 0 | numeric_vals > 1))
-        if (length(bad_range) > 0) {
-          blocking <- c(blocking, sprintf(
-            "Nodes file, row %d: %s %s is outside the valid range [0, 1].",
-            bad_range + 1, field, numeric_vals[bad_range]
-          ))
-        }
-      }
-    }
-
+    # Revisao 2 (30/09): uncertainty/controllability were removed - they never
+    # entered any calculation; an older file's columns are reported as not
+    # recognized and ignored.
     if ("self_regulation" %in% present) {
       raw <- nodes_raw$self_regulation
       legacy_levels <- c("none", "low", "medium", "high") # pre-Revisao-1 vocabulary, still accepted
@@ -132,11 +130,17 @@ preflight_import_nodes <- function(nodes_raw, schema = get_default_dpsir_schema(
           bad_type + 1, raw_chr[bad_type]
         ))
       }
-      bad_range <- which(!blank & !is_legacy & !is.na(numeric_vals) & (numeric_vals < 0 | numeric_vals >= 1))
+      # Revisao 2, item A8: 1 is allowed now (no memory, D20).
+      bad_range <- which(!blank & !is_legacy & !is.na(numeric_vals) & (numeric_vals < 0 | numeric_vals > 1))
       if (length(bad_range) > 0) {
         blocking <- c(blocking, sprintf(
-          "Nodes file, row %d: self_regulation %s is outside the valid range [0, 1).",
+          "Nodes file, row %d: self_regulation %s is outside the valid range [0, 1].",
           bad_range + 1, numeric_vals[bad_range]
+        ))
+      }
+      if (any(blank)) {
+        warn <- c(warn, sprintf(
+          "Nodes file, row %d: self_regulation is blank - defaults to 0.5.", which(blank) + 1
         ))
       }
     }
@@ -155,7 +159,7 @@ preflight_import_nodes <- function(nodes_raw, schema = get_default_dpsir_schema(
       }
       has_value <- !blank & !is.na(numeric_vals)
       is_state <- if ("dpsir_category" %in% present) {
-        trimws(as.character(nodes_raw$dpsir_category)) == "State"
+        roles_of(trimws(as.character(nodes_raw$dpsir_category)), schema) %in% "state"
       } else {
         rep(TRUE, nrow(nodes_raw))
       }
@@ -171,6 +175,112 @@ preflight_import_nodes <- function(nodes_raw, schema = get_default_dpsir_schema(
         blocking <- c(blocking, sprintf(
           "Nodes file, row %d: activation_threshold %s is outside the valid range [0, 1].",
           bad_range + 1, numeric_vals[bad_range]
+        ))
+      }
+    }
+  }
+
+  # Revisao 2, item D4: growth rate (g <= -1 would flip the base level's
+  # sign; above 0.5 per window is unusual) and the optional growth ceiling.
+  if (nrow(nodes_raw) > 0 && "growth_rate" %in% present) {
+    raw <- nodes_raw$growth_rate
+    vals <- suppressWarnings(as.numeric(raw))
+    filled <- !.pf_is_blank(raw)
+    bad <- which(filled & is.na(vals))
+    if (length(bad) > 0) {
+      blocking <- c(blocking, sprintf("Nodes file, row %d: growth_rate '%s' is not a number.", bad + 1, trimws(as.character(raw))[bad]))
+    }
+    low <- which(filled & !is.na(vals) & vals <= -1)
+    if (length(low) > 0) {
+      blocking <- c(blocking, sprintf("Nodes file, row %d: growth_rate %s must be greater than -1.", low + 1, vals[low]))
+    }
+    high <- which(filled & !is.na(vals) & vals > 0.5)
+    if (length(high) > 0) {
+      warn <- c(warn, sprintf("Nodes file, row %d: growth_rate %s is above 0.5 per window - check the window length.", high + 1, vals[high]))
+    }
+  }
+  if (nrow(nodes_raw) > 0 && "growth_cap" %in% present) {
+    raw <- nodes_raw$growth_cap
+    vals <- suppressWarnings(as.numeric(raw))
+    bad <- which(!.pf_is_blank(raw) & (is.na(vals) | vals <= 0))
+    if (length(bad) > 0) {
+      blocking <- c(blocking, sprintf("Nodes file, row %d: growth_cap '%s' must be a number greater than 0.", bad + 1, trimws(as.character(raw))[bad]))
+    }
+  }
+
+  # Revisao 2, item C0: measurement layer.
+  if (nrow(nodes_raw) > 0) {
+    for (field in c("reference_value", "sd")) {
+      if (field %in% present) {
+        raw <- nodes_raw[[field]]
+        vals <- suppressWarnings(as.numeric(raw))
+        bad <- which(!.pf_is_blank(raw) & (is.na(vals) | vals <= 0))
+        if (length(bad) > 0) {
+          blocking <- c(blocking, sprintf(
+            "Nodes file, row %d: %s '%s' must be a number greater than 0.", bad + 1, field, trimws(as.character(raw))[bad]
+          ))
+        }
+      }
+    }
+    if ("threshold_level" %in% present) {
+      raw <- nodes_raw$threshold_level
+      vals <- suppressWarnings(as.numeric(raw))
+      filled <- !.pf_is_blank(raw)
+      bad <- which(filled & is.na(vals))
+      if (length(bad) > 0) {
+        blocking <- c(blocking, sprintf("Nodes file, row %d: threshold_level '%s' is not a number.", bad + 1, trimws(as.character(raw))[bad]))
+      }
+      is_state <- if ("dpsir_category" %in% present) roles_of(trimws(as.character(nodes_raw$dpsir_category)), schema) %in% "state" else rep(TRUE, nrow(nodes_raw))
+      not_state <- which(filled & !is_state)
+      if (length(not_state) > 0) {
+        blocking <- c(blocking, sprintf("Nodes file, row %d: threshold_level is only for State factors.", not_state + 1))
+      }
+    }
+    if ("threshold_direction" %in% present) {
+      raw <- nodes_raw$threshold_direction
+      vals <- tolower(trimws(as.character(raw)))
+      bad <- which(!.pf_is_blank(raw) & !vals %in% c("auto", "both"))
+      if (length(bad) > 0) {
+        blocking <- c(blocking, sprintf("Nodes file, row %d: threshold_direction '%s' must be auto or both.", bad + 1, vals[bad]))
+      }
+    }
+  }
+
+  # Revisao 2, item B1: endpoint_class / value_v - Impact nodes only.
+  if (nrow(nodes_raw) > 0 && "dpsir_category" %in% present) {
+    is_impact <- roles_of(trimws(as.character(nodes_raw$dpsir_category)), schema) %in% "impact"
+    if ("endpoint_class" %in% present) {
+      raw <- nodes_raw$endpoint_class
+      vals <- tolower(trimws(as.character(raw)))
+      filled <- !.pf_is_blank(raw)
+      bad <- which(filled & !vals %in% get_endpoint_classes())
+      if (length(bad) > 0) {
+        blocking <- c(blocking, sprintf(
+          "Nodes file, row %d: endpoint_class '%s' must be one of %s.",
+          bad + 1, vals[bad], paste(get_endpoint_classes(), collapse = ", ")
+        ))
+      }
+      not_impact <- which(filled & !is_impact)
+      if (length(not_impact) > 0) {
+        blocking <- c(blocking, sprintf(
+          "Nodes file, row %d: endpoint_class is only for Impact factors.", not_impact + 1
+        ))
+      }
+    }
+    if ("value_v" %in% present) {
+      raw <- nodes_raw$value_v
+      vals <- suppressWarnings(as.numeric(raw))
+      filled <- !.pf_is_blank(raw)
+      bad <- which(filled & (is.na(vals) | vals < 0 | vals > 1))
+      if (length(bad) > 0) {
+        blocking <- c(blocking, sprintf(
+          "Nodes file, row %d: value_v '%s' must be a number in [0, 1].", bad + 1, trimws(as.character(raw))[bad]
+        ))
+      }
+      not_impact <- which(filled & !is_impact)
+      if (length(not_impact) > 0) {
+        blocking <- c(blocking, sprintf(
+          "Nodes file, row %d: value_v is only for Impact factors.", not_impact + 1
         ))
       }
     }
@@ -203,8 +313,14 @@ preflight_import_edges <- function(edges_raw) {
     ))
   }
 
+  # Revisao 2, item 0.7: interaction_type is no longer optional - the sign
+  # of an edge has no safe default (a missing sign used to silently become
+  # +1, i.e. "increases"), so a missing column blocks the import below.
+  # Revisao 2, Fase 1: weight is |beta|; blank = the class given in
+  # strength_class, or "moderate" (0.45). The band comes from
+  # weight_low/weight_high, or the (legacy) confidence, or the class.
   optional_defaults <- c(
-    weight = "1", confidence = "1", interaction_type = "an uncolored/undashed edge",
+    weight = "its strength_class, or 'moderate' (0.45) when that is blank too",
     evidence_type = "blank", reference = "blank"
   )
   missing_optional <- setdiff(names(optional_defaults), present)
@@ -216,14 +332,36 @@ preflight_import_edges <- function(edges_raw) {
   }
 
   if (length(missing_required) == 0) {
-    if ("interaction_type" %in% present) {
+    if (!"interaction_type" %in% present) {
+      blocking <- c(blocking, paste(
+        "Edges file: missing column 'interaction_type'. Every edge needs a sign",
+        "(positive = increases the target, negative = reduces it); there is no safe default."
+      ))
+    } else {
       raw <- edges_raw$interaction_type
       vals <- trimws(as.character(raw))
-      bad <- which(!.pf_is_blank(raw) & !vals %in% c("positive", "negative"))
+      blank <- .pf_is_blank(raw)
+      # Revisao 2, item B6: the vocabulary of the relevance specification
+      # (increases/reduces/...) is accepted and mapped to positive/negative.
+      aliased <- !blank & tolower(vals) %in% names(interaction_type_aliases())
+      if (any(aliased)) {
+        warn <- c(warn, sprintf(
+          "Edges file: %d interaction_type value(s) mapped to positive/negative (%s).",
+          sum(aliased), paste(unique(tolower(vals[aliased])), collapse = ", ")
+        ))
+        vals[aliased] <- interaction_type_aliases()[tolower(vals[aliased])]
+      }
+      bad <- which(!blank & !vals %in% c("positive", "negative"))
       if (length(bad) > 0) {
         blocking <- c(blocking, sprintf(
           "Edges file, row %d: interaction_type '%s' must be positive or negative.",
           bad + 1, vals[bad]
+        ))
+      }
+      if (any(blank)) {
+        blocking <- c(blocking, sprintf(
+          "Edges file, row %d: interaction_type is empty - every edge needs a sign (positive or negative).",
+          which(blank) + 1
         ))
       }
     }
@@ -243,6 +381,52 @@ preflight_import_edges <- function(edges_raw) {
       if (length(bad_range) > 0) {
         blocking <- c(blocking, sprintf(
           "Edges file, row %d: weight %s must be greater than 0.", bad_range + 1, numeric_vals[bad_range]
+        ))
+      }
+      # Revisao 2, Fase 1: a standardized beta above 1 is possible (multiple
+      # regression with correlated sources) but unusual - warn, don't block.
+      above_one <- which(!blank & !is.na(numeric_vals) & numeric_vals > 1)
+      if (length(above_one) > 0) {
+        warn <- c(warn, sprintf(
+          "Edges file, row %d: weight %s is above 1 - unusual for a standardized strength (beta). If this is an older file with relative weights, tick 'Convert from older relative weights'.",
+          above_one + 1, numeric_vals[above_one]
+        ))
+      }
+    }
+
+    if ("strength_class" %in% present) {
+      raw <- edges_raw$strength_class
+      vals <- tolower(trimws(as.character(raw)))
+      bad <- which(!.pf_is_blank(raw) & !vals %in% strength_classes()$class)
+      if (length(bad) > 0) {
+        blocking <- c(blocking, sprintf(
+          "Edges file, row %d: strength_class '%s' must be weak, moderate or strong.", bad + 1, vals[bad]
+        ))
+      }
+    }
+
+    band <- list()
+    for (field in c("weight_low", "weight_high")) {
+      if (field %in% present) {
+        raw <- edges_raw[[field]]
+        vals <- suppressWarnings(as.numeric(raw))
+        bad <- which(!.pf_is_blank(raw) & (is.na(vals) | vals < 0))
+        if (length(bad) > 0) {
+          blocking <- c(blocking, sprintf(
+            "Edges file, row %d: %s '%s' must be a number of at least 0.", bad + 1, field, trimws(as.character(raw))[bad]
+          ))
+        }
+        band[[field]] <- vals
+      }
+    }
+    if (length(band) == 2) {
+      w <- if ("weight" %in% present) suppressWarnings(as.numeric(edges_raw$weight)) else rep(NA_real_, nrow(edges_raw))
+      bad <- which(!is.na(band$weight_low) & !is.na(band$weight_high) & band$weight_low > band$weight_high)
+      bad <- union(bad, which(!is.na(w) & !is.na(band$weight_low) & band$weight_low > w))
+      bad <- union(bad, which(!is.na(w) & !is.na(band$weight_high) & band$weight_high < w))
+      if (length(bad) > 0) {
+        blocking <- c(blocking, sprintf(
+          "Edges file, row %d: the uncertainty band (weight_low to weight_high) must contain the weight.", sort(bad) + 1
         ))
       }
     }
@@ -284,37 +468,20 @@ preflight_import <- function(nodes_raw, edges_raw = NULL, schema = get_default_d
   )
 }
 
-normalize_dpsir_nodes <- function(nodes) {
+normalize_dpsir_nodes <- function(nodes, schema = get_default_dpsir_schema()) {
   nodes <- as.data.frame(nodes, stringsAsFactors = FALSE)
   nodes$id <- trimws(as.character(nodes$id))
   nodes$label <- as.character(nodes$label)
   nodes$dpsir_category <- trimws(as.character(nodes$dpsir_category))
+  # Audit: an imported file without `subsystem` crashed the Graph tab's
+  # subsystem filter; it is optional, so default to empty.
+  if (!"subsystem" %in% names(nodes)) nodes$subsystem <- if (nrow(nodes) == 0) character() else ""
+  nodes$subsystem <- ifelse(is.na(nodes$subsystem), "", as.character(nodes$subsystem))
 
-  # uncertainty/controllability deixaram de ser um vocabulario categorico
-  # (low/medium/high) e viraram uma fracao continua em [0,1] - nunca
-  # entraram em nenhum calculo (so leitura: borda do no, tooltip, media
-  # por categoria), entao a mudanca e so de representacao, sem nenhuma
-  # equacao pra reavaliar (diferente de self_regulation, ver abaixo, que
-  # precisou virar numerico especificamente pra ser usado no motor
-  # temporal). 0.5 e o default tanto pra coluna ausente quanto pra valor
-  # em branco - "moderado/nao informado", o mesmo papel que "medium" jogava
-  # no vocabulario antigo, sem favorecer nem alta nem baixa incerteza por
-  # omissao. Um savepoint/CSV de antes desta mudanca ainda pode trazer as
-  # strings antigas - mapeadas aqui pra nao quebrar ao carregar, mesmo
-  # padrao de legado ja usado por self_regulation logo abaixo.
-  for (field in c("uncertainty", "controllability")) {
-    if (!field %in% names(nodes)) {
-      nodes[[field]] <- 0.5
-    } else {
-      raw <- nodes[[field]]
-      legacy_levels <- c(low = 0.2, medium = 0.5, high = 0.8)
-      is_legacy_string <- as.character(raw) %in% names(legacy_levels)
-      numeric_values <- suppressWarnings(as.numeric(raw))
-      numeric_values[is_legacy_string] <- legacy_levels[as.character(raw)[is_legacy_string]]
-      numeric_values[is.na(numeric_values)] <- 0.5
-      nodes[[field]] <- numeric_values
-    }
-  }
+  # Revisao 2 (30/09): uncertainty/controllability removed (never used in
+  # any calculation); dropped from older files, like temporal_scale.
+  nodes$uncertainty <- NULL
+  nodes$controllability <- NULL
 
   # Revisao 1, Fase 5: self_regulation deixou de ser um vocabulario
   # categorico (none/low/medium/high) e virou uma fracao continua em
@@ -325,15 +492,19 @@ normalize_dpsir_nodes <- function(nodes) {
   # self_regulation_diagonal(). Um savepoint/CSV de antes desta mudanca
   # ainda pode trazer as strings antigas - mapeadas aqui pra um valor
   # numerico so pra nao quebrar ao carregar, nao e o caminho principal.
+  # Revisao 2, item A8 (D20): the default is 0.5 - half of a deviation
+  # fades each window. A file that already has the column keeps the values
+  # it stores; an older savepoint without the column keeps its old
+  # behaviour (0), set by read_savepoint() before normalizing.
   if (!"self_regulation" %in% names(nodes)) {
-    nodes$self_regulation <- 0
+    nodes$self_regulation <- DEFAULT_SELF_REGULATION
   } else {
     raw <- nodes$self_regulation
     legacy_levels <- c(none = 0, low = 0.2, medium = 0.4, high = 0.6)
     is_legacy_string <- as.character(raw) %in% names(legacy_levels)
     numeric_values <- suppressWarnings(as.numeric(raw))
     numeric_values[is_legacy_string] <- legacy_levels[as.character(raw)[is_legacy_string]]
-    numeric_values[is.na(numeric_values)] <- 0
+    numeric_values[is.na(numeric_values)] <- DEFAULT_SELF_REGULATION
     nodes$self_regulation <- numeric_values
   }
 
@@ -347,15 +518,31 @@ normalize_dpsir_nodes <- function(nodes) {
     nodes$growth_rate[is.na(nodes$growth_rate)] <- 0
   }
 
-  # Revisao 1, Fase 5: escala de referencia do no, usada so pra tornar
-  # `threshold` (aresta) relativo em vez de absoluto - ver R/temporal.R.
-  # Opcional, default 1 (threshold se comporta como magnitude absoluta,
-  # igual a antes desta coluna existir).
+  # Revisao 2, item C0 (D23): the measurement layer. reference_value is the
+  # factor's initial level (> 0) and sd its typical variation, both in the
+  # factor's own units. Blank stays NA (the engine then uses 1, i.e. the
+  # model's own units) - no longer silently turned into 1, so the app can
+  # tell "not given" from "1".
   if (!"reference_value" %in% names(nodes)) {
-    nodes$reference_value <- 1
+    nodes$reference_value <- NA_real_
   } else {
     nodes$reference_value <- suppressWarnings(as.numeric(nodes$reference_value))
-    nodes$reference_value[is.na(nodes$reference_value) | nodes$reference_value == 0] <- 1
+    nodes$reference_value[!is.na(nodes$reference_value) & nodes$reference_value <= 0] <- NA_real_
+  }
+  # Revisao 2, Fase D: optional ceiling (or floor, for a negative growth
+  # rate) of the base level reached through growth, in the factor's own
+  # units. Blank = no ceiling.
+  if (!"growth_cap" %in% names(nodes)) {
+    nodes$growth_cap <- NA_real_
+  } else {
+    nodes$growth_cap <- suppressWarnings(as.numeric(nodes$growth_cap))
+    nodes$growth_cap[!is.na(nodes$growth_cap) & nodes$growth_cap <= 0] <- NA_real_
+  }
+  if (!"sd" %in% names(nodes)) {
+    nodes$sd <- NA_real_
+  } else {
+    nodes$sd <- suppressWarnings(as.numeric(nodes$sd))
+    nodes$sd[!is.na(nodes$sd) & nodes$sd <= 0] <- NA_real_
   }
 
   # Descricao livre e opcional do no (uma frase explicando o que o fator
@@ -378,11 +565,27 @@ normalize_dpsir_nodes <- function(nodes) {
   # de sempre: ausente/NA e o caso normal ("sempre ligado", comportamento
   # de hoje), so significativo pra um no de categoria State - validado no
   # formulario (mod_data.R), nao aqui.
-  if (!"activation_threshold" %in% names(nodes)) {
-    nodes$activation_threshold <- NA_real_
-  } else {
-    nodes$activation_threshold <- suppressWarnings(as.numeric(nodes$activation_threshold))
+  # Revisao 2, item C0 (D23): the State's threshold is a LEVEL in the
+  # factor's own units (threshold_level), with a direction: "auto" (from the
+  # sign of level - reference: below it = a falling State, above = a rising
+  # one) or "both" (either way). The older activation_threshold (a fraction
+  # f of reference_value, direction-free, |x| / ref >= f) is converted to
+  # level = ref * (1 - f) with direction "both", which reproduces the older
+  # criterion exactly (engine unit sd = 1: |x| >= f * ref), then dropped.
+  level <- if ("threshold_level" %in% names(nodes)) suppressWarnings(as.numeric(nodes$threshold_level)) else rep(NA_real_, nrow(nodes))
+  direction <- if ("threshold_direction" %in% names(nodes)) tolower(trimws(as.character(nodes$threshold_direction))) else rep(NA_character_, nrow(nodes))
+  if ("activation_threshold" %in% names(nodes)) {
+    f <- suppressWarnings(as.numeric(nodes$activation_threshold))
+    legacy <- !is.na(f) & is.na(level)
+    ref_eff <- ifelse(is.na(nodes$reference_value), 1, nodes$reference_value)
+    level[legacy] <- ref_eff[legacy] * (1 - f[legacy])
+    direction[legacy] <- "both"
   }
+  direction[is.na(direction) | direction == ""] <- "auto"
+  direction[is.na(level)] <- NA_character_
+  nodes$threshold_level <- level
+  nodes$threshold_direction <- direction
+  nodes$activation_threshold <- NULL
 
   # `temporal_scale` foi aposentado (ver R/schema.R) - removida aqui, nao
   # so ignorada, se um savepoint/CSV antigo ainda trouxer a coluna.
@@ -403,6 +606,22 @@ normalize_dpsir_nodes <- function(nodes) {
   # dados de origem (savepoint/CSV) tinham `temporal_scale` ou nao.
   nodes$temporal_scale <- NULL
 
+  # Revisao 2, item B1 (specification V1): an Impact is an ecological,
+  # service or welfare endpoint, with a social value v in [0, 1] (forced to
+  # 1 for ecological endpoints). Blank for every other category.
+  # Revisao 2, item 2.6: by role, so a renamed impact level still counts.
+  is_impact <- roles_of(nodes$dpsir_category, schema) %in% "impact"
+  ec <- if ("endpoint_class" %in% names(nodes)) tolower(trimws(as.character(nodes$endpoint_class))) else rep(NA_character_, nrow(nodes))
+  ec[is.na(ec) | ec == ""] <- NA_character_
+  ec[is_impact & is.na(ec)] <- "ecological"
+  ec[!is_impact] <- NA_character_
+  nodes$endpoint_class <- ec
+
+  v <- if ("value_v" %in% names(nodes)) suppressWarnings(as.numeric(nodes$value_v)) else rep(NA_real_, nrow(nodes))
+  v[is_impact & (is.na(v) | ec == "ecological")] <- 1
+  v[!is_impact] <- NA_real_
+  nodes$value_v <- v
+
   nodes
 }
 
@@ -416,13 +635,19 @@ normalize_dpsir_edges <- function(edges) {
   edges$from <- trimws(as.character(edges$from))
   edges$to <- trimws(as.character(edges$to))
 
-  if ("weight" %in% names(edges)) {
-    edges$weight <- as.numeric(edges$weight)
+  # Revisao 2, item B6: sign aliases -> positive/negative.
+  if ("interaction_type" %in% names(edges)) {
+    it <- trimws(as.character(edges$interaction_type))
+    aliased <- !is.na(it) & tolower(it) %in% names(interaction_type_aliases())
+    it[aliased] <- interaction_type_aliases()[tolower(it[aliased])]
+    edges$interaction_type <- it
   }
 
-  if ("confidence" %in% names(edges)) {
-    edges$confidence <- as.numeric(edges$confidence)
-  }
+  # Revisao 2, item 0.7 + Fase 1: every edge ends up with |beta|, an
+  # uncertainty band, a class and where its value came from - a blank CELL
+  # gets the class/default value too, not only a missing column
+  # (R/structural.R, normalize_edge_strength()).
+  edges <- normalize_edge_strength(edges)
 
   # `threshold` foi movido de aresta pra no (ver normalize_dpsir_nodes()'s
   # `activation_threshold`) - removida aqui, nao so ignorada, pelo mesmo
@@ -502,7 +727,7 @@ validate_dpsir_nodes <- function(nodes, schema = get_default_dpsir_schema()) {
     "Nodes table"
   )
 
-  nodes <- normalize_dpsir_nodes(nodes)
+  nodes <- normalize_dpsir_nodes(nodes, schema)
 
   validate_unique_node_ids(nodes)
   validate_dpsir_categories(nodes, schema)
@@ -587,7 +812,7 @@ validate_dpsir_edges <- function(nodes, edges, schema = get_default_dpsir_schema
     "Edges table"
   )
 
-  nodes <- normalize_dpsir_nodes(nodes)
+  nodes <- normalize_dpsir_nodes(nodes, schema)
   edges <- normalize_dpsir_edges(edges)
 
   if (nrow(edges) == 0) {
@@ -596,6 +821,22 @@ validate_dpsir_edges <- function(nodes, edges, schema = get_default_dpsir_schema
 
   validate_edge_node_existence(nodes, edges)
   validate_dpsir_edge_logic(nodes, edges, schema)
+
+  # Revisao 2, item 0.7: a blank sign used to be read as +1 by
+  # build_interaction_matrix(). It is an error now, wherever the edge came
+  # from (form, CSV, savepoint).
+  sign <- if ("interaction_type" %in% names(edges)) trimws(as.character(edges$interaction_type)) else rep(NA_character_, nrow(edges))
+  bad_sign <- which(is.na(sign) | !sign %in% c("positive", "negative"))
+  if (length(bad_sign) > 0) {
+    stop(
+      paste0(
+        "Every edge needs a sign (positive or negative). Missing or invalid on: ",
+        paste(sprintf("%s -> %s", edges$from[bad_sign], edges$to[bad_sign]), collapse = ", "),
+        "."
+      ),
+      call. = FALSE
+    )
+  }
 
   invisible(TRUE)
 }

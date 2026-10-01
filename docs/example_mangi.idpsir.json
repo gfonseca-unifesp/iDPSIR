@@ -1,45 +1,46 @@
 {
   "format_version": "1.0",
   "metadata": {
-    "project_name": "Example: Coral reef fisheries (Mangi et al. 2007)",
-    "author": "fonse",
-    "created_at": "2026-08-01 16:40:22.883745",
-    "notes": "",
-    "updated_at": "2026-08-01 16:40:22.883745"
+    "project_name": "Example: Kenyan reef fisheries (Mangi et al. 2007)",
+    "author": "iDPSIR examples",
+    "created_at": "2026-09-30 15:36:26.301641",
+    "notes": "Structure from Mangi et al. 2007 (Table 1, sections 3-6). One window = one year. Strengths are classes; the only parameter from the article is the 3.7%/yr population growth.",
+    "updated_at": "2026-09-30 15:36:26.301641",
+    "weight_mode": "structural"
   },
   "schema": [
     {
       "name": "Driver",
       "order": 1,
-      "color": "#1f77b4",
+      "color": "#0072B2",
       "shape": "square",
-      "role": null
+      "role": "driver"
     },
     {
       "name": "Pressure",
       "order": 2,
-      "color": "#d62728",
+      "color": "#D55E00",
       "shape": "triangle",
-      "role": null
+      "role": "pressure"
     },
     {
       "name": "State",
       "order": 3,
-      "color": "#2ca02c",
+      "color": "#009E73",
       "shape": "dot",
-      "role": null
+      "role": "state"
     },
     {
       "name": "Impact",
       "order": 4,
-      "color": "#ff7f0e",
+      "color": "#E69F00",
       "shape": "diamond",
-      "role": null
+      "role": "impact"
     },
     {
       "name": "Response",
       "order": 5,
-      "color": "#9467bd",
+      "color": "#CC79A7",
       "shape": "star",
       "role": "feedback"
     }
@@ -47,518 +48,786 @@
   "nodes": [
     {
       "id": "D1",
-      "label": "Coastal population growth",
+      "label": "Coastal population",
       "dpsir_category": "Driver",
-      "subsystem": "Socioeconomic",
-      "uncertainty": 0.5,
-      "controllability": 0.2,
-      "self_regulation": 0,
-      "growth_rate": 0,
-      "reference_value": 1,
-      "activation_threshold": null,
-      "descriptor": ""
+      "subsystem": "Society",
+      "self_regulation": 1,
+      "growth_rate": 0.037,
+      "reference_value": 2.5,
+      "endpoint_class": null,
+      "value_v": null,
+      "descriptor": "Coastal population, million (2.5 in 1999), growing 3.7% per year (3.1.1).",
+      "growth_cap": null,
+      "sd": null,
+      "threshold_level": null,
+      "threshold_direction": null
     },
     {
       "id": "D2",
-      "label": "Poverty and low fisher income",
+      "label": "Poverty",
       "dpsir_category": "Driver",
-      "subsystem": "Socioeconomic",
-      "uncertainty": 0.5,
-      "controllability": 0.2,
-      "self_regulation": 0,
+      "subsystem": "Society",
+      "self_regulation": 1,
       "growth_rate": 0,
-      "reference_value": 1,
-      "activation_threshold": null,
-      "descriptor": ""
+      "reference_value": null,
+      "endpoint_class": null,
+      "value_v": null,
+      "descriptor": "Share of the population below the poverty line (42%, 3.1.4).",
+      "growth_cap": null,
+      "sd": null,
+      "threshold_level": null,
+      "threshold_direction": null
     },
     {
       "id": "D3",
-      "label": "Market demand for reef fish",
+      "label": "Unemployment",
       "dpsir_category": "Driver",
-      "subsystem": "Economy",
-      "uncertainty": 0.5,
-      "controllability": 0.2,
-      "self_regulation": 0,
+      "subsystem": "Society",
+      "self_regulation": 1,
       "growth_rate": 0,
-      "reference_value": 1,
-      "activation_threshold": null,
-      "descriptor": ""
+      "reference_value": null,
+      "endpoint_class": null,
+      "value_v": null,
+      "descriptor": "Unemployment rate (40% in 2001, 3.1.2).",
+      "growth_cap": null,
+      "sd": null,
+      "threshold_level": null,
+      "threshold_direction": null
     },
     {
       "id": "D4",
-      "label": "Lack of alternative livelihoods",
+      "label": "Tourism employment",
       "dpsir_category": "Driver",
-      "subsystem": "Socioeconomic",
-      "uncertainty": 0.5,
-      "controllability": 0.5,
-      "self_regulation": 0,
+      "subsystem": "Society",
+      "self_regulation": 1,
       "growth_rate": 0,
-      "reference_value": 1,
-      "activation_threshold": null,
-      "descriptor": ""
+      "reference_value": null,
+      "endpoint_class": null,
+      "value_v": null,
+      "descriptor": "Jobs in coastal tourism; when tourism fell (1997-98) boat operators turned to fishing (3.1.5).",
+      "growth_cap": null,
+      "sd": null,
+      "threshold_level": null,
+      "threshold_direction": null
+    },
+    {
+      "id": "D5",
+      "label": "Traditional fishing customs",
+      "dpsir_category": "Driver",
+      "subsystem": "Society",
+      "self_regulation": 1,
+      "growth_rate": 0,
+      "reference_value": null,
+      "endpoint_class": null,
+      "value_v": null,
+      "descriptor": "Customary rules (taboos, elders) that regulate where and how to fish; their decay leads young fishers to non-traditional gears (3.1.3).",
+      "growth_cap": null,
+      "sd": null,
+      "threshold_level": null,
+      "threshold_direction": null
+    },
+    {
+      "id": "D6",
+      "label": "Sea warming",
+      "dpsir_category": "Driver",
+      "subsystem": "Climate",
+      "self_regulation": 1,
+      "growth_rate": 0,
+      "reference_value": null,
+      "endpoint_class": null,
+      "value_v": null,
+      "descriptor": "Rising sea surface temperature (external variability; +1.5 C in the 1998 event, 3.3.4).",
+      "growth_cap": null,
+      "sd": null,
+      "threshold_level": null,
+      "threshold_direction": null
     },
     {
       "id": "P1",
-      "label": "Fishing effort",
+      "label": "General fishing effort",
       "dpsir_category": "Pressure",
-      "subsystem": "Fisheries",
-      "uncertainty": 0.5,
-      "controllability": 0.5,
-      "self_regulation": 0,
+      "subsystem": "Fishery",
+      "self_regulation": 1,
       "growth_rate": 0,
-      "reference_value": 1,
-      "activation_threshold": null,
-      "descriptor": ""
+      "reference_value": null,
+      "endpoint_class": null,
+      "value_v": null,
+      "descriptor": "Number of fishers per km2 and the catch they take (3.2.1-3.2.2); the trend in total catch is the alternative indicator.",
+      "growth_cap": null,
+      "sd": null,
+      "threshold_level": null,
+      "threshold_direction": null
     },
     {
       "id": "P2",
-      "label": "Destructive and illegal gear use",
+      "label": "Triggerfish fishing",
       "dpsir_category": "Pressure",
-      "subsystem": "Fisheries",
-      "uncertainty": 0.5,
-      "controllability": 0.5,
-      "self_regulation": 0,
+      "subsystem": "Fishery",
+      "self_regulation": 1,
       "growth_rate": 0,
-      "reference_value": 1,
-      "activation_threshold": null,
-      "descriptor": ""
+      "reference_value": null,
+      "endpoint_class": null,
+      "value_v": null,
+      "descriptor": "Fishing of the urchin's predators, e.g. the red-lined triggerfish Balistapus undulatus (3.3.3).",
+      "growth_cap": null,
+      "sd": null,
+      "threshold_level": null,
+      "threshold_direction": null
+    },
+    {
+      "id": "P3",
+      "label": "Destructive gear use",
+      "dpsir_category": "Pressure",
+      "subsystem": "Fishery",
+      "self_regulation": 1,
+      "growth_rate": 0,
+      "reference_value": null,
+      "endpoint_class": null,
+      "value_v": null,
+      "descriptor": "Frequency of use of beach seines and spear guns (3.2.3).",
+      "growth_cap": null,
+      "sd": null,
+      "threshold_level": null,
+      "threshold_direction": null
+    },
+    {
+      "id": "P4",
+      "label": "Thermal stress (bleaching)",
+      "dpsir_category": "Pressure",
+      "subsystem": "Climate",
+      "self_regulation": 1,
+      "growth_rate": 0,
+      "reference_value": null,
+      "endpoint_class": null,
+      "value_v": null,
+      "descriptor": "Coral bleaching episodes driven by warm-water anomalies (3.3.4).",
+      "growth_cap": null,
+      "sd": null,
+      "threshold_level": null,
+      "threshold_direction": null
     },
     {
       "id": "S1",
-      "label": "Coral cover",
+      "label": "Fish abundance",
       "dpsir_category": "State",
-      "subsystem": "Habitat",
-      "uncertainty": 0.8,
-      "controllability": 0.2,
-      "self_regulation": 0.3,
+      "subsystem": "Reef",
+      "self_regulation": 0.5,
       "growth_rate": 0,
-      "reference_value": 1,
-      "activation_threshold": null,
-      "descriptor": ""
+      "reference_value": null,
+      "endpoint_class": null,
+      "value_v": null,
+      "descriptor": "Fish biomass, kg/ha (3.3.1).",
+      "growth_cap": null,
+      "sd": null,
+      "threshold_level": null,
+      "threshold_direction": null
     },
     {
       "id": "S2",
-      "label": "Fish stock",
+      "label": "Live coral cover",
       "dpsir_category": "State",
-      "subsystem": "Fisheries",
-      "uncertainty": 0.8,
-      "controllability": 0.2,
-      "self_regulation": 0.3,
+      "subsystem": "Reef",
+      "self_regulation": 0.5,
       "growth_rate": 0,
-      "reference_value": 1,
-      "activation_threshold": null,
-      "descriptor": ""
+      "reference_value": null,
+      "endpoint_class": null,
+      "value_v": null,
+      "descriptor": "Percentage of live hard coral and reef complexity; fished reefs have half the cover of unfished ones (3.3.2).",
+      "growth_cap": null,
+      "sd": null,
+      "threshold_level": null,
+      "threshold_direction": null
     },
     {
       "id": "S3",
-      "label": "Large high-trophic fish",
+      "label": "Sea urchin density",
       "dpsir_category": "State",
-      "subsystem": "Fisheries",
-      "uncertainty": 0.8,
-      "controllability": 0.2,
-      "self_regulation": 0.2,
+      "subsystem": "Reef",
+      "self_regulation": 0.5,
       "growth_rate": 0,
-      "reference_value": 1,
-      "activation_threshold": null,
-      "descriptor": ""
-    },
-    {
-      "id": "S4",
-      "label": "Biodiversity",
-      "dpsir_category": "State",
-      "subsystem": "Biodiversity",
-      "uncertainty": 0.8,
-      "controllability": 0.2,
-      "self_regulation": 0.2,
-      "growth_rate": 0,
-      "reference_value": 1,
-      "activation_threshold": null,
-      "descriptor": ""
+      "reference_value": null,
+      "endpoint_class": null,
+      "value_v": null,
+      "descriptor": "Density of grazing and rock-boring urchins (no./m2), released when their predators are fished; they erode the reef and compete with fish (3.3.3).",
+      "growth_cap": null,
+      "sd": null,
+      "threshold_level": null,
+      "threshold_direction": null
     },
     {
       "id": "I1",
-      "label": "Catch decline (reduced CPUE)",
+      "label": "Declining catch per fisher",
       "dpsir_category": "Impact",
-      "subsystem": "Fisheries",
-      "uncertainty": 0.5,
-      "controllability": 0.5,
-      "self_regulation": 0,
+      "subsystem": "Fishery",
+      "self_regulation": 0.5,
       "growth_rate": 0,
-      "reference_value": 1,
-      "activation_threshold": null,
-      "descriptor": ""
+      "reference_value": null,
+      "endpoint_class": "service",
+      "value_v": 1,
+      "descriptor": "Catch per unit effort, kg per fisher (3-4 kg/day, 3.4.1).",
+      "growth_cap": null,
+      "sd": null,
+      "threshold_level": null,
+      "threshold_direction": null
     },
     {
       "id": "I2",
-      "label": "Reef ecosystem degradation",
+      "label": "Livelihood benefits compromised",
       "dpsir_category": "Impact",
-      "subsystem": "Biodiversity",
-      "uncertainty": 0.8,
-      "controllability": 0.2,
-      "self_regulation": 0,
+      "subsystem": "Human welfare",
+      "self_regulation": 0.5,
       "growth_rate": 0,
-      "reference_value": 1,
-      "activation_threshold": null,
-      "descriptor": ""
+      "reference_value": null,
+      "endpoint_class": "welfare",
+      "value_v": 1,
+      "descriptor": "Share of household income and food that depends on the reef (3.4.2).",
+      "growth_cap": null,
+      "sd": null,
+      "threshold_level": null,
+      "threshold_direction": null
     },
     {
       "id": "I3",
-      "label": "Food insecurity and income loss",
+      "label": "Exclusion and conflicts",
       "dpsir_category": "Impact",
-      "subsystem": "Economy",
-      "uncertainty": 0.5,
-      "controllability": 0.5,
-      "self_regulation": 0,
+      "subsystem": "Human welfare",
+      "self_regulation": 0.5,
       "growth_rate": 0,
-      "reference_value": 1,
-      "activation_threshold": null,
-      "descriptor": ""
+      "reference_value": null,
+      "endpoint_class": "welfare",
+      "value_v": 1,
+      "descriptor": "Fishers excluded and number of conflicts among reef users (3.4.3).",
+      "growth_cap": null,
+      "sd": null,
+      "threshold_level": null,
+      "threshold_direction": null
     },
     {
       "id": "R1",
-      "label": "Marine protected areas (closures)",
+      "label": "No-take marine parks",
       "dpsir_category": "Response",
-      "subsystem": "Governance",
-      "uncertainty": 0.2,
-      "controllability": 0.8,
-      "self_regulation": 0,
+      "subsystem": "Management",
+      "self_regulation": 1,
       "growth_rate": 0,
-      "reference_value": 1,
-      "activation_threshold": null,
-      "descriptor": ""
+      "reference_value": null,
+      "endpoint_class": null,
+      "value_v": null,
+      "descriptor": "Existing in 2007: four marine parks with no extraction (3.5.1). Also excludes fishers.",
+      "growth_cap": null,
+      "sd": null,
+      "threshold_level": null,
+      "threshold_direction": null
     },
     {
       "id": "R2",
       "label": "Gear restrictions",
       "dpsir_category": "Response",
-      "subsystem": "Governance",
-      "uncertainty": 0.2,
-      "controllability": 0.8,
-      "self_regulation": 0,
+      "subsystem": "Management",
+      "self_regulation": 1,
       "growth_rate": 0,
-      "reference_value": 1,
-      "activation_threshold": null,
-      "descriptor": ""
+      "reference_value": null,
+      "endpoint_class": null,
+      "value_v": null,
+      "descriptor": "Existing in 2007: Fisheries Act gear and mesh rules, reserves with gear restrictions; beach seines banned but still used (3.5.1).",
+      "growth_cap": null,
+      "sd": null,
+      "threshold_level": null,
+      "threshold_direction": null
     },
     {
       "id": "R3",
-      "label": "Enforcement and regulation",
+      "label": "Education and awareness",
       "dpsir_category": "Response",
-      "subsystem": "Governance",
-      "uncertainty": 0.5,
-      "controllability": 0.8,
-      "self_regulation": 0,
+      "subsystem": "Management",
+      "self_regulation": 1,
       "growth_rate": 0,
-      "reference_value": 1,
-      "activation_threshold": null,
-      "descriptor": ""
+      "reference_value": null,
+      "endpoint_class": null,
+      "value_v": null,
+      "descriptor": "Existing in 2007: awareness campaigns and meetings with fishers (3.5.2).",
+      "growth_cap": null,
+      "sd": null,
+      "threshold_level": null,
+      "threshold_direction": null
     },
     {
       "id": "R4",
-      "label": "Alternative livelihood programmes",
+      "label": "Tourism-based alternative livelihoods",
       "dpsir_category": "Response",
-      "subsystem": "Socioeconomic",
-      "uncertainty": 0.5,
-      "controllability": 0.8,
-      "self_regulation": 0,
+      "subsystem": "Management",
+      "self_regulation": 1,
       "growth_rate": 0,
-      "reference_value": 1,
-      "activation_threshold": null,
-      "descriptor": ""
+      "reference_value": null,
+      "endpoint_class": null,
+      "value_v": null,
+      "descriptor": "Recommended (section 6): develop tourism and other income around parks to remove fishers from the reef.",
+      "growth_cap": null,
+      "sd": null,
+      "threshold_level": null,
+      "threshold_direction": null
     },
     {
       "id": "R5",
-      "label": "Community co-management",
+      "label": "Co-management with access rights",
       "dpsir_category": "Response",
-      "subsystem": "Governance",
-      "uncertainty": 0.5,
-      "controllability": 0.8,
-      "self_regulation": 0,
+      "subsystem": "Management",
+      "self_regulation": 1,
       "growth_rate": 0,
-      "reference_value": 1,
-      "activation_threshold": null,
-      "descriptor": ""
+      "reference_value": null,
+      "endpoint_class": null,
+      "value_v": null,
+      "descriptor": "Recommended (section 6): licences, exclusive access rights and collaborative (ICZM) management with local fishers.",
+      "growth_cap": null,
+      "sd": null,
+      "threshold_level": null,
+      "threshold_direction": null
+    },
+    {
+      "id": "R6",
+      "label": "Gear exchange with credit",
+      "dpsir_category": "Response",
+      "subsystem": "Management",
+      "self_regulation": 1,
+      "growth_rate": 0,
+      "reference_value": null,
+      "endpoint_class": null,
+      "value_v": null,
+      "descriptor": "Recommended (section 6): credit to buy authorized gear and compensation for gear declared illegal.",
+      "growth_cap": null,
+      "sd": null,
+      "threshold_level": null,
+      "threshold_direction": null
     }
   ],
   "edges": [
     {
       "from": "D1",
       "to": "P1",
-      "weight": 3,
-      "confidence": 0.8,
+      "strength_class": "strong",
       "interaction_type": "positive",
-      "evidence_type": "expert_assessment",
-      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
+      "evidence_type": "literature",
+      "reference": "Mangi et al. 2007, section 3.1.1 (doi:10.1016/j.ocecoaman.2006.10.003)",
+      "weight": 0.8,
+      "weight_low": 0.6,
+      "weight_high": 1,
+      "weight_source": "class",
+      "confidence": 0.5
     },
     {
       "from": "D2",
       "to": "P1",
-      "weight": 2,
-      "confidence": 0.65,
+      "strength_class": "weak",
       "interaction_type": "positive",
-      "evidence_type": "expert_assessment",
-      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
-    },
-    {
-      "from": "D2",
-      "to": "P2",
-      "weight": 2,
-      "confidence": 0.7,
-      "interaction_type": "positive",
-      "evidence_type": "expert_assessment",
-      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
+      "evidence_type": "literature",
+      "reference": "Mangi et al. 2007, section 3.2.1 (doi:10.1016/j.ocecoaman.2006.10.003)",
+      "weight": 0.15,
+      "weight_low": 0,
+      "weight_high": 0.3,
+      "weight_source": "class",
+      "confidence": 0
     },
     {
       "from": "D3",
       "to": "P1",
-      "weight": 2,
-      "confidence": 0.7,
+      "strength_class": "moderate",
       "interaction_type": "positive",
-      "evidence_type": "expert_assessment",
-      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
+      "evidence_type": "literature",
+      "reference": "Mangi et al. 2007, section 3.1.2 (doi:10.1016/j.ocecoaman.2006.10.003)",
+      "weight": 0.45,
+      "weight_low": 0.3,
+      "weight_high": 0.6,
+      "weight_source": "class",
+      "confidence": 0.3333
     },
     {
       "from": "D4",
       "to": "P1",
-      "weight": 2,
-      "confidence": 0.65,
-      "interaction_type": "positive",
-      "evidence_type": "expert_assessment",
-      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
+      "strength_class": "weak",
+      "interaction_type": "negative",
+      "evidence_type": "literature",
+      "reference": "Mangi et al. 2007, section 3.1.5 (doi:10.1016/j.ocecoaman.2006.10.003)",
+      "weight": 0.15,
+      "weight_low": 0,
+      "weight_high": 0.3,
+      "weight_source": "class",
+      "confidence": 0
     },
     {
-      "from": "D4",
+      "from": "D1",
       "to": "P2",
-      "weight": 1,
-      "confidence": 0.55,
+      "strength_class": "moderate",
       "interaction_type": "positive",
-      "evidence_type": "expert_assessment",
-      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
+      "evidence_type": "literature",
+      "reference": "Mangi et al. 2007, section 3.2.2 (doi:10.1016/j.ocecoaman.2006.10.003)",
+      "weight": 0.45,
+      "weight_low": 0.3,
+      "weight_high": 0.6,
+      "weight_source": "class",
+      "confidence": 0.3333
+    },
+    {
+      "from": "D2",
+      "to": "P2",
+      "strength_class": "moderate",
+      "interaction_type": "positive",
+      "evidence_type": "literature",
+      "reference": "Mangi et al. 2007, section 3.2.2 (doi:10.1016/j.ocecoaman.2006.10.003)",
+      "weight": 0.45,
+      "weight_low": 0.3,
+      "weight_high": 0.6,
+      "weight_source": "class",
+      "confidence": 0.3333
+    },
+    {
+      "from": "D1",
+      "to": "P3",
+      "strength_class": "weak",
+      "interaction_type": "positive",
+      "evidence_type": "literature",
+      "reference": "Mangi et al. 2007, section 3.1.1 (doi:10.1016/j.ocecoaman.2006.10.003)",
+      "weight": 0.15,
+      "weight_low": 0,
+      "weight_high": 0.3,
+      "weight_source": "class",
+      "confidence": 0
+    },
+    {
+      "from": "D2",
+      "to": "P3",
+      "strength_class": "strong",
+      "interaction_type": "positive",
+      "evidence_type": "literature",
+      "reference": "Mangi et al. 2007, section 5 (doi:10.1016/j.ocecoaman.2006.10.003)",
+      "weight": 0.8,
+      "weight_low": 0.6,
+      "weight_high": 1,
+      "weight_source": "class",
+      "confidence": 0.5
+    },
+    {
+      "from": "D5",
+      "to": "P3",
+      "strength_class": "moderate",
+      "interaction_type": "negative",
+      "evidence_type": "literature",
+      "reference": "Mangi et al. 2007, section 3.1.3 (doi:10.1016/j.ocecoaman.2006.10.003)",
+      "weight": 0.45,
+      "weight_low": 0.3,
+      "weight_high": 0.6,
+      "weight_source": "class",
+      "confidence": 0.3333
+    },
+    {
+      "from": "D6",
+      "to": "P4",
+      "strength_class": "strong",
+      "interaction_type": "positive",
+      "evidence_type": "literature",
+      "reference": "Mangi et al. 2007, section 3.3.4 (doi:10.1016/j.ocecoaman.2006.10.003)",
+      "weight": 0.8,
+      "weight_low": 0.6,
+      "weight_high": 1,
+      "weight_source": "class",
+      "confidence": 0.5
     },
     {
       "from": "P1",
-      "to": "S2",
-      "weight": 3,
-      "confidence": 0.85,
-      "interaction_type": "negative",
-      "evidence_type": "monitoring",
-      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
-    },
-    {
-      "from": "P1",
-      "to": "S3",
-      "weight": 2,
-      "confidence": 0.8,
-      "interaction_type": "negative",
-      "evidence_type": "monitoring",
-      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
-    },
-    {
-      "from": "P1",
-      "to": "S4",
-      "weight": 2,
-      "confidence": 0.65,
-      "interaction_type": "negative",
-      "evidence_type": "observational",
-      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
-    },
-    {
-      "from": "P2",
       "to": "S1",
-      "weight": 3,
-      "confidence": 0.85,
+      "strength_class": "strong",
       "interaction_type": "negative",
-      "evidence_type": "monitoring",
-      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
+      "evidence_type": "literature",
+      "reference": "Mangi et al. 2007, section 3.3.1 (doi:10.1016/j.ocecoaman.2006.10.003)",
+      "weight": 0.8,
+      "weight_low": 0.6,
+      "weight_high": 1,
+      "weight_source": "class",
+      "confidence": 0.5
+    },
+    {
+      "from": "P3",
+      "to": "S1",
+      "strength_class": "moderate",
+      "interaction_type": "negative",
+      "evidence_type": "literature",
+      "reference": "Mangi et al. 2007, section 3.2.3 (doi:10.1016/j.ocecoaman.2006.10.003)",
+      "weight": 0.45,
+      "weight_low": 0.3,
+      "weight_high": 0.6,
+      "weight_source": "class",
+      "confidence": 0.3333
+    },
+    {
+      "from": "P3",
+      "to": "S2",
+      "strength_class": "strong",
+      "interaction_type": "negative",
+      "evidence_type": "literature",
+      "reference": "Mangi et al. 2007, section 3.3.2 (doi:10.1016/j.ocecoaman.2006.10.003)",
+      "weight": 0.8,
+      "weight_low": 0.6,
+      "weight_high": 1,
+      "weight_source": "class",
+      "confidence": 0.5
+    },
+    {
+      "from": "P4",
+      "to": "S2",
+      "strength_class": "moderate",
+      "interaction_type": "negative",
+      "evidence_type": "literature",
+      "reference": "Mangi et al. 2007, section 3.3.4 (doi:10.1016/j.ocecoaman.2006.10.003)",
+      "weight": 0.45,
+      "weight_low": 0.3,
+      "weight_high": 0.6,
+      "weight_source": "class",
+      "confidence": 0.3333
     },
     {
       "from": "P2",
-      "to": "S4",
-      "weight": 2,
-      "confidence": 0.7,
+      "to": "S3",
+      "strength_class": "strong",
+      "interaction_type": "positive",
+      "evidence_type": "literature",
+      "reference": "Mangi et al. 2007, section 3.3.3 (doi:10.1016/j.ocecoaman.2006.10.003)",
+      "weight": 0.8,
+      "weight_low": 0.6,
+      "weight_high": 1,
+      "weight_source": "class",
+      "confidence": 0.5
+    },
+    {
+      "from": "S1",
+      "to": "I1",
+      "strength_class": "strong",
       "interaction_type": "negative",
-      "evidence_type": "observational",
-      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
+      "evidence_type": "literature",
+      "reference": "Mangi et al. 2007, section 3.4.1 (doi:10.1016/j.ocecoaman.2006.10.003)",
+      "weight": 0.8,
+      "weight_low": 0.6,
+      "weight_high": 1,
+      "weight_source": "class",
+      "confidence": 0.5
     },
     {
       "from": "S2",
       "to": "I1",
-      "weight": 3,
-      "confidence": 0.8,
+      "strength_class": "moderate",
       "interaction_type": "negative",
-      "evidence_type": "observational",
-      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
+      "evidence_type": "literature",
+      "reference": "Mangi et al. 2007, section 3.3.2 (doi:10.1016/j.ocecoaman.2006.10.003)",
+      "weight": 0.45,
+      "weight_low": 0.3,
+      "weight_high": 0.6,
+      "weight_source": "class",
+      "confidence": 0.3333
     },
     {
       "from": "S3",
       "to": "I1",
-      "weight": 2,
-      "confidence": 0.7,
-      "interaction_type": "negative",
-      "evidence_type": "observational",
-      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
-    },
-    {
-      "from": "S2",
-      "to": "I3",
-      "weight": 2,
-      "confidence": 0.7,
-      "interaction_type": "negative",
-      "evidence_type": "expert_assessment",
-      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
+      "strength_class": "weak",
+      "interaction_type": "positive",
+      "evidence_type": "literature",
+      "reference": "Mangi et al. 2007, section 3.3.3 (doi:10.1016/j.ocecoaman.2006.10.003)",
+      "weight": 0.15,
+      "weight_low": 0,
+      "weight_high": 0.3,
+      "weight_source": "class",
+      "confidence": 0
     },
     {
       "from": "S1",
       "to": "I2",
-      "weight": 3,
-      "confidence": 0.8,
+      "strength_class": "moderate",
       "interaction_type": "negative",
-      "evidence_type": "observational",
-      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
+      "evidence_type": "literature",
+      "reference": "Mangi et al. 2007, section 3.4.2 (doi:10.1016/j.ocecoaman.2006.10.003)",
+      "weight": 0.45,
+      "weight_low": 0.3,
+      "weight_high": 0.6,
+      "weight_source": "class",
+      "confidence": 0.3333
     },
     {
-      "from": "S4",
+      "from": "S2",
       "to": "I2",
-      "weight": 2,
-      "confidence": 0.75,
+      "strength_class": "moderate",
       "interaction_type": "negative",
-      "evidence_type": "observational",
-      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
+      "evidence_type": "literature",
+      "reference": "Mangi et al. 2007, section 3.4.2 (doi:10.1016/j.ocecoaman.2006.10.003)",
+      "weight": 0.45,
+      "weight_low": 0.3,
+      "weight_high": 0.6,
+      "weight_source": "class",
+      "confidence": 0.3333
     },
     {
-      "from": "I1",
-      "to": "R1",
-      "weight": 2,
-      "confidence": 0.5,
+      "from": "S3",
+      "to": "I2",
+      "strength_class": "moderate",
       "interaction_type": "positive",
-      "evidence_type": "policy_document",
-      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
+      "evidence_type": "literature",
+      "reference": "Mangi et al. 2007, section 3.3.3 (doi:10.1016/j.ocecoaman.2006.10.003)",
+      "weight": 0.45,
+      "weight_low": 0.3,
+      "weight_high": 0.6,
+      "weight_source": "class",
+      "confidence": 0.3333
     },
     {
-      "from": "I1",
-      "to": "R3",
-      "weight": 2,
-      "confidence": 0.5,
-      "interaction_type": "positive",
-      "evidence_type": "policy_document",
-      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
-    },
-    {
-      "from": "I2",
-      "to": "R1",
-      "weight": 2,
-      "confidence": 0.55,
-      "interaction_type": "positive",
-      "evidence_type": "policy_document",
-      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
-    },
-    {
-      "from": "I3",
-      "to": "R4",
-      "weight": 2,
-      "confidence": 0.5,
-      "interaction_type": "positive",
-      "evidence_type": "policy_document",
-      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
+      "from": "S1",
+      "to": "I3",
+      "strength_class": "moderate",
+      "interaction_type": "negative",
+      "evidence_type": "literature",
+      "reference": "Mangi et al. 2007, section 3.4.3 (doi:10.1016/j.ocecoaman.2006.10.003)",
+      "weight": 0.45,
+      "weight_low": 0.3,
+      "weight_high": 0.6,
+      "weight_source": "class",
+      "confidence": 0.3333
     },
     {
       "from": "R1",
       "to": "P1",
-      "weight": 2,
-      "confidence": 0.7,
+      "strength_class": "moderate",
       "interaction_type": "negative",
-      "evidence_type": "management_plan",
-      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
+      "evidence_type": "literature",
+      "reference": "Mangi et al. 2007, section 3.5.1 (doi:10.1016/j.ocecoaman.2006.10.003)",
+      "weight": 0.45,
+      "weight_low": 0.3,
+      "weight_high": 0.6,
+      "weight_source": "class",
+      "confidence": 0.3333
     },
     {
       "from": "R1",
-      "to": "S2",
-      "weight": 3,
-      "confidence": 0.8,
-      "interaction_type": "positive",
-      "evidence_type": "monitoring",
-      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
+      "to": "P2",
+      "strength_class": "moderate",
+      "interaction_type": "negative",
+      "evidence_type": "literature",
+      "reference": "Mangi et al. 2007, section 3.5.1 (doi:10.1016/j.ocecoaman.2006.10.003)",
+      "weight": 0.45,
+      "weight_low": 0.3,
+      "weight_high": 0.6,
+      "weight_source": "class",
+      "confidence": 0.3333
     },
     {
       "from": "R1",
-      "to": "S1",
-      "weight": 2,
-      "confidence": 0.65,
+      "to": "P3",
+      "strength_class": "moderate",
+      "interaction_type": "negative",
+      "evidence_type": "literature",
+      "reference": "Mangi et al. 2007, section 3.5.1 (doi:10.1016/j.ocecoaman.2006.10.003)",
+      "weight": 0.45,
+      "weight_low": 0.3,
+      "weight_high": 0.6,
+      "weight_source": "class",
+      "confidence": 0.3333
+    },
+    {
+      "from": "R1",
+      "to": "I3",
+      "strength_class": "moderate",
       "interaction_type": "positive",
-      "evidence_type": "monitoring",
-      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
+      "evidence_type": "literature",
+      "reference": "Mangi et al. 2007, section 3.4.3 (doi:10.1016/j.ocecoaman.2006.10.003)",
+      "weight": 0.45,
+      "weight_low": 0.3,
+      "weight_high": 0.6,
+      "weight_source": "class",
+      "confidence": 0.3333
     },
     {
       "from": "R2",
-      "to": "P2",
-      "weight": 3,
-      "confidence": 0.75,
+      "to": "P3",
+      "strength_class": "strong",
       "interaction_type": "negative",
-      "evidence_type": "management_plan",
-      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
+      "evidence_type": "literature",
+      "reference": "Mangi et al. 2007, section 3.5.1 (doi:10.1016/j.ocecoaman.2006.10.003)",
+      "weight": 0.8,
+      "weight_low": 0.6,
+      "weight_high": 1,
+      "weight_source": "class",
+      "confidence": 0.5
     },
     {
       "from": "R3",
-      "to": "P1",
-      "weight": 2,
-      "confidence": 0.65,
+      "to": "P3",
+      "strength_class": "moderate",
       "interaction_type": "negative",
-      "evidence_type": "management_plan",
-      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
-    },
-    {
-      "from": "R3",
-      "to": "P2",
-      "weight": 3,
-      "confidence": 0.75,
-      "interaction_type": "negative",
-      "evidence_type": "management_plan",
-      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
+      "evidence_type": "literature",
+      "reference": "Mangi et al. 2007, section 3.5.2 (doi:10.1016/j.ocecoaman.2006.10.003)",
+      "weight": 0.45,
+      "weight_low": 0.3,
+      "weight_high": 0.6,
+      "weight_source": "class",
+      "confidence": 0.3333
     },
     {
       "from": "R4",
       "to": "D4",
-      "weight": 2,
-      "confidence": 0.6,
-      "interaction_type": "negative",
-      "evidence_type": "management_plan",
-      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
+      "strength_class": "strong",
+      "interaction_type": "positive",
+      "evidence_type": "literature",
+      "reference": "Mangi et al. 2007, section 6 (doi:10.1016/j.ocecoaman.2006.10.003)",
+      "weight": 0.8,
+      "weight_low": 0.6,
+      "weight_high": 1,
+      "weight_source": "class",
+      "confidence": 0.5
     },
     {
       "from": "R4",
-      "to": "D2",
-      "weight": 1,
-      "confidence": 0.55,
+      "to": "D3",
+      "strength_class": "moderate",
       "interaction_type": "negative",
-      "evidence_type": "expert_assessment",
-      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
-    },
-    {
-      "from": "R4",
-      "to": "P1",
-      "weight": 2,
-      "confidence": 0.6,
-      "interaction_type": "negative",
-      "evidence_type": "expert_assessment",
-      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
+      "evidence_type": "literature",
+      "reference": "Mangi et al. 2007, section 6 (doi:10.1016/j.ocecoaman.2006.10.003)",
+      "weight": 0.45,
+      "weight_low": 0.3,
+      "weight_high": 0.6,
+      "weight_source": "class",
+      "confidence": 0.3333
     },
     {
       "from": "R5",
       "to": "P1",
-      "weight": 2,
-      "confidence": 0.6,
+      "strength_class": "moderate",
       "interaction_type": "negative",
-      "evidence_type": "management_plan",
-      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
+      "evidence_type": "literature",
+      "reference": "Mangi et al. 2007, section 6 (doi:10.1016/j.ocecoaman.2006.10.003)",
+      "weight": 0.45,
+      "weight_low": 0.3,
+      "weight_high": 0.6,
+      "weight_source": "class",
+      "confidence": 0.3333
     },
     {
       "from": "R5",
-      "to": "P2",
-      "weight": 2,
-      "confidence": 0.65,
+      "to": "I3",
+      "strength_class": "moderate",
       "interaction_type": "negative",
-      "evidence_type": "management_plan",
-      "reference": "Mangi et al. 2007 (10.1016/j.ocecoaman.2006.10.003)"
+      "evidence_type": "literature",
+      "reference": "Mangi et al. 2007, section 3.5.2 (doi:10.1016/j.ocecoaman.2006.10.003)",
+      "weight": 0.45,
+      "weight_low": 0.3,
+      "weight_high": 0.6,
+      "weight_source": "class",
+      "confidence": 0.3333
+    },
+    {
+      "from": "R6",
+      "to": "P3",
+      "strength_class": "strong",
+      "interaction_type": "negative",
+      "evidence_type": "literature",
+      "reference": "Mangi et al. 2007, section 6 (doi:10.1016/j.ocecoaman.2006.10.003)",
+      "weight": 0.8,
+      "weight_low": 0.6,
+      "weight_high": 1,
+      "weight_source": "class",
+      "confidence": 0.5
     }
   ],
   "positions": {},
@@ -569,16 +838,255 @@
         "strength": 100
       },
       {
+        "id": "D2",
+        "strength": 100
+      },
+      {
         "id": "D3",
+        "strength": 100
+      },
+      {
+        "id": "D6",
         "strength": 100
       }
     ],
     "response": [
       {
+        "id": "R1",
+        "strength": 100
+      },
+      {
         "id": "R2",
+        "strength": 100
+      },
+      {
+        "id": "R3",
         "strength": 100
       }
     ],
-    "effect_horizon": 0.5
-  }
+    "temporal_mode_pressure": "permanent",
+    "temporal_mode_response": "permanent",
+    "temporal_stop_rule": "fixed",
+    "temporal_max_windows": 50,
+    "temporal_windows": 30,
+    "temporal_tol_rel": 5,
+    "baseline_without_response": false,
+    "temporal_gate_mode": "state_level",
+    "temporal_trends_outside": true,
+    "temporal_continue_after": 0
+  },
+  "saved_scenarios": [
+    {
+      "name": "1. Existing measures, as written",
+      "response": [
+        {
+          "id": "R1",
+          "strength": 100
+        },
+        {
+          "id": "R2",
+          "strength": 100
+        },
+        {
+          "id": "R3",
+          "strength": 100
+        }
+      ],
+      "pressure": [
+        {
+          "id": "D1",
+          "strength": 100
+        },
+        {
+          "id": "D2",
+          "strength": 100
+        },
+        {
+          "id": "D3",
+          "strength": 100
+        },
+        {
+          "id": "D6",
+          "strength": 100
+        }
+      ],
+      "n_simulations": 300,
+      "structural_uncertainty": false,
+      "temporal_mode_pressure": "permanent",
+      "temporal_mode_response": "permanent",
+      "temporal_stop_rule": "fixed",
+      "temporal_max_windows": 50,
+      "temporal_windows": 30,
+      "temporal_tol_rel": 5,
+      "baseline_without_response": false,
+      "temporal_gate_mode": "state_level",
+      "temporal_trends_outside": true,
+      "temporal_continue_after": 0
+    },
+    {
+      "name": "2. Existing measures, as enforced (30%)",
+      "response": [
+        {
+          "id": "R1",
+          "strength": 30
+        },
+        {
+          "id": "R2",
+          "strength": 30
+        },
+        {
+          "id": "R3",
+          "strength": 30
+        }
+      ],
+      "pressure": [
+        {
+          "id": "D1",
+          "strength": 100
+        },
+        {
+          "id": "D2",
+          "strength": 100
+        },
+        {
+          "id": "D3",
+          "strength": 100
+        },
+        {
+          "id": "D6",
+          "strength": 100
+        }
+      ],
+      "n_simulations": 300,
+      "structural_uncertainty": false,
+      "temporal_mode_pressure": "permanent",
+      "temporal_mode_response": "permanent",
+      "temporal_stop_rule": "fixed",
+      "temporal_max_windows": 50,
+      "temporal_windows": 30,
+      "temporal_tol_rel": 5,
+      "baseline_without_response": false,
+      "temporal_gate_mode": "state_level",
+      "temporal_trends_outside": true,
+      "temporal_continue_after": 0
+    },
+    {
+      "name": "3. + Recommended measures",
+      "response": [
+        {
+          "id": "R1",
+          "strength": 30
+        },
+        {
+          "id": "R2",
+          "strength": 30
+        },
+        {
+          "id": "R3",
+          "strength": 30
+        },
+        {
+          "id": "R4",
+          "strength": 100
+        },
+        {
+          "id": "R5",
+          "strength": 100
+        },
+        {
+          "id": "R6",
+          "strength": 100
+        }
+      ],
+      "pressure": [
+        {
+          "id": "D1",
+          "strength": 100
+        },
+        {
+          "id": "D2",
+          "strength": 100
+        },
+        {
+          "id": "D3",
+          "strength": 100
+        },
+        {
+          "id": "D6",
+          "strength": 100
+        }
+      ],
+      "n_simulations": 300,
+      "structural_uncertainty": false,
+      "temporal_mode_pressure": "permanent",
+      "temporal_mode_response": "permanent",
+      "temporal_stop_rule": "fixed",
+      "temporal_max_windows": 50,
+      "temporal_windows": 30,
+      "temporal_tol_rel": 5,
+      "baseline_without_response": false,
+      "temporal_gate_mode": "state_level",
+      "temporal_trends_outside": true,
+      "temporal_continue_after": 0
+    },
+    {
+      "name": "4. All measures, fully complied",
+      "response": [
+        {
+          "id": "R1",
+          "strength": 100
+        },
+        {
+          "id": "R2",
+          "strength": 100
+        },
+        {
+          "id": "R3",
+          "strength": 100
+        },
+        {
+          "id": "R4",
+          "strength": 100
+        },
+        {
+          "id": "R5",
+          "strength": 100
+        },
+        {
+          "id": "R6",
+          "strength": 100
+        }
+      ],
+      "pressure": [
+        {
+          "id": "D1",
+          "strength": 100
+        },
+        {
+          "id": "D2",
+          "strength": 100
+        },
+        {
+          "id": "D3",
+          "strength": 100
+        },
+        {
+          "id": "D6",
+          "strength": 100
+        }
+      ],
+      "n_simulations": 300,
+      "structural_uncertainty": false,
+      "temporal_mode_pressure": "permanent",
+      "temporal_mode_response": "permanent",
+      "temporal_stop_rule": "fixed",
+      "temporal_max_windows": 50,
+      "temporal_windows": 30,
+      "temporal_tol_rel": 5,
+      "baseline_without_response": false,
+      "temporal_gate_mode": "state_level",
+      "temporal_trends_outside": true,
+      "temporal_continue_after": 0
+    }
+  ]
 }

@@ -18,7 +18,8 @@ response_reach <- function(g, active_ids) {
   empty_result <- list(
     reached_ids = character(),
     total = 0L,
-    by_category = data.frame(category = character(), count = integer(), stringsAsFactors = FALSE)
+    by_category = data.frame(category = character(), count = integer(), stringsAsFactors = FALSE),
+    impacts = 0L
   )
 
   active_ids <- intersect(active_ids, V(g)$name)
@@ -56,7 +57,9 @@ response_reach <- function(g, active_ids) {
   list(
     reached_ids = reached,
     total = length(reached),
-    by_category = by_category
+    by_category = by_category,
+    # Revisao 2, item 2.6: Impacts reached, by role (not by category name).
+    impacts = sum(has_role(g, "impact")[match(reached, V(g)$name)])
   )
 }
 
@@ -66,5 +69,5 @@ response_reach <- function(g, active_ids) {
 # responses reaches, not the whole network's shape.
 count_impacts_in_graph <- function(g) {
   stopifnot(inherits(g, "igraph"))
-  sum(V(g)$dpsir_category == "Impact")
+  sum(has_role(g, "impact"))
 }

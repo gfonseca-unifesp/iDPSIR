@@ -15,6 +15,8 @@ exports/
 *.png
 # ...exceto as figuras do exemplo didatico versionadas para o tutorial (docs/)
 !docs/example_gnanapragasam_*.png
+!docs/example_port_*.png
+!docs/example_mangi_*.png
 
 # Sistema operacional
 .DS_Store
@@ -32,3 +34,13 @@ desktop.ini
 *.idpsir.json
 # ...exceto os exemplos didaticos versionados para o tutorial (docs/)
 !docs/*.idpsir.json
+!tests/testthat/fixtures/*.idpsir.json
+
+# Manuscrito e material de trabalho local (nao versionados)
+manuscrito*/
+MANUSCRIPT_*.docx
+/*.pdf
+/revisao_*.xlsx
+
+# Simulated networks: timing run (not analysed)
+analysis/sim_networks/out_timing/

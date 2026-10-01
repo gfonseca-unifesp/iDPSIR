@@ -1,0 +1,37 @@
+Type: Project
+Package: iDPSIR
+Title: Build and Analyse DPSIR Causal Networks for Environmental Management
+Version: 0.9.0
+Authors@R:
+    c(person("Gustavo", "Fonseca", email = "gfonseca@unifesp.br", role = c("aut", "cre")),
+      person("Marcela Bergo", "Davanso", role = "aut"))
+Description: A Shiny app to build Driver-Pressure-State-Impact-Response (DPSIR)
+    causal networks with standardized path coefficients (beta), and to ask whether
+    a planned response covers the worsening caused by a pressure: a static
+    sufficiency reading (path-analysis total effect), confidence by resampling
+    each strength within its uncertainty band, relevance and priority of the
+    Impacts, State triggers, and an optional simulation over discrete time windows
+    with self-regulation and growth trends.
+License: MIT + file LICENSE
+URL: https://github.com/gfonseca-unifesp/iDPSIR, https://gfonseca-unifesp.github.io/iDPSIR/
+BugReports: https://github.com/gfonseca-unifesp/iDPSIR/issues
+Encoding: UTF-8
+Depends:
+    R (>= 4.1)
+Imports:
+    shiny,
+    bs4Dash,
+    visNetwork,
+    igraph,
+    DT,
+    dplyr,
+    data.table,
+    htmlwidgets,
+    shinyWidgets,
+    glue,
+    purrr,
+    scales,
+    jsonlite,
+    htmltools
+Suggests:
+    testthat (>= 3.0.0)

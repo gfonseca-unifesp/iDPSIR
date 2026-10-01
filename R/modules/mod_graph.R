@@ -53,7 +53,13 @@ mod_graph_ui <- function(id) {
           ns("layout_mode"), "Layout",
           choices = c("Layered by category" = "layered", "Circular" = "circular")
         ),
-        selectInput(ns("palette"), "Color palette", choices = get_dpsir_palette_choices()),
+        # Revisao 2, item 3.11: one source of colors - the model's own palette
+        # (Model step) unless another is picked here for this view.
+        selectInput(ns("palette"), "Color palette", choices = c("As set in the model" = "model", get_dpsir_palette_choices()), selected = "model"),
+        conditionalPanel(
+          condition = sprintf("input['%s'] == 'community'", ns("color_by")),
+          helpText("Colored by community - the palette applies when coloring by DPSIR category.")
+        ),
         checkboxInput(ns("use_shapes"), "Use DPSIR shapes", value = TRUE),
         selectInput(ns("subsystem_filter"), "Subsystem", choices = "All"),
         checkboxInput(ns("show_node_legend"), "Show category/community legend", value = TRUE),
@@ -71,15 +77,19 @@ mod_graph_ui <- function(id) {
           ns("edge_width_by"), "Edge width based on",
           choices = c("Edge weight" = "weight", "Confidence" = "confidence", "Fixed" = "fixed")
         ),
-        sliderInput(ns("confidence_threshold"), "Dash edges below confidence", min = 0, max = 1, value = 0.5, step = 0.05)
+        sliderInput(ns("confidence_threshold"), "Dash edges below confidence", min = 0, max = 1, value = 0.5, step = 0.05),
+        helpText("Confidence = 1 - (width of the edge's uncertainty band / its strength). A class edge (weak/moderate/strong) has the band of its class, so the default classes may already fall below 0.5 and show dashed.")
       ),
 
       box(
         width = 12, title = "Layout & spacing", status = "primary", solidHeader = TRUE,
         collapsible = TRUE, collapsed = TRUE,
-        sliderInput(ns("x_spacing"), "Horizontal spacing between categories", min = 100, max = 500, value = 200, step = 25),
-        sliderInput(ns("y_spacing"), "Vertical spacing between nodes", min = 30, max = 250, value = 80, step = 10),
-        sliderInput(ns("avoid_overlap"), "Avoid node overlap", min = 0, max = 1, value = 0.5, step = 0.1),
+        sliderInput(ns("x_spacing"), "Horizontal spacing between categories (ring size when circular)", min = 100, max = 500, value = 200, step = 25),
+        # Audit: the circular layout has no vertical spacing.
+        conditionalPanel(
+          condition = sprintf("input['%s'] != 'circular'", ns("layout_mode")),
+          sliderInput(ns("y_spacing"), "Vertical spacing between nodes", min = 30, max = 250, value = 80, step = 10)
+        ),
         sliderInput(ns("node_font_size"), "Graph label font size", min = 8, max = 40, value = 14, step = 1),
         sliderInput(ns("legend_font_size"), "Legend font size", min = 8, max = 40, value = 14, step = 1),
         tags$hr(),
@@ -97,7 +107,11 @@ mod_graph_ui <- function(id) {
         selectInput(ns("path_from_category"), "Pathway from category", choices = character()),
         selectInput(ns("path_to_category"), "Pathway to category", choices = character()),
         selectInput(ns("path_highlight"), "Highlight pathway", choices = c("None" = "none"), width = "100%"),
-        uiOutput(ns("path_status"))
+        uiOutput(ns("path_status")),
+        conditionalPanel(
+          condition = sprintf("input['%s'] == 'community'", ns("color_by")),
+          helpText("The highlight shows only when nodes are colored by DPSIR category.")
+        )
       ),
 
       box(
@@ -133,36 +147,61 @@ mod_graph_ui <- function(id) {
           column(width = 6, textInput(ns("snapshot_name"), NULL, value = "Snapshot 1", placeholder = "Snapshot name")),
           column(width = 6, actionButton(ns("save_snapshot"), "Save current view for report", icon = icon("camera"), class = "btn-outline-primary", width = "100%"))
         ),
-        uiOutput(ns("snapshot_status"))
+        uiOutput(ns("snapshot_status")),
+        # Revisao 3: the network drawn for print (DPSIR columns, readable
+        # labels, sign legend), in any format, size, resolution and font.
+        tags$div(style = "margin-top: 8px;",
+                 figure_export_button(ns, "network_static", "Download network figure…"),
+                 tags$span(class = "text-muted", style = "font-size: 12px; margin-left: 8px;",
+                           "Drawn for print in DPSIR columns, independent of the view above."))
       )
     )
   )
 }
 
-mod_graph_server <- function(id, schema, nodes, edges, graph, positions, set_positions) {
+mod_graph_server <- function(id, schema, nodes, edges, graph, positions, set_positions, epoch = NULL) {
   moduleServer(id, function(input, output, session) {
-    observeEvent(nodes(), {
+    # The Explore tab is built only when step 6 is first reached, so an
+    # update sent before the dropdown existed was lost (it only offered
+    # "All"). Re-send when the input appears, keeping a still-valid choice.
+    observeEvent(list(nodes(), is.null(input$subsystem_filter)), {
       n <- nodes()
-
-      subsystems <- sort(unique(n$subsystem[nzchar(n$subsystem)]))
-      updateSelectInput(session, "subsystem_filter", choices = c("All", subsystems), selected = "All")
+      req(n)
+      subsystems <- sort(unique(n$subsystem[!is.na(n$subsystem) & nzchar(n$subsystem)]))
+      current <- isolate(input$subsystem_filter)
+      updateSelectInput(session, "subsystem_filter", choices = c("All", subsystems),
+                        selected = if (!is.null(current) && current %in% subsystems) current else "All")
     })
 
     # =================================================
     # PATHWAY HIGHLIGHT (dropdown, same pattern as the other display options)
     # =================================================
 
-    observeEvent(schema(), {
+    # Fills the category choices whenever they are missing or no longer
+    # match the schema. Reading the inputs matters: the Explore tab is built
+    # only when step 6 is first reached, so an update sent when the schema
+    # loaded (before these dropdowns existed) was lost and they stayed empty.
+    observe({
+      req(schema())
       categories <- schema_categories(schema())
-      updateSelectInput(session, "path_from_category", choices = categories, selected = categories[1])
-      updateSelectInput(session, "path_to_category", choices = categories, selected = categories[length(categories)])
+      from <- input$path_from_category
+      to <- input$path_to_category
+      if (is.null(from) || !from %in% categories) {
+        updateSelectInput(session, "path_from_category", choices = categories, selected = categories[1])
+      }
+      if (is.null(to) || !to %in% categories) {
+        updateSelectInput(session, "path_to_category", choices = categories, selected = categories[length(categories)])
+      }
     })
 
     path_candidates <- reactive({
       req(graph(), input$path_from_category, input$path_to_category)
 
-      paths <- find_dpsir_paths(graph(), input$path_from_category, input$path_to_category, schema = schema())
-      compute_critical_pathways(graph(), paths, top_n = 10)
+      # Audit: only pathways that are on screen (the subsystem filter).
+      g <- filtered_graph()
+      req(g)
+      paths <- find_dpsir_paths(g, input$path_from_category, input$path_to_category, schema = schema())
+      compute_critical_pathways(g, paths, top_n = 10)
     })
 
     observeEvent(path_candidates(), {
@@ -175,7 +214,7 @@ mod_graph_server <- function(id, schema, nodes, edges, graph, positions, set_pos
 
       choices <- setNames(
         as.character(seq_len(nrow(candidates))),
-        sprintf("%s (score %.2f)", candidates$nodes, candidates$score)
+        sprintf("%s (effect %+.3f)", candidates$path, candidates$effect)
       )
       updateSelectInput(session, "path_highlight", choices = c("None" = "none", choices), selected = "none")
     })
@@ -254,10 +293,11 @@ mod_graph_server <- function(id, schema, nodes, edges, graph, positions, set_pos
       # converted to undirected to avoid an error.
       switch(
         input$community_algorithm,
-        "Louvain" = cluster_louvain(as_undirected(g)),
+        # Revisao 2, item 2.4: the randomized algorithms run with a fixed seed.
+        "Louvain" = with_local_seed(42, cluster_louvain(as_undirected(g))),
         "Walktrap" = cluster_walktrap(g),
-        "Infomap" = cluster_infomap(g),
-        "Label Propagation" = cluster_label_prop(as_undirected(g))
+        "Infomap" = with_local_seed(42, cluster_infomap(g)),
+        "Label Propagation" = with_local_seed(42, cluster_label_prop(as_undirected(g)))
       )
     })
 
@@ -266,11 +306,27 @@ mod_graph_server <- function(id, schema, nodes, edges, graph, positions, set_pos
       membership(community_result())
     })
 
+    # Revisao 2, item 3.2: sliders are debounced (no redraw per tick), and
+    # dragging a node no longer redraws the whole widget - the position is
+    # stored and the node pinned through the proxy (see node_drag below).
+    # `redraw_counter` forces a redraw only when positions must be re-applied
+    # from the server (reset).
+    # The defaults cover the first render, before the sliders are bound
+    # (a NULL spacing broke the layer layout).
+    d_x_spacing <- debounce(reactive(input$x_spacing %||% 200), 400)
+    d_y_spacing <- debounce(reactive(input$y_spacing %||% 80), 400)
+    d_node_font <- debounce(reactive(input$node_font_size %||% 14), 400)
+    d_legend_font <- debounce(reactive(input$legend_font_size %||% 14), 400)
+    d_conf_threshold <- debounce(reactive(input$confidence_threshold %||% 0.5), 400)
+    redraw_counter <- reactiveVal(0)
+
     output$network <- renderVisNetwork({
       req(graph())
       req(filtered_graph())
+      redraw_counter()
+      manual_positions <- isolate(positions())
 
-      display_schema <- apply_schema_palette(schema(), input$palette)
+      display_schema <- if (is.null(input$palette) || identical(input$palette, "model")) schema() else apply_schema_palette(schema(), input$palette)
 
       widget <- if (identical(input$color_by, "community")) {
         build_community_visual(
@@ -282,16 +338,16 @@ mod_graph_server <- function(id, schema, nodes, edges, graph, positions, set_pos
           node_size_mode = input$node_size_mode,
           node_size_weighted = input$node_size_weighted,
           edge_width_by = input$edge_width_by,
-          confidence_threshold = input$confidence_threshold,
-          x_spacing = input$x_spacing,
-          y_spacing = input$y_spacing,
-          avoid_overlap = input$avoid_overlap,
-          node_font_size = input$node_font_size,
-          legend_font_size = input$legend_font_size,
+          confidence_threshold = d_conf_threshold(),
+          x_spacing = d_x_spacing(),
+          y_spacing = d_y_spacing(),
+          node_font_size = d_node_font(),
+          legend_font_size = d_legend_font(),
           layout_mode = input$layout_mode,
-          manual_positions = positions(),
+          manual_positions = manual_positions,
           show_node_legend = input$show_node_legend,
-          show_edge_legend = input$show_edge_legend
+          show_edge_legend = input$show_edge_legend,
+          use_shapes = input$use_shapes
         )
       } else {
         build_network_visual(
@@ -303,15 +359,14 @@ mod_graph_server <- function(id, schema, nodes, edges, graph, positions, set_pos
           node_size_mode = input$node_size_mode,
           node_size_weighted = input$node_size_weighted,
           edge_width_by = input$edge_width_by,
-          confidence_threshold = input$confidence_threshold,
-          x_spacing = input$x_spacing,
-          y_spacing = input$y_spacing,
-          avoid_overlap = input$avoid_overlap,
-          node_font_size = input$node_font_size,
-          legend_font_size = input$legend_font_size,
+          confidence_threshold = d_conf_threshold(),
+          x_spacing = d_x_spacing(),
+          y_spacing = d_y_spacing(),
+          node_font_size = d_node_font(),
+          legend_font_size = d_legend_font(),
           highlighted_nodes = highlighted_nodes(),
           layout_mode = input$layout_mode,
-          manual_positions = positions(),
+          manual_positions = manual_positions,
           show_node_legend = input$show_node_legend,
           show_edge_legend = input$show_edge_legend
         )
@@ -389,10 +444,16 @@ mod_graph_server <- function(id, schema, nodes, edges, graph, positions, set_pos
 
       current <- current[!current$id %in% dragged$id, ]
       set_positions(rbind(current, dragged))
+      # Pin the dragged node(s) in the live widget instead of redrawing it:
+      # physics off keeps it where it was dropped (fixed.* stays FALSE so the
+      # next drag is still respected - see graph.R).
+      visNetworkProxy(session$ns("network")) %>%
+        visUpdateNodes(data.frame(id = dragged$id, x = dragged$x, y = dragged$y, physics = FALSE, stringsAsFactors = FALSE))
     })
 
     observeEvent(input$reset_positions, {
       set_positions(NULL)
+      redraw_counter(redraw_counter() + 1)
     })
 
     # =================================================
@@ -466,6 +527,19 @@ mod_graph_server <- function(id, schema, nodes, edges, graph, positions, set_pos
     pending_snapshot_name <- reactiveVal(NULL)
     pending_snapshot_caption <- reactiveVal(NULL)
 
+    # Revisao 2, item 0.2: snapshots belong to the project they were taken
+    # in - a new Start action (mod_data.R's rv$epoch) clears them, so project
+    # B's report never shows project A's images.
+    if (!is.null(epoch)) {
+      observeEvent(epoch(), {
+        graph_snapshots$list <- list()
+        snapshot_counter(1)
+        updateTextInput(session, "snapshot_name", value = "Snapshot 1")
+        pending_snapshot_name(NULL)
+        pending_snapshot_caption(NULL)
+      }, ignoreInit = TRUE)
+    }
+
     # Describes exactly which display/filter/highlight choices produced this
     # view, so the Report tab can caption the figure instead of showing a
     # bare image - the same choices affect what's visually meaningful, not
@@ -476,7 +550,7 @@ mod_graph_server <- function(id, schema, nodes, edges, graph, positions, set_pos
       color_desc <- if (identical(input$color_by, "community")) {
         paste0("nodes colored by community (", input$community_algorithm, " algorithm)")
       } else {
-        paste0("nodes colored by DPSIR category (", input$palette, " palette)")
+        paste0("nodes colored by DPSIR category (", if (identical(input$palette, "model")) "model" else input$palette, " palette)")
       }
 
       filters <- character()
@@ -499,16 +573,29 @@ mod_graph_server <- function(id, schema, nodes, edges, graph, positions, set_pos
 
       parts <- c(layout_desc, color_desc, filter_desc, size_desc, edge_desc)
 
-      if (!is.null(input$path_highlight) && input$path_highlight != "none") {
+      if (!identical(input$color_by, "community") && !is.null(input$path_highlight) && input$path_highlight != "none") {
         candidates <- path_candidates()
         idx <- as.integer(input$path_highlight)
         if (!is.na(idx) && idx <= nrow(candidates)) {
-          parts <- c(parts, paste0("highlighted pathway: ", candidates$nodes[idx]))
+          parts <- c(parts, paste0("highlighted pathway: ", candidates$path[idx]))
         }
       }
 
       paste0(paste(parts, collapse = "; "), ".")
     }
+
+    # Layout (columns by level, or a circle with radial labels) and link
+    # style (colour, or line type for black and white) of the print drawing.
+    net_opt <- function(x, default) input[[paste0("figexp_network_static_", x)]] %||% default
+    register_figure_export(input, output, session, "network_static", filename = "network",
+      draw = function() draw_network_static(graph(), schema(), layout = net_opt("layout", "columns"),
+                                            edge_style = net_opt("edges", "color")),
+      height = function(w, font) network_static_height_mm(graph(), schema(), w, font, layout = net_opt("layout", "columns"),
+                                                          edge_style = net_opt("edges", "color")),
+      extra_ui = function(key) fluidRow(
+        column(6, selectInput(key("layout"), "Layout", choices = NETWORK_LAYOUT_CHOICES, selected = net_opt("layout", "columns"))),
+        column(6, selectInput(key("edges"), "Links", choices = NETWORK_EDGE_CHOICES, selected = net_opt("edges", "color")))
+      ))
 
     observeEvent(input$save_snapshot, {
       name <- trimws(input$snapshot_name)
@@ -524,6 +611,10 @@ mod_graph_server <- function(id, schema, nodes, edges, graph, positions, set_pos
         "idpsir_capture_element",
         list(elementId = session$ns("network"), inputId = session$ns("snapshot_capture_result"))
       )
+    })
+
+    observeEvent(input$snapshot_capture_result_error, {
+      showNotification(paste("Could not save the view:", input$snapshot_capture_result_error), type = "error", duration = NULL)
     })
 
     observeEvent(input$snapshot_capture_result, {

@@ -18,12 +18,22 @@ mod_metrics_ui <- function(id) {
         DTOutput(ns("general_table"))
       ),
       tabPanel(
+        "Strength & confidence",
+        helpText("How strong the network is and how well founded its strengths are, as a whole.",
+                 "Static reading, without State triggers; the sign and interval rows resample the link bands (200 draws, fixed seed)."),
+        DTOutput(ns("strength_confidence_table")),
+        helpText("For the specific links and States to look up first in a scenario, see the \"Data needs\" table in the Interpretation tab."),
+        h4("By transition (where the network is least founded first)"),
+        DTOutput(ns("strength_by_transition_table"))
+      ),
+      tabPanel(
         "Centralities",
         fluidRow(
           column(width = 4, ina_toggle_directed(ns("directed"))),
           column(width = 4, ina_toggle_normalized(ns("normalized"))),
           column(width = 4, checkboxInput(ns("weighted"), "Weighted by edge weight (link strength)", value = FALSE))
         ),
+        helpText("Directed: betweenness and closeness follow the arrows (closeness along outgoing paths, so it is blank for factors with no outgoing path, e.g. Impacts without a Response link). Degree is always the total number of links."),
         DTOutput(ns("centrality_table"))
       ),
       tabPanel(
@@ -35,12 +45,10 @@ mod_metrics_ui <- function(id) {
         h4("Category x category matrix"),
         DTOutput(ns("matrix_table")),
         uiOutput(ns("gaps_summary")),
-        h4("Average uncertainty/controllability by category (0 = low, 1 = high)"),
-        DTOutput(ns("averages_table")),
         h4("All Driver-to-Impact pathways"),
         p(
           class = "text-muted",
-          "Every simple causal chain from a Driver to an Impact in this network, ranked by score (mean edge weight x mean confidence x number of links)."
+          PATHWAYS_CAPTION
         ),
         uiOutput(ns("pathways_note")),
         DTOutput(ns("pathways_table"))
@@ -59,6 +67,19 @@ mod_metrics_server <- function(id, schema, graph) {
         rownames = FALSE,
         options = list(dom = "t")
       )
+    })
+
+    strength_confidence <- reactive({
+      req(graph())
+      network_strength_confidence(graph())
+    })
+
+    output$strength_confidence_table <- renderDT({
+      datatable(strength_confidence()$summary, rownames = FALSE, options = list(dom = "t", pageLength = 50))
+    })
+
+    output$strength_by_transition_table <- renderDT({
+      datatable(strength_confidence()$by_transition, rownames = FALSE, options = list(dom = "t", pageLength = 50))
     })
 
     output$centrality_table <- renderDT({
@@ -109,15 +130,6 @@ mod_metrics_server <- function(id, schema, graph) {
       datatable(as.data.frame.matrix(descriptors()$transition_matrix), options = list(dom = "t"))
     })
 
-    output$averages_table <- renderDT({
-      datatable(
-        descriptors()$averages_by_category,
-        rownames = FALSE,
-        options = list(dom = "t")
-      ) %>%
-        formatRound(columns = c("avg_uncertainty", "avg_controllability"), digits = 2)
-    })
-
     driver_impact_pathways <- reactive({
       req(graph())
       compute_all_driver_impact_pathways(graph(), schema())
@@ -144,12 +156,10 @@ mod_metrics_server <- function(id, schema, graph) {
       dp <- driver_impact_pathways()
 
       datatable(
-        dp$table[, c("nodes", "length", "score")],
-        colnames = c("Pathway", "Length (nodes)", "Score"),
+        format_pathways_table(dp$table),
         rownames = FALSE,
         options = list(pageLength = 10, scrollX = TRUE)
-      ) %>%
-        formatRound(columns = "score", digits = 3)
+      )
     })
 
     output$gaps_summary <- renderUI({

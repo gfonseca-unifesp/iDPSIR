@@ -1,13 +1,14 @@
-name: Deploy shinylive demo
+name: Test and deploy shinylive demo
 
-# Publishes a WebAssembly build of the app (no server, runs entirely in the
-# visitor's browser) to GitHub Pages on every push to main. See item 8.1 of
-# ROADMAP_MELHORIAS_iDPSIR.md and the "Fase 8" notes in CLAUDE.md for why
-# this exists and how it was validated before being wired into CI.
+# Revisao 2, Fase 4: the testthat suite runs on every push and pull request;
+# the WebAssembly build of the app (no server, runs entirely in the visitor's
+# browser) is published to GitHub Pages only from main, and only after the
+# tests pass. R and shinylive versions are pinned so a new release of either
+# cannot silently change the demo.
 
 on:
   push:
-    branches: [main]
+  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -16,34 +17,60 @@ permissions:
   id-token: write
 
 concurrency:
-  group: "pages"
+  group: "pages-${{ github.ref }}"
   cancel-in-progress: false
 
+env:
+  R_VERSION: "4.5.1"
+  SHINYLIVE_VERSION: "0.5.0"
+
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
       - uses: r-lib/actions/setup-r@v2
         with:
-          r-version: "release"
+          r-version: ${{ env.R_VERSION }}
+          use-public-rspm: true
 
-      - name: Install shinylive
-        run: Rscript -e 'install.packages("shinylive")'
+      # Installs the Imports of DESCRIPTION (the same list as global.R's
+      # required_packages) plus testthat.
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          extra-packages: any::testthat
+
+      - name: Run the testthat suite
+        run: Rscript tests/testthat.R
+
+  build:
+    needs: test
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: ${{ env.R_VERSION }}
+          use-public-rspm: true
+
+      - name: Install shinylive (pinned)
+        run: |
+          Rscript -e 'install.packages("remotes")'
+          Rscript -e 'remotes::install_version("shinylive", version = Sys.getenv("SHINYLIVE_VERSION"), upgrade = "never")'
 
       # shinylive::export() bundles every file under appdir as-is (it has no
       # .gitignore-style exclusion) - exporting the repo root directly would
-      # sweep tests/, ROADMAP_MELHORIAS_iDPSIR.md, PLANO_iDPSIR.md and
-      # CLAUDE.md into the publicly served app's editable source tree.
-      # Staging only what the running app actually needs (app.R, global.R,
-      # R/, data/, docs/) keeps the export scoped to real app files, same as
-      # what shiny::runApp()/runGitHub() actually use.
+      # sweep tests/, legacy/, the roadmaps and CLAUDE.md into the publicly
+      # served app's source tree. Only what the running app needs is staged.
       - name: Stage app files
         run: |
           mkdir -p _app
           cp app.R global.R _app/
           cp -r R data docs _app/
+          rm -f _app/docs/CHANGELOG.md
 
       - name: Export to shinylive (WebAssembly)
         run: Rscript -e 'shinylive::export(appdir = "_app", destdir = "_site")'
@@ -54,6 +81,7 @@ jobs:
 
   deploy:
     needs: build
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
