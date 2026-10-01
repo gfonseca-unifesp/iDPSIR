@@ -714,7 +714,9 @@ typical variation also takes its push in its own units. Older files with an
   - `data-raw/manuscript_build.R` computes the numbers;
   - `data-raw/manuscript_tables.R` writes the tables, checked against the text;
   - `data-raw/manuscript_figures.R` draws the six figures at 600 dpi, with the same
-    exporter and network drawing as the app.
+    exporter and network drawing as the app;
+  - `data-raw/manuscript_supplement.R` writes the tables of Supplements S1–S3 (factors,
+    links, scenarios with their schedules, Data needs).
 
   The cited numbers are frozen in `tests/testthat/fixtures/manuscript_numbers.json`, so a
   change of the engine that alters one of them fails the suite.
@@ -727,7 +729,7 @@ Davanso, in preparation). Its supplementary material maps onto this repository:
 
 | Supplement | Content | In the repository |
 |---|---|---|
-| S1 | Port: savepoint, links, scenarios and their schedules, Data needs | `docs/example_port.idpsir.json`, `data/port_*.csv`, `data-raw/port_build.R` |
+| S1 | Port: savepoint, links, scenarios and their schedules, Data needs | `docs/example_port.idpsir.json`, `data/port_*.csv`, `data-raw/port_build.R`; tables: `data-raw/manuscript_supplement.R` |
 | S2 | Kenyan reef fishery: savepoints (full and first run), Data needs | `docs/example_mangi*.idpsir.json`, `data/mangi2007_*.csv`, `data-raw/mangi2007_build.R` |
 | S3 | Sri Lankan fishery: savepoints (published, first run, variant), parameters and sources, observed effort | `docs/example_gnanapragasam*.idpsir.json`, `data/gnanapragasam2026_*.csv` |
 | S4 | Pre-registration of the simulation experiment and its deviations | `analysis/sim_networks/` |
