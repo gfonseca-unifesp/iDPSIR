@@ -177,6 +177,14 @@ registradas no roadmap).
   GAP") — a novidade é a leitura por propagação numa rede causal, aberta e sem instalação; QPress
   tem widgets Shiny; FCM já tem incerteza Monte Carlo (In-Cognitive 2023); ler Ramos-Quintana
   et al. 2018.
+- **S7 / passo 6 fora do app:** `analysis/templates/validate_network.R` (template genérico:
+  `vn_load`, `vn_calibrate`, `vn_validate`, `vn_compare`, `vn_plot_validation`); os scripts de
+  `analysis/validation_srilanka/` são só a configuração do caso (mesmos números, conferidos por
+  `test-validation-template.R` contra `manuscript_numbers.json`). `vn_compare` acrescenta AICc e a
+  autocorrelação lag-1 dos resíduos (publicada 0,15; alternativas 0,75–0,76).
+- **Figuras do manuscrito v8:** `data-raw/manuscript_figures.R` grava em `manuscrito_v8/fig_hr/`;
+  redes das Figs. 3a–5a em layout circular com ligações por tipo de linha (`MS_NET_LAYOUT`,
+  `MS_NET_EDGES`); Fig. 6 com texto maior (`par(cex = 1)` depois do `mfrow`).
 - **E6 (teste de usabilidade): fora do plano** por decisão do autor — não há coleta com
   participantes, nada depende de CEP.
 - **E4:** forma aditiva opcional; justificativa do produto (perda esperada evitável);

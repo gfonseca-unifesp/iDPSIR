@@ -1,8 +1,8 @@
 # data-raw/manuscript_figures.R: the six figures of manuscript v7 in print
-# resolution. The outputs live in manuscrito_v7/fig_hr/ (not versioned), so
+# resolution. The outputs live in manuscrito_v8/fig_hr/ (not versioned), so
 # the test is skipped where they do not exist (CI, a fresh clone).
 
-fig_dir <- "../../manuscrito_v7/fig_hr"
+fig_dir <- "../../manuscrito_v8/fig_hr"
 fig_stems <- c("fig1_workflow", "fig2_architecture", "fig3_port", "fig4_kenya", "fig5_srilanka", "fig6_simulated")
 
 png_size <- function(path) {

@@ -16,7 +16,7 @@
 # in base R so that one script, on any machine with R, makes every figure.
 #
 # Run from the repository root:
-#   Rscript data-raw/manuscript_figures.R [out_dir]   (default manuscrito_v7/fig_hr)
+#   Rscript data-raw/manuscript_figures.R [out_dir]   (default manuscrito_v8/fig_hr)
 
 MS_PT <- 8                        # device point size: cex 1 = 8 pt in print
 MS_DPI <- 600
@@ -249,8 +249,19 @@ ms_temporal_panels <- function(tb, region, xlab, ncol = NULL, legend_frac = 0.09
 # A case figure: network (a) with its legend, then panel (b). Heights in mm:
 # the network's from its content, (b) as given. Returns the drawing function
 # and the total height.
-ms_case_figure <- function(g, schema, lay, draw_b, b_mm, width_mm = 190, node_cex = 2.1) {
-  letter_mm <- 5; net_mm <- lay$H * ms_line_mm(); legend_mm <- 7; gap_mm <- 3
+# The network panels of the manuscript (v8): circular layout, grouped by
+# DPSIR level, links by line type (solid arrow increases, dashed bar
+# decreases, width = strength class). "columns"/"color" give the earlier look.
+MS_NET_LAYOUT <- "circle"
+MS_NET_EDGES <- "linetype"
+
+ms_case_figure <- function(g, schema, lay, draw_b, b_mm, width_mm = 190, node_cex = 2.1,
+                           layout = MS_NET_LAYOUT, edge_style = MS_NET_EDGES, circle_mm = 150) {
+  if (identical(layout, "circle")) lay <- network_circle_layout(g, schema)
+  letter_mm <- 5
+  net_mm <- if (identical(layout, "circle")) circle_mm else lay$H * ms_line_mm()
+  legend_mm <- if (identical(edge_style, "linetype")) 12 else 7
+  gap_mm <- 3
   total <- letter_mm + net_mm + legend_mm + gap_mm + letter_mm + b_mm
   f <- function(mm) mm / total
   draw <- function() {
@@ -259,10 +270,11 @@ ms_case_figure <- function(g, schema, lay, draw_b, b_mm, width_mm = 190, node_ce
     ms_letter("a")   # first drawing on the page: no new = TRUE
     top <- top - f(letter_mm)
     graphics::par(fig = c(0, 1, top - f(net_mm), top), new = TRUE)
-    ms_network_panel(g, lay, node_cex = node_cex)
+    if (identical(layout, "circle")) draw_network_circle_panel(g, lay, node_cex = node_cex, edge_style = edge_style)
+    else draw_network_static_panel(g, lay, node_cex = node_cex, edge_style = edge_style)
     top <- top - f(net_mm)
     graphics::par(fig = c(0, 1, top - f(legend_mm), top), new = TRUE)
-    ms_network_legend(schema)
+    draw_network_static_legend(schema, cats = lay$cats, edge_style = edge_style)
     top <- top - f(legend_mm) - f(gap_mm)
     graphics::par(fig = c(0, 1, top - f(letter_mm), top), new = TRUE)
     ms_letter("b")
@@ -331,7 +343,7 @@ ms_validation_panel <- function(region, root = ".") {
 fig5_srilanka <- function(root = ".") {
   x <- ms_load("example_gnanapragasam", root)
   lay <- ms_network_layout(x$g, x$sp$schema, wrap = 22)
-  ms_case_figure(x$g, x$sp$schema, lay, function(region) ms_validation_panel(region, root), b_mm = 75)
+  ms_case_figure(x$g, x$sp$schema, lay, function(region) ms_validation_panel(region, root), b_mm = 64)
 }
 
 # ---------------------------------------------------------------------------
@@ -352,43 +364,46 @@ fig6_data <- function(root = ".") {
 
 fig6_simulated <- function(dat) {
   function() {
-    graphics::par(mfrow = c(2, 2), mar = c(3.6, 4.2, 2.2, 0.8), mgp = c(2.3, 0.5, 0), tcl = -0.25, las = 1,
-                  col.axis = INK, col.lab = INK, cex.axis = 0.875, cex.lab = 0.9)
+    # mfrow shrinks the text to 83%: set it back, so the sizes below are the
+    # printed ones (titles ~9.6 pt, axes 9 pt, bar labels 8 pt, at 8 pt base).
+    graphics::par(mfrow = c(2, 2), mar = c(4.2, 4.8, 2.6, 0.8), mgp = c(2.7, 0.55, 0), tcl = -0.3, las = 1,
+                  col.axis = INK, col.lab = INK)
+    graphics::par(cex = 1, cex.axis = 1.125, cex.lab = 1.15)
     # (a)
     k <- dat$rates[match(c("C0->C1", "C1->C2", "C2t->C3"), dat$rates$pair), ]
     yb <- graphics::barplot(k$rate * 100, names.arg = c("Link strengths", "State thresholds", "Growth trends"),
-                            ylim = c(0, 25), col = OI[["blue"]], border = NA, ylab = "Verdicts that change (%)", cex.names = 0.875)
+                            ylim = c(0, 25), col = OI[["blue"]], border = NA, ylab = "Verdicts that change (%)", cex.names = 1.125)
     graphics::arrows(yb, k$lo * 100, yb, k$hi * 100, angle = 90, code = 3, length = 0.04, col = INK, lwd = 1)
-    graphics::text(yb, k$hi * 100, sprintf("%.1f%%", k$rate * 100), pos = 3, cex = 0.875, col = INK, offset = 0.3)
-    graphics::mtext("(a) What changes the verdict", side = 3, line = 0.6, adj = 0, font = 2, cex = 1.0, col = INK)
+    graphics::text(yb, k$hi * 100, sprintf("%.1f%%", k$rate * 100), pos = 3, cex = 1, col = INK, offset = 0.3)
+    graphics::mtext("(a) What changes the verdict", side = 3, line = 0.8, adj = 0, font = 2, cex = 1.2, col = INK)
     # (b)
     nb <- dat$near
     yb <- graphics::barplot(nb$rate * 100, names.arg = c("< 0.1", "0.1-0.2", "0.2-0.4", "0.4-0.8", "> 0.8"),
                             ylim = c(0, 55), col = OI[["orange"]], border = NA, ylab = "Verdicts changed by strengths (%)",
-                            xlab = "Closeness to neutralization, |net| / worsening", cex.names = 0.875)
-    graphics::text(yb, nb$rate * 100, sprintf("%.0f%%", nb$rate * 100), pos = 3, cex = 0.875, col = INK, offset = 0.3)
-    graphics::mtext("(b) Changes near neutralization", side = 3, line = 0.6, adj = 0, font = 2, cex = 1.0, col = INK)
+                            xlab = "Closeness to neutralization, |net| / worsening", cex.names = 1.125)
+    graphics::text(yb, nb$rate * 100, sprintf("%.0f%%", nb$rate * 100), pos = 3, cex = 1, col = INK, offset = 0.3)
+    graphics::mtext("(b) Changes near neutralization", side = 3, line = 0.8, adj = 0, font = 2, cex = 1.2, col = INK)
     # (c)
     nice <- c(near = "closeness to neutralization", rho_B = "loop amplification ρ(B)", has_cycle = "has a loop",
               density = "density", n_nodes = "number of factors", mean_path_DI = "mean D→I path length",
               n_thresholds = "number of thresholds", n_growing = "number of growing Drivers",
               draw_mode = "strength draw mode", share_reached = "share of Impacts reached")
     rr <- dat$rf[order(dat$rf$importance), ]
-    graphics::par(mar = c(3.6, 10.5, 2.2, 0.8))
+    graphics::par(mar = c(4.2, 14.5, 2.6, 0.8))
     graphics::barplot(rr$importance, names.arg = nice[rr$variable], horiz = TRUE, col = OI[["green"]], border = NA,
-                      xlab = "Permutation importance", cex.names = 0.875)
-    graphics::mtext("(c) What explains a change", side = 3, line = 0.6, adj = 0, font = 2, cex = 1.0, col = INK,
+                      xlab = "Permutation importance", cex.names = 1.125)
+    graphics::mtext("(c) What explains a change", side = 3, line = 0.8, adj = 0, font = 2, cex = 1.2, col = INK,
                     at = graphics::grconvertX(0.02, "nfc", "user"))
     # (d)
-    graphics::par(mar = c(3.6, 4.2, 2.2, 0.8))
+    graphics::par(mar = c(4.2, 4.8, 2.6, 0.8))
     tau <- dat$kt$tau[!is.na(dat$kt$tau)]
     h <- graphics::hist(tau, breaks = seq(-1, 1, 0.1), plot = FALSE)
     graphics::plot(h, col = OI[["purple"]], border = "white", main = "", xlab = "Kendall τ, bare structure vs drawn strengths",
                    ylab = "Network × draw pairs", xlim = c(-1, 1))
     graphics::abline(v = 0.7, lty = 2, col = INK, lwd = 1.2)
-    graphics::text(0.7, max(h$counts) * 0.97, "pre-registered 0.7", pos = 2, cex = 0.875, col = INK)
-    graphics::mtext(sprintf("(d) Priority order: mean τ %.2f; top changes in %.0f%%", mean(tau),
-                            100 * mean(dat$kt$top_changed, na.rm = TRUE)), side = 3, line = 0.6, adj = 0, font = 2, cex = 1.0, col = INK)
+    graphics::text(0.7, max(h$counts) * 0.97, "pre-registered 0.7", pos = 2, cex = 1, col = INK)
+    graphics::mtext(sprintf("(d) Priority order: mean τ %.2f; top changes %.0f%%", mean(tau),
+                            100 * mean(dat$kt$top_changed, na.rm = TRUE)), side = 3, line = 0.8, adj = 0, font = 2, cex = 1.2, col = INK)
   }
 }
 
@@ -398,7 +413,7 @@ fig6_simulated <- function(dat) {
 MS_FIGURES <- data.frame(
   stem = c("fig1_workflow", "fig2_architecture", "fig3_port", "fig4_kenya", "fig5_srilanka", "fig6_simulated"),
   width_mm = 190,
-  height_mm = c(156, 154, NA, NA, NA, 150),   # NA: from the network's content
+  height_mm = c(156, 154, NA, NA, NA, 170),   # NA: from the network's content
   content = c("Workflow cycle (7 steps)", "Software: guided workflow and layered architecture",
               "Port: (a) network; (b) temporal, scenario 4 (runoff treatment late)",
               "Kenya: (a) network; (b) temporal, scenario 4, 30 years",
@@ -406,7 +421,7 @@ MS_FIGURES <- data.frame(
               "Simulated networks (a)-(d)"),
   stringsAsFactors = FALSE)
 
-manuscript_figures <- function(root = ".", out_dir = "manuscrito_v7/fig_hr", which = MS_FIGURES$stem) {
+manuscript_figures <- function(root = ".", out_dir = "manuscrito_v8/fig_hr", which = MS_FIGURES$stem) {
   dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
   draws <- list(
     fig1_workflow = function() list(draw = fig1_workflow),
@@ -429,7 +444,7 @@ manuscript_figures <- function(root = ".", out_dir = "manuscrito_v7/fig_hr", whi
 
 if (sys.nframe() == 0) {
   args <- commandArgs(trailingOnly = TRUE)
-  out_dir <- if (length(args) >= 1 && !startsWith(args[1], "--")) args[1] else "manuscrito_v7/fig_hr"
+  out_dir <- if (length(args) >= 1 && !startsWith(args[1], "--")) args[1] else "manuscrito_v8/fig_hr"
   only <- sub("^--only=", "", grep("^--only=", args, value = TRUE))
   setwd("tests/testthat"); suppressMessages(suppressWarnings(source("helper-setup.R"))); setwd("../..")
   suppressMessages({ library(shiny); source("R/modules/mod_responses.R") })

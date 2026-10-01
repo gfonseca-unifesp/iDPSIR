@@ -1576,6 +1576,18 @@ P1,S1,negative,0.55,,monitoring</pre>
           fleet's own growth and demand → effort fitted instead (AIC 42 worse; RMSE 2,472 in sample,
           10,867 out of sample). A smooth trend cannot produce the two aid steps and the plateau
           after 2014. The data, not only the paper's narrative, support the assumption.</p>
+        <p><strong>Testing a network against observed data (outside the app).</strong> Fitting
+          link strengths to a series, predicting the years left out and comparing networks by AIC are
+          statistics the app does not perform. They run in R with
+          <code>analysis/templates/validate_network.R</code>, which reads a saved network and runs it
+          with the app's own engine, so the network tested is the one you decide with. Give it your
+          savepoint, a CSV with an observed series of one factor (in its own units; the factor needs a
+          reference level and SD), the links or growth rates to fit and the periods; it returns the
+          fitted values with standard errors, the out-of-sample metrics against persistence and trend,
+          a 90% band, a rolling origin, the AIC/AICc/BIC comparison of alternative networks and a
+          figure like the one above. The Sri Lanka scripts are this template set up for the case.
+          Enter the fitted values back in the app as link strengths, with evidence type
+          <em>calibration</em>.</p>
         <div class="code-cluster">
           <div class="code-card">
             <h4>The variant</h4>

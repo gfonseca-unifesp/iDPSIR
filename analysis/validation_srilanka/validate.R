@@ -8,7 +8,8 @@
 # with a rolling origin (fit 2006..k, predict k+1..2021, k = 2012..2016).
 # E2.2: a 90% band for 2015-2021 from the calibrated betas (their fitted
 # covariance) and every other edge resampled uniformly within its uncertainty
-# band, as in sufficiency_confidence(); reports its coverage.
+# band, as in sufficiency_confidence(); reports its coverage. The work is done
+# by vn_validate() in analysis/templates/validate_network.R.
 #
 # Run from the repository root:
 #   Rscript analysis/validation_srilanka/validate.R
@@ -17,79 +18,8 @@
 
 run_validation <- function(root = ".", n_band = 500, seed = 42, fit_years = 2006:2014, test_years = 2015:2021,
                            origins = 2012:2016) {
-  d <- load_srilanka(root)
-  cal <- calibrate_aid(d, fit_years)
-  sim <- simulate_effort(d, cal$beta, max(test_years))
-  yt <- as.character(test_years)
-  yf <- as.character(fit_years)
-  obs_t <- d$obs[yt]
-
-  persistence <- setNames(rep(d$obs[as.character(max(fit_years))], length(test_years)), yt)
-  trend_fit <- stats::lm(y ~ x, data = data.frame(x = fit_years, y = d$obs[yf]))
-  trend <- setNames(stats::predict(trend_fit, data.frame(x = test_years)), yt)
-
-  peak_year <- as.character(test_years[which.max(obs_t)])
-  metrics_of <- function(pred, label) {
-    s <- fit_stats(obs_t, pred[yt])
-    data.frame(model = label, r2 = s[["r2"]], rmse = s[["rmse"]], bias = s[["bias"]], nse = s[["nse"]],
-               peak_year = as.integer(peak_year), peak_error = unname(pred[peak_year] - obs_t[peak_year]),
-               stringsAsFactors = FALSE)
-  }
-  metrics <- rbind(
-    metrics_of(sim, "iDPSIR (aid calibrated 2006-2014)"),
-    metrics_of(persistence, "Persistence (2014 value)"),
-    metrics_of(trend, "Linear trend 2006-2014")
-  )
-  metrics$fit_r2 <- c(cal$stats[["r2"]], NA, NA)
-  metrics$beta_R1 <- c(cal$beta[["R1"]], NA, NA)
-  metrics$beta_R2 <- c(cal$beta[["R2"]], NA, NA)
-  metrics$se_R1 <- c(cal$se[["R1"]], NA, NA)
-  metrics$se_R2 <- c(cal$se[["R2"]], NA, NA)
-
-  # Rolling origin.
-  rolling <- do.call(rbind, lapply(origins, function(k) {
-    fy <- 2006:k
-    ty <- as.character((k + 1):max(test_years))
-    ck <- calibrate_aid(d, fy)
-    sk <- simulate_effort(d, ck$beta, max(test_years))
-    pk <- setNames(rep(d$obs[as.character(k)], length(ty)), ty)
-    tk <- setNames(stats::predict(stats::lm(y ~ x, data = data.frame(x = fy, y = d$obs[as.character(fy)])),
-                                  data.frame(x = as.numeric(ty))), ty)
-    m <- function(pred) fit_stats(d$obs[ty], pred[ty])
-    data.frame(origin = k, n_test = length(ty), beta_R1 = ck$beta[["R1"]], beta_R2 = ck$beta[["R2"]],
-               rmse = m(sk)[["rmse"]], nse = m(sk)[["nse"]], bias = m(sk)[["bias"]],
-               rmse_persistence = m(pk)[["rmse"]], rmse_trend = m(tk)[["rmse"]])
-  }))
-
-  # E2.2: uncertainty band of the forecast.
-  g <- d$g
-  w <- igraph::E(g)$weight
-  lo <- igraph::E(g)$weight_low; hi <- igraph::E(g)$weight_high
-  lo[is.na(lo)] <- w[is.na(lo)]; hi[is.na(hi)] <- w[is.na(hi)]
-  draws <- with_local_seed(seed, {
-    L <- tryCatch(chol(cal$cov), error = function(e) diag(cal$se))
-    t(vapply(seq_len(n_band), function(i) {
-      b <- pmax(0, cal$beta + as.numeric(stats::rnorm(2) %*% L))
-      ww <- stats::runif(length(w), lo, hi)
-      out <- tryCatch(simulate_effort(d, b, max(test_years), weights = ww), error = function(e) rep(NA_real_, max(test_years) - VAL_YEAR0 + 1))
-      out
-    }, numeric(max(test_years) - VAL_YEAR0 + 1)))
-  })
-  colnames(draws) <- as.character(VAL_YEAR0:max(test_years))
-  band <- apply(draws, 2, stats::quantile, probs = c(0.05, 0.95), na.rm = TRUE)
-  covered <- obs_t >= band[1, yt] & obs_t <= band[2, yt]
-  metrics$band_coverage_90 <- c(mean(covered), NA, NA)
-  metrics$band_draws_used <- c(sum(stats::complete.cases(draws)), NA, NA)
-
-  forecast <- data.frame(
-    year = VAL_YEAR0:max(test_years),
-    observed = unname(d$obs[as.character(VAL_YEAR0:max(test_years))]),
-    simulated = unname(sim[as.character(VAL_YEAR0:max(test_years))]),
-    band_05 = unname(band[1, ]), band_95 = unname(band[2, ]),
-    period = ifelse(VAL_YEAR0:max(test_years) %in% fit_years, "fit", ifelse(VAL_YEAR0:max(test_years) %in% test_years, "test", "other"))
-  )
-  list(metrics = metrics, rolling = rolling, forecast = forecast, calibration = cal,
-       persistence = persistence, trend = trend)
+  vn_validate(load_srilanka(root), SL_AID_PARAMS, fit_years, test_years, origins = origins, n_band = n_band, seed = seed,
+              label = "iDPSIR, aid")
 }
 
 plot_validation <- function(v) {

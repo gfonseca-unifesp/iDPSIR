@@ -361,6 +361,29 @@ Rscript analysis/validation_srilanka/variant_test.R
 
 Outputs go to `analysis/validation_srilanka/out/`.
 
+**With your own network.** These scripts are the generic template
+[`analysis/templates/validate_network.R`](analysis/templates/validate_network.R) configured
+for the Sri Lankan case.
+
+What you give it:
+- a savepoint;
+- a CSV with an observed series of one factor, in its own units (the factor needs a
+  reference level and an SD);
+- the links (or node attributes, such as a growth rate) to fit;
+- the calibration and test periods;
+- optionally, alternative networks.
+
+What it returns:
+- fitted values with standard errors;
+- out-of-sample metrics against persistence and trend, with a 90% band and a rolling
+  origin;
+- an AIC/AICc/BIC comparison of the networks, with the residual autocorrelation;
+- a figure in the style of the paper's Fig. 5b.
+
+To use it, copy `vn_example_srilanka()` at the end of the file, adapt it, and run
+`Rscript analysis/templates/validate_network.R`. A test checks that the template
+reproduces the Sri Lankan numbers cited in the paper.
+
 **Two checks, kept apart:**
 - *Consistency* compares the network with another model of the same system (here, the
   paper's bioeconomic model). It shows agreement, not validity.
@@ -710,7 +733,7 @@ Davanso, in preparation). Its supplementary material maps onto this repository:
 | S4 | Pre-registration of the simulation experiment and its deviations | `analysis/sim_networks/` |
 | S5 | Tool-search protocol, with a source for each cell of Table 1 | `analysis/tool_search/` |
 | S6 | Plain-language guide to every input and result | (with the paper); see also the tutorial and [Data format](#data-format) |
-| S7 | Methods run outside the app: calibration, out-of-sample validation, comparison of networks | `analysis/validation_srilanka/` |
+| S7 | Methods run outside the app: calibration, out-of-sample validation, comparison of networks | `analysis/templates/validate_network.R`, `analysis/validation_srilanka/` |
 
 ## Limitations
 
@@ -764,7 +787,8 @@ iDPSIR/
 │                              #   and every number, table and figure of the paper (manuscript_*.R)
 ├── docs/                      # tutorial.html, example savepoints, example figures, CHANGELOG.md
 ├── analysis/
-│   ├── validation_srilanka/   # calibration, out-of-sample validation, rival networks (outside the app)
+│   ├── templates/             # validate_network.R: test any saved network against observed data (step 6)
+│   ├── validation_srilanka/   # the template configured for the Sri Lankan case
 │   ├── sim_networks/          # pre-registered experiment with 1,000 simulated networks
 │   └── tool_search/           # documented search of existing tools (Table 1 of the paper)
 ├── tests/testthat/            # test suite; fixtures/ holds older-format savepoints and the frozen paper numbers
