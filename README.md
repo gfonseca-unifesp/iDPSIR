@@ -303,8 +303,13 @@ the three that have plain tables.
 the two "aid → fleet capacity" links (built by
 [`data-raw/gnanapragasam2026_variant_build.R`](data-raw/gnanapragasam2026_variant_build.R)):
 the aid then reaches only fisher income loss, the stock never falls below B_MSY, and
-the simulated effort misses the observed one (RMSE 6,152 against 658) - the data support
-the assumption that the aid enlarged the fleet.
+the simulated effort misses the observed one (RMSE 6,152 against 658). Because the variant
+simply loses the two fitted aid strengths, it is also compared fairly
+([`analysis/validation_srilanka/variant_test.R`](analysis/validation_srilanka/variant_test.R)):
+with a penalty for parameters (AIC 67 worse), out of sample (fitted on 2006-2014: RMSE 6,871
+against 559 in 2015-2021), and against a rival with as many fitted parameters (no aid -> fleet,
+but the fleet's own growth and demand -> effort fitted: AIC 42 worse, RMSE 2,472 in-sample and
+10,867 out of sample). The data support the assumption that the aid enlarged the fleet.
 
 **First run (defaults only).** `docs/example_mangi_default.idpsir.json` and
 `docs/example_gnanapragasam_default.idpsir.json` hold the same networks with every setting

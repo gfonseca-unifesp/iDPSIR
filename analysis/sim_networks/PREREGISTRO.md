@@ -168,3 +168,11 @@ network × draw × condition × Impact to `out/results.csv.gz` and the network p
    (fixed in the app, with a test). In the experiment, a condition whose base reading
    cannot be computed for this reason is counted (`conditions_failed` in `counts.csv`) and
    left out of the comparisons that use it; the rest of the network is kept.
+
+**2026-09-30, after the run (found while checking the analysis for the manuscript):**
+6. The confidence readings counted as "neutralized" a draw in which the pressure no longer
+   worsened the Impact (with structural uncertainty, a link on the pressure's path can be
+   absent). The app now counts those draws apart (`not_worsened_pct`). This affects only the
+   secondary condition C4 (`confidence_structural` in `results.csv.gz`), which none of the
+   hypotheses H1-H5 uses and which is not reported; the primary results are unchanged. If
+   C4 is ever cited, rerun it with the corrected engine.

@@ -66,6 +66,7 @@ manuscript_numbers <- function(root = ".", with_sim = TRUE) {
       cm <- sc$sufficiency_confidence_matrix; cmt <- sct$sufficiency_confidence_matrix
       put("port.s1.conf_fauna", cm[1, "Behavioral alterations of fauna"])
       put("port.s1.conf_fauna_structural", cmt[1, "Behavioral alterations of fauna"])
+      put("port.s1.fauna_not_worsened_structural", attr(cmt, "not_worsened")[["Behavioral alterations of fauna"]])
       sens <- self_regulation_sensitivity(port$g, sc$p_D, sc$press)
       put("port.s1.sr_depends_n", sum(sens$depends_on_s))
     }
@@ -102,6 +103,7 @@ manuscript_numbers <- function(root = ".", with_sim = TRUE) {
       sct <- ms_scenario(mangi, d$active, d$strengths, d$pressure_active, d$pressure_strengths, structural = TRUE)
       put("mangi.s1.conf_catch", sc$sufficiency_confidence_matrix[1, "Declining catch per fisher"])
       put("mangi.s1.conf_catch_structural", sct$sufficiency_confidence_matrix[1, "Declining catch per fisher"])
+      put("mangi.s1.catch_not_worsened_structural", attr(sct$sufficiency_confidence_matrix, "not_worsened")[["Declining catch per fisher"]])
       # First run.
       sc0 <- ms_scenario(mangi0, d$active, d$strengths, d$pressure_active, d$pressure_strengths)
       s0 <- sc0$sufficiency_df
@@ -162,6 +164,16 @@ manuscript_numbers <- function(root = ".", with_sim = TRUE) {
   d <- load_srilanka(root)
   full <- calibrate_aid(d, 2006:2021)
   put("val.full.beta_R1", full$beta[["R1"]]); put("val.full.beta_R2", full$beta[["R2"]]); put("val.full.nse", full$stats[["nse"]])
+  # Aid -> fleet against rivals, with a penalty for parameters and out of
+  # sample (E3.2 done fairly; analysis/validation_srilanka/variant_test.R).
+  source(file.path(root, "analysis/validation_srilanka/variant_test.R"), local = TRUE)
+  vt <- run_variant_test(root, out_dir = file.path(root, "analysis/validation_srilanka/out"))
+  for (mm in vt$model) {
+    put(sprintf("var.%s.rmse_all", mm), vt$rmse_2006_2021[vt$model == mm])
+    put(sprintf("var.%s.delta_aic", mm), vt$delta_aic[vt$model == mm])
+    put(sprintf("var.%s.delta_bic", mm), vt$delta_bic[vt$model == mm])
+    put(sprintf("var.%s.rmse_test", mm), vt$rmse_test_2015_2021[vt$model == mm])
+  }
 
   # ---- Simulated networks (E5), when the outputs exist ----
   hyp <- file.path(root, "analysis/sim_networks/out/hypotheses.csv")

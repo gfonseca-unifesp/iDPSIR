@@ -1552,8 +1552,13 @@ P1,S1,negative,0.55,,monitoring</pre>
           </table>
         </div>
         <p>Without the link, the aid cannot become a pressure — and the model can no longer
-          reproduce the effort that was actually observed. The data, not only the paper's
-          narrative, support the assumption.</p>
+          reproduce the effort that was actually observed. Removing the links also removes the
+          two fitted strengths, so the comparison was repeated fairly: penalizing parameters (AIC
+          67 worse without the link), out of sample (fitted on 2006–2014, RMSE 6,871 against 559 in
+          2015–2021) and against a rival with as many fitted parameters — no aid → fleet, but the
+          fleet's own growth and demand → effort fitted instead (AIC 42 worse; RMSE 2,472 in sample,
+          10,867 out of sample). A smooth trend cannot produce the two aid steps and the plateau
+          after 2014. The data, not only the paper's narrative, support the assumption.</p>
         <div class="code-cluster">
           <div class="code-card">
             <h4>The variant</h4>

@@ -12,6 +12,12 @@ It is not copied into the shinylive demo.
   and with the 2006–2014 linear trend; rolling origin (2012–2016); 90% band from the
   strengths' uncertainty (E2.2).
 
+- `variant_test.R`: is "aid → fleet capacity" supported by the data? Dropping those links
+  also drops the two fitted strengths, so the variant is compared fairly: AIC/BIC on
+  2006–2021, out of sample (fitted on 2006–2014, tested on 2015–2021), and against a rival
+  with as many fitted parameters (no aid → fleet; the fleet's own growth and demand → effort
+  fitted). Output `out/variant_test.csv`.
+
 Run from the repository root: `Rscript analysis/validation_srilanka/validate.R`.
 Outputs in `out/`: `metrics.csv`, `rolling_origin.csv`, `forecast.csv`,
 `fig_validation.png` / `.svg`. The numbers are pinned by

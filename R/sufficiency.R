@@ -271,6 +271,11 @@ sufficiency_confidence <- function(g, p_D, p_R, n_simulations = 300, seed = 42, 
   high[is.na(high)] <- base_weight[is.na(high)]
 
   matches <- matrix(NA_integer_, nrow = n_simulations, ncol = length(impact_ids), dimnames = list(NULL, impact_ids))
+  # Revisao 3: a draw where the pressure no longer worsens the Impact (with
+  # structural uncertainty, a link on its path can be absent) is NOT a
+  # neutralization - it is counted apart ("not worsened"), so the three
+  # outcomes neutralized / not neutralized / not worsened add up to 100%.
+  unworsened <- matches
   g_sim <- g
 
   gated <- has_state_thresholds(g)
@@ -288,15 +293,19 @@ sufficiency_confidence <- function(g, p_D, p_R, n_simulations = 300, seed = 42, 
       B_sim <- effect_matrix(g_sim)
       if (spectral_radius(B_sim) >= 1 - 1e-9) next
       # Revisao 2, item C2: the gates are re-evaluated in every draw.
-      net_sim <- if (gated) {
+      if (gated) {
         # Closing a trigger can raise rho in a signed matrix (see
         # prediction_reliability()); such a draw is skipped.
-        tryCatch(propagate(gated_effect_matrix(g_sim, p_net, B_sim), p_net)[impact_ids], error = function(e) NULL)
+        net_sim <- tryCatch(propagate(gated_effect_matrix(g_sim, p_net, B_sim), p_net)[impact_ids], error = function(e) NULL)
+        worse_sim <- tryCatch(propagate(gated_effect_matrix(g_sim, p_D, B_sim), p_D)[impact_ids], error = function(e) NULL)
+        if (is.null(net_sim) || is.null(worse_sim)) next
       } else {
-        propagate(B_sim, p_D)[impact_ids] + propagate(B_sim, p_R)[impact_ids]
+        worse_sim <- propagate(B_sim, p_D)[impact_ids]
+        net_sim <- worse_sim + propagate(B_sim, p_R)[impact_ids]
       }
-      if (is.null(net_sim)) next
-      matches[sim, ] <- as.integer(net_sim <= threshold)
+      hit <- worse_sim > threshold
+      matches[sim, ] <- as.integer(hit & net_sim <= threshold)
+      unworsened[sim, ] <- as.integer(!hit)
     }
   })
 
@@ -305,6 +314,7 @@ sufficiency_confidence <- function(g, p_D, p_R, n_simulations = 300, seed = 42, 
     id = impact_ids,
     node = if (!is.null(V(g)$label)) V(g)$label[is_impact] else impact_ids,
     neutralized_pct = ifelse(affected, unname(colMeans(matches, na.rm = TRUE)[impact_ids]) * 100, NA_real_),
+    not_worsened_pct = ifelse(affected, unname(colMeans(unworsened, na.rm = TRUE)[impact_ids]) * 100, NA_real_),
     affected = unname(affected),
     stringsAsFactors = FALSE
   )
@@ -400,6 +410,18 @@ format_confidence_matrix <- function(df) {
     df[[col]] <- ifelse(is.nan(v), "not computable", ifelse(is.na(v), "\u2014", sprintf("%.0f", v)))
   }
   df
+}
+
+# Revisao 3: draws where the pressure no longer worsens an Impact (a link
+# on its path absent under structural uncertainty) are not neutralizations;
+# the note says in how many draws that happened, for the scenario as set.
+# `nw` = named vector of not-worsened percentages (Impact label -> %).
+not_worsened_note <- function(nw) {
+  if (is.null(nw)) return(NULL)
+  nw <- nw[!is.na(nw) & nw >= 0.5]
+  if (length(nw) == 0) return(NULL)
+  sprintf("With structural uncertainty, the pressure no longer worsens some Impacts in part of the draws (a link on its path is absent): %s. Those draws are counted apart, not as neutralized.",
+          paste(sprintf("%s in %.0f%%", names(nw), nw), collapse = "; "))
 }
 
 # Audit: a plain-language note when resampled draws had to be skipped

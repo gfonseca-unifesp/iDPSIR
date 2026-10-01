@@ -141,6 +141,12 @@ build_confidence_matrix <- function(g, p_D, response_nodes_df, n_simulations = 3
     names(row) <- impact_labels
     out <- rbind(cbind(Response = "Planned scenario (as set)", row, stringsAsFactors = FALSE), out)
     per_response <- c(per_response, list(pl))
+    attr(out, "not_worsened") <- setNames(pl$not_worsened_pct, impact_labels)
+  }
+  if (is.null(attr(out, "not_worsened"))) {
+    # No scenario set: the largest share over the responses alone (the
+    # pressure part of each draw is the same for all of them).
+    attr(out, "not_worsened") <- setNames(apply(do.call(rbind, lapply(per_response, function(sc) sc$not_worsened_pct)), 2, max), impact_labels)
   }
   attr(out, "skipped") <- max(vapply(per_response, function(x) as.numeric(attr(x, "skipped") %||% 0), numeric(1)))
   attr(out, "n_simulations") <- n_simulations
@@ -599,8 +605,10 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
       req(sc)
       m <- sc$sufficiency_confidence_matrix
       note <- skipped_draws_note(attr(m, "skipped"), attr(m, "n_simulations") %||% sc$n_simulations)
-      if (is.null(note)) return(NULL)
-      div(class = "alert alert-warning", note)
+      nw <- not_worsened_note(attr(m, "not_worsened"))
+      if (is.null(note) && is.null(nw)) return(NULL)
+      tagList(if (!is.null(note)) div(class = "alert alert-warning", note),
+              if (!is.null(nw)) div(class = "alert alert-info", nw))
     })
 
     output$confidence_matrix_table <- renderDT({

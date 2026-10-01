@@ -143,10 +143,18 @@ registradas no roadmap).
   definition); incerteza estrutural por aresta (`edge_absence_probability()`: 0,2
   expert/política/branco, 0,1 literatura/observação, 0 definição/regressão/calibração ou força
   estimada). Os sorteios de β são feitos antes das ausências (matriz), então
-  `structural = FALSE` reproduz os números antigos. Pode subir a confiança (uma ligação da
-  pressão também some). Variante do Sri Lanka sem auxílio → frota
-  (`example_gnanapragasam_noaidfleet`): alcance do auxílio 1/5, estoque nunca abaixo de
-  B_MSY, esforço RMSE 6.152 (NSE −4,9) contra 658 — os dados sustentam a hipótese.
+  `structural = FALSE` reproduz os números antigos. **Sorteio em que a pressão deixa de piorar
+  o Impacto (ligação ausente no caminho) não conta como neutralizado**: vai para
+  `not_worsened_pct`, com nota na tela, no relatório e na Interpretation (antes inflava a
+  confiança: fauna do porto 0% → 29%, que eram todos "não piorado"; agora 0% e 29% não piorado).
+  A confiança ainda pode subir de verdade quando some uma de várias ligações da pressão e a
+  piora diminui (Mangi, rendimento 11% → 29%, com a pressão piorando em 100% dos sorteios).
+  Variante do Sri Lanka sem auxílio → frota (`example_gnanapragasam_noaidfleet`): alcance do
+  auxílio 1/5, estoque nunca abaixo de B_MSY, esforço RMSE 6.152 contra 658. Como a variante
+  perde os dois betas ajustados, a comparação justa está em
+  `analysis/validation_srilanka/variant_test.R`: ΔAIC 67 (sem auxílio, nada ajustado) e 42 (rival
+  com 2 parâmetros: crescimento da frota e demanda → esforço, que bate no limite β = 1,5); fora da
+  amostra 2015–2021, RMSE 559 contra 6.871 e 10.867 — os dados sustentam a hipótese.
 - **E5.3–E5.5 (redes simuladas, 1000 × 20):** H1 confirmada (forças mudam 15,9% dos
   vereditos); H2 refutada (limiares 18,9%, mas crescimento só 4,3% — move linha de base e
   cenário juntos); H3 refutada (ciclos mudam *menos*, OR 0,79); H4 confirmada (perto da

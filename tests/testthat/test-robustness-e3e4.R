@@ -105,3 +105,30 @@ test_that("a draw whose triggers raise rho above 1 is skipped, not an error (fou
   }
   expect_true(found)
 })
+
+test_that("E3: a draw where the pressure no longer worsens the Impact is not a neutralization", {
+  nodes <- normalize_dpsir_nodes(data.frame(
+    id = c("D", "P", "S", "I", "R"), label = c("D", "P", "S", "I", "R"),
+    dpsir_category = c("Driver", "Pressure", "State", "Impact", "Response"), stringsAsFactors = FALSE))
+  # D -> P rests on expert judgement (absent in ~20% of the draws); the rest
+  # is by definition (never absent). The response is as strong as the push,
+  # so it neutralizes in part of the draws.
+  edges <- normalize_dpsir_edges(data.frame(
+    from = c("D", "P", "S", "R"), to = c("P", "S", "I", "P"), weight = c(0.8, 0.6, 0.6, 0.8),
+    interaction_type = c("positive", "negative", "negative", "negative"),
+    evidence_type = c("expert_assessment", "definition", "definition", "definition"), stringsAsFactors = FALSE))
+  g <- build_igraph(nodes, edges, get_default_dpsir_schema())
+  pv <- function(v) { p <- setNames(rep(0, 5), V(g)$name); p[names(v)] <- v; p }
+  a <- sufficiency_confidence(g, pv(c(D = 1)), pv(c(R = 1)), n_simulations = 300)
+  b <- sufficiency_confidence(g, pv(c(D = 1)), pv(c(R = 1)), n_simulations = 300, structural = TRUE)
+  expect_equal(a$not_worsened_pct[a$id == "I"], 0)
+  nw <- b$not_worsened_pct[b$id == "I"]
+  expect_gt(nw, 10); expect_lt(nw, 30)
+  # Without D -> P the net is the response alone (< 0): before the fix those
+  # draws counted as neutralized; now they are counted apart, so the
+  # structural confidence cannot exceed the plain one here.
+  na <- a$neutralized_pct[a$id == "I"]; nb <- b$neutralized_pct[b$id == "I"]
+  expect_gt(na, 10); expect_lt(na, 90)
+  expect_lt(nb, na)
+  expect_lte(nb + nw, 100)
+})

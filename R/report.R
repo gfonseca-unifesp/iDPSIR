@@ -286,7 +286,9 @@ build_full_report_html <- function(
         {
           m <- sc$sufficiency_confidence_matrix
           note <- skipped_draws_note(attr(m, "skipped"), attr(m, "n_simulations") %||% sc$n_simulations)
-          if (!is.null(note)) tags$p(class = "report-warning", note)
+          nw <- not_worsened_note(attr(m, "not_worsened"))
+          tagList(if (!is.null(note)) tags$p(class = "report-warning", note),
+                  if (!is.null(nw)) tags$p(class = "report-note", nw))
         },
         caption_tag(
           "Table", next_table_n(),

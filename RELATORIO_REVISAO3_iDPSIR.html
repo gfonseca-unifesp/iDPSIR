@@ -1,0 +1,609 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Revisão 3 do iDPSIR</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,500;6..72,600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: documento de trabalho de coluna única (~72ch) com sumário lateral fixo em telas largas. Cores do Okabe-Ito, a paleta padrão do app. */
+:root {
+  --bg: #f7f8f9;
+  --paper: #ffffff;
+  --fg: #1c2530;
+  --muted: #5b6673;
+  --rule: #dde2e7;
+  --accent: #0072B2;
+  --accent-soft: #e6f1f8;
+  --ok: #007a5a;
+  --ok-soft: #e3f3ee;
+  --bad: #b84a00;
+  --bad-soft: #fbece2;
+  --warn: #8a6100;
+  --warn-soft: #fbf3dc;
+  --code-bg: #eef1f4;
+  --font-display: "Newsreader", "Georgia", "Times New Roman", serif;
+  --font-body: "IBM Plex Sans", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-mono: "IBM Plex Mono", "Consolas", "Menlo", monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11161c; --paper: #171e26; --fg: #e3e8ee; --muted: #9aa6b3; --rule: #2a343f;
+    --accent: #56b4e9; --accent-soft: #15293a; --ok: #3fc39a; --ok-soft: #12302a;
+    --bad: #f0915a; --bad-soft: #3a2418; --warn: #e6c15a; --warn-soft: #332a12; --code-bg: #1f2831;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11161c; --paper: #171e26; --fg: #e3e8ee; --muted: #9aa6b3; --rule: #2a343f;
+  --accent: #56b4e9; --accent-soft: #15293a; --ok: #3fc39a; --ok-soft: #12302a;
+  --bad: #f0915a; --bad-soft: #3a2418; --warn: #e6c15a; --warn-soft: #332a12; --code-bg: #1f2831;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 16px; line-height: 1.6; margin: 0; }
+.wrap { display: grid; grid-template-columns: minmax(0, 1fr); gap: 32px; max-width: 1160px; margin: 0 auto; padding-inline: 16px; padding-block: 32px 64px; }
+@media (min-width: 1000px) { .wrap { grid-template-columns: 220px minmax(0, 1fr); padding-inline: 32px; } }
+nav.toc { display: none; }
+@media (min-width: 1000px) {
+  nav.toc { display: block; position: sticky; top: calc(env(safe-area-inset-top, 0px) + 24px); align-self: start; font-size: 13.5px; }
+  nav.toc ol { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+  nav.toc a { color: var(--muted); text-decoration: none; }
+  nav.toc a:hover, nav.toc a:focus-visible { color: var(--accent); }
+  nav.toc .toc-title { font-size: 11.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+}
+main { min-width: 0; max-width: 76ch; }
+header.doc { border-bottom: 1px solid var(--rule); padding-bottom: 20px; margin-bottom: 8px; }
+.eyebrow { font-size: 12px; letter-spacing: .09em; text-transform: uppercase; color: var(--accent); font-weight: 600; }
+h1 { font-family: var(--font-display); font-weight: 600; font-size: clamp(30px, 5vw, 42px); line-height: 1.15; margin: 8px 0 12px; text-wrap: balance; }
+h2 { font-family: var(--font-display); font-weight: 600; font-size: 27px; line-height: 1.25; margin: 56px 0 8px; text-wrap: balance; scroll-margin-top: 24px; }
+h3 { font-size: 17px; font-weight: 600; margin: 32px 0 6px; text-wrap: balance; }
+h4 { font-size: 13px; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); font-weight: 600; margin: 22px 0 6px; }
+p, li { margin: 0 0 10px; }
+ul, ol { padding-left: 22px; margin: 0 0 12px; }
+a { color: var(--accent); }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+code, .mono { font-family: var(--font-mono); font-size: .88em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+.meta { display: flex; flex-wrap: wrap; gap: 8px 24px; color: var(--muted); font-size: 14px; }
+.meta b { color: var(--fg); font-weight: 500; }
+.lede { font-size: 17.5px; }
+.phase-tag { display: inline-block; font-family: var(--font-mono); font-size: 13px; font-weight: 500; color: var(--accent); background: var(--accent-soft); padding: 2px 8px; border-radius: 4px; margin-right: 6px; vertical-align: 3px; }
+.where { border-left: 3px solid var(--accent); background: var(--paper); padding: 12px 16px; margin: 14px 0; border-radius: 0 6px 6px 0; }
+.where h4 { margin-top: 0; color: var(--accent); }
+.where ul { margin-bottom: 0; }
+.en { background: var(--paper); border: 1px solid var(--rule); border-radius: 6px; padding: 12px 16px 4px; margin: 14px 0; font-family: var(--font-display); font-size: 17px; line-height: 1.55; }
+.en .label { font-family: var(--font-body); font-size: 11.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); display: block; margin-bottom: 4px; }
+.caveat { background: var(--warn-soft); border-radius: 6px; padding: 12px 16px; margin: 14px 0; }
+.caveat strong { color: var(--warn); }
+.table-scroll { overflow-x: auto; margin: 12px 0 16px; border: 1px solid var(--rule); border-radius: 6px; background: var(--paper); }
+table { border-collapse: collapse; width: 100%; font-size: 14px; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+th { font-weight: 600; font-size: 12.5px; color: var(--muted); letter-spacing: .02em; background: var(--bg); }
+tr:last-child td { border-bottom: 0; }
+td.num { text-align: right; white-space: nowrap; }
+.pill { display: inline-block; font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 999px; white-space: nowrap; }
+.pill.ok { color: var(--ok); background: var(--ok-soft); }
+.pill.bad { color: var(--bad); background: var(--bad-soft); }
+.pill.warn { color: var(--warn); background: var(--warn-soft); }
+figure { margin: 18px 0; background: #ffffff; border: 1px solid var(--rule); border-radius: 6px; padding: 10px; }
+figure img { display: block; width: 100%; height: auto; }
+.muted { color: var(--muted); font-size: .9em; }
+figcaption { font-size: 13.5px; color: #4a5561; padding: 8px 4px 2px; }
+.fig-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 12px; }
+.fig-grid figure { margin: 0; }
+.summary { display: grid; gap: 10px; margin: 16px 0; padding: 0; list-style: none; counter-reset: s; }
+.summary li { background: var(--paper); border: 1px solid var(--rule); border-radius: 6px; padding: 12px 16px 12px 16px; margin: 0; }
+.summary li b { display: block; margin-bottom: 2px; }
+.checklist { list-style: none; padding: 0; }
+.checklist li { padding-left: 26px; position: relative; }
+.checklist li::before { content: ""; position: absolute; left: 2px; top: 6px; width: 13px; height: 13px; border: 1.5px solid var(--muted); border-radius: 3px; }
+hr { border: 0; border-top: 1px solid var(--rule); margin: 40px 0; }
+footer { color: var(--muted); font-size: 13.5px; margin-top: 48px; }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+
+</head>
+<body>
+<div class="wrap">
+<nav class="toc" aria-label="Sumário">
+  <div class="toc-title">Sumário</div>
+  <ol>
+    <li><a href="#sintese">Síntese</a></li>
+    <li><a href="#e1">E1 · Premissas do motor</a></li>
+    <li><a href="#e2">E2 · Validação do Sri Lanka</a></li>
+    <li><a href="#e3">E3 · Incerteza estrutural</a></li>
+    <li><a href="#e4">E4 · Índice de prioridade</a></li>
+    <li><a href="#e5">E5 · Redes simuladas</a></li>
+    <li><a href="#e7">E7 · Busca de ferramentas</a></li>
+    <li><a href="#e8">E8 · Script de números</a></li>
+    <li><a href="#app">Mudanças no app</a></li>
+    <li><a href="#e6">E6 · Fora do plano</a></li>
+    <li><a href="#numeros">Números para citar</a></li>
+    <li><a href="#secoes">Mapa por seção</a></li>
+    <li><a href="#pendencias">Pendências</a></li>
+    <li><a href="#arquivos">Onde está cada coisa</a></li>
+  </ol>
+</nav>
+
+<main>
+<header class="doc">
+  <div class="eyebrow">iDPSIR · relatório para a edição do manuscrito</div>
+  <h1>Revisão 3 do iDPSIR</h1>
+  <div class="meta">
+    <span>Branch <b>revisao3</b> · commits <b>795f7aa → a4f76a3</b></span>
+    <span>Data <b>30/09/2026</b></span>
+    <span>Suíte de testes: <b>0 falhas</b></span>
+  </div>
+</header>
+
+<p class="lede">Este relatório reúne o que a Revisão 3 fez no app e nas análises, os resultados com os números que o texto pode citar, e o que muda em cada seção do manuscrito (<code>MANUSCRIPT_full_4.docx</code>). Os trechos em inglês são sugestões de redação, prontos para adaptar.</p>
+
+<div class="caveat"><strong>Atualizado depois da conferência de dois pontos.</strong> (1) A variante sem auxílio → frota perdia justamente os dois parâmetros ajustados; a comparação foi refeita com penalidade por parâmetros, fora da amostra e contra um rival com o mesmo número de parâmetros, e continua a favor do auxílio → frota. (2) A confiança com incerteza estrutural contava como "neutralizado" o sorteio em que a pressão nem chegava ao Impacto; corrigido no app, a fauna do porto cai de 29% para 0% (os 29% viram "não piorado"); a alta no Mangi é real. Detalhes em <a href="#e3">E3</a>.</div>
+
+<p>Todos os números citáveis saem de um único script (<code>data-raw/manuscript_build.R</code>) e 107 deles estão congelados num teste. Se o motor mudar e um número citado mudar junto, o teste falha. O roadmap anterior (<code>ROADMAP_MANUSCRITO_iDPSIR.md</code>) continua valendo para a reescrita das seções; este relatório acrescenta o que a Revisão 3 mudou.</p>
+
+<h2 id="sintese">Síntese: o que muda no manuscrito</h2>
+<ul class="summary">
+  <li><b>O modelo formal agora tem premissas declaradas.</b> Força em desvios-padrão do nó; leitura estática = equilíbrio temporal com autorregulação 1 (provado nos três exemplos); convergência de ρ(B) &lt; 1 não é o mesmo que estabilidade; sensibilidade dos vereditos à autorregulação reportada.</li>
+  <li><b>"Validated" sai do texto do Sri Lanka.</b> Calibrado em 2006–2014 e testado em 2015–2021, o modelo erra menos que a persistência (RMSE 559 contra 632) e muito menos que a tendência linear (5.737), mas o NSE é −0,48 e o período de teste é um platô. A redação correta é "consistente fora da amostra e melhor que referências ingênuas".</li>
+  <li><b>A confiança pode incluir incerteza estrutural</b> (ligações com evidência fraca podem faltar). A hipótese auxílio → frota foi testada de forma justa: com penalidade por parâmetros (ΔAIC 67), fora da amostra (RMSE 559 contra 6.871) e contra um rival com o mesmo número de parâmetros ajustados (ΔAIC 42). Os dados sustentam a hipótese causal.</li>
+  <li><b>O índice de prioridade tem justificativa e teste.</b> Produto = perda esperada evitável; forma aditiva como alternativa; estabilidade da ordem reportada (coluna, figura e mensagem).</li>
+  <li><b>O experimento com 1000 redes simuladas refuta a mensagem "limiares e crescimento primeiro".</b> Forças e limiares mudam vereditos em medida parecida (15,9% e 18,9%), crescimento pouco (4,3%); perto da neutralização os vereditos mudam muito mais (OR 5,4); a prioridade é mais sensível que o veredito (τ = 0,64).</li>
+  <li><b>A novidade precisa ser reformulada.</b> Avaliações de suficiência já existem (Ahtiainen et al.; Bryhn et al. 2026). O que é novo no iDPSIR é ler a suficiência propagando efeitos numa rede causal, com evidência e incerteza por ligação, numa ferramenta aberta e sem instalação. Ramos-Quintana et al. (2018) é o precursor mais próximo.</li>
+  <li><b>O app ganhou três coisas que o texto deve descrever:</b> o aviso de veredito apertado (consequência direta de H4), as medidas globais de força e confiança da rede (aba Metrics) e o limite de 300 simulações com estimativa de tempo.</li>
+  <li><b>Usabilidade não é reivindicada.</b> O teste com usuários saiu do plano; o texto não deve dizer que a ferramenta foi testada com usuários.</li>
+</ul>
+
+<hr>
+
+<h2 id="e1"><span class="phase-tag">E1</span>Premissas do motor declaradas e coerentes</h2>
+<p>Resposta ao ponto 3 da revisão pré-submissão: o manuscrito não dizia em que unidade pressão e resposta se comparam, nem como as leituras estática e temporal se relacionam.</p>
+
+<h3>O que foi feito</h3>
+<ul>
+  <li><b>Unidades.</b> A força de um fator vira o vetor p como <code>força% / 100</code> desvios-padrão do nó; quando o usuário informa em unidades, p = unidades / DP. "Neutralizado" (líquido ≤ 0) compara efeitos em DP do Impacto. O relatório de cada cenário mostra a força de cada nó em DP e, quando há DP, em unidades reais (<code>press_units_note()</code>).</li>
+  <li><b>Equivalência estática × temporal.</b> O equilíbrio da simulação temporal é (S − B)⁻¹p, com S = diag(s). Com s = 1, (I − B)⁻¹p = Φ(p) + p, isto é, o efeito total estático mais o próprio push. Testado nos três exemplos (porto, Mangi, Sri Lanka) sem gatilho nem crescimento, com tolerância 10⁻⁶ (<code>static_equivalent_windows()</code>, <code>temporal_equilibrium()</code>, <code>test-equivalence.R</code>).</li>
+  <li><b>Divergência detectada.</b> A simulação só atinge esse equilíbrio se ρ((I − S) + B) &lt; 1. Quando não atinge, o app declara o caso divergente em vez de devolver um número.</li>
+  <li><b>Convergência × estabilidade.</b> A redação passou a ser: "a expansão em soma de caminhos converge quando ρ(B) &lt; 1; (I − B) é então invertível". Isso implica que −(I − B), a matriz de Levins com autorregulação 1, é estável; a recíproca não vale.</li>
+  <li><b>Sensibilidade à autorregulação.</b> <code>self_regulation_sensitivity()</code> recalcula o veredito de cada Impacto para s ∈ {0,25; 0,5; 0,75; 1}, com os gatilhos como na leitura estática. A tabela de suficiência ganhou a coluna "Holds for self-regulation 0.25–1".</li>
+</ul>
+
+<h3>Resultado</h3>
+<ul>
+  <li>A equivalência vale nos três exemplos. A coluna s = 1 sempre coincide com a leitura estática.</li>
+  <li>No porto, cenário 1 (só boas práticas), <b>2 Impactos</b> têm veredito que depende de s.</li>
+  <li>Correção ao plano original: mesmo sem ciclos, o líquido <b>não</b> é igual para todo s. Com S = s·I, (sI − B)⁻¹ = Σ Bᵏ / sᵏ⁺¹, de modo que caminhos de comprimentos diferentes mudam de peso relativo.</li>
+</ul>
+
+<div class="where">
+  <h4>No manuscrito</h4>
+  <ul>
+    <li><b>§3 (Métodos), nova subseção do modelo formal:</b> equações, mapeamento força → p, equivalência com s = 1, convergência × estabilidade.</li>
+    <li><b>§3.6 (temporal):</b> citar que o equilíbrio é (S − B)⁻¹p e que a simulação avisa quando diverge.</li>
+    <li><b>§5 (Discussão), limitações:</b> a leitura estática é a de um instante com autorregulação 1; a sensibilidade a s é reportada por Impacto.</li>
+  </ul>
+</div>
+<div class="en">
+  <span class="label">Texto sugerido</span>
+  <p>Pressure and response strengths enter the model in standard deviations of the pushed factor (100% = one SD; values in real units are divided by the factor's SD), so that "neutralized" compares effects in SD of each Impact. The static reading is the total effect of a standardized path model, Φ(p) = (I − B)⁻¹p − p, whose path-sum expansion converges when ρ(B) &lt; 1; this implies that −(I − B) is Levins-stable, but not the converse. The temporal simulation settles at (S − B)⁻¹p, which equals the static reading plus the push when every factor has self-regulation 1; we verified this equivalence numerically in the three case studies (tolerance 10⁻⁶). For each Impact, the app reports whether the verdict holds for self-regulation between 0.25 and 1.</p>
+</div>
+
+<h2 id="e2"><span class="phase-tag">E2</span>Validação do Sri Lanka fora da amostra</h2>
+<p>Resposta ao ponto 2. Antes, os betas dos auxílios eram ajustados ao esforço observado de 2006–2021 inteiro (R² = 0,93), e as outras comparações eram com saídas do modelo bioeconômico do artigo, isto é, consistência entre modelos, não validação.</p>
+
+<h3>O que foi feito</h3>
+<ul>
+  <li>Ajuste por mínimos quadrados reescrito em <code>analysis/validation_srilanka/calibrate.R</code>; com o período inteiro reproduz o build (β<sub>R1</sub> = 0,342, β<sub>R2</sub> = 0,089, NSE = 0,93).</li>
+  <li>Calibração em <b>2006–2014</b>, previsão de <b>2015–2021</b> com os betas congelados.</li>
+  <li>Referências ingênuas: persistência (esforço de 2014 constante) e tendência linear de 2006–2014.</li>
+  <li>Banda de 90% da previsão, propagando o erro-padrão dos betas calibrados e a faixa das demais arestas (500 sorteios).</li>
+  <li>Validação com origem móvel (calibra até o ano k e prevê até 2021, k = 2012…2016).</li>
+  <li>No tutorial e no build, as comparações com o artigo (B_MSY em 2012, estoque de 307 kt, E_MEY) passaram a se chamar "consistência com o modelo bioeconômico"; "validação" ficou só para a comparação com o esforço observado.</li>
+</ul>
+
+<h3>Resultado</h3>
+<div class="table-scroll"><table>
+  <thead><tr><th>Modelo (teste 2015–2021)</th><th class="num">RMSE</th><th class="num">Viés</th><th class="num">NSE</th></tr></thead>
+  <tbody>
+    <tr><td>iDPSIR (auxílios calibrados em 2006–2014)</td><td class="num"><b>559</b></td><td class="num">+351</td><td class="num">−0,48</td></tr>
+    <tr><td>Persistência (valor de 2014)</td><td class="num">632</td><td class="num">+434</td><td class="num">−0,90</td></tr>
+    <tr><td>Tendência linear 2006–2014</td><td class="num">5.737</td><td class="num">+5.253</td><td class="num">−155</td></tr>
+  </tbody>
+</table></div>
+<p>Esforço em mil kW-dia por ano. A banda de 90% cobre os 7 anos observados, mas é larga (cerca de ±1.300).</p>
+
+<div class="table-scroll"><table>
+  <thead><tr><th>Origem</th><th class="num">Anos de teste</th><th class="num">β R1</th><th class="num">β R2</th><th class="num">RMSE modelo</th><th class="num">RMSE persistência</th><th>Quem vence</th></tr></thead>
+  <tbody>
+    <tr><td>2012</td><td class="num">9</td><td class="num">0,336</td><td class="num">0,213</td><td class="num">1.348</td><td class="num">488</td><td><span class="pill bad">persistência</span></td></tr>
+    <tr><td>2013</td><td class="num">8</td><td class="num">0,340</td><td class="num">0,118</td><td class="num">528</td><td class="num">517</td><td><span class="pill warn">empate</span></td></tr>
+    <tr><td>2014</td><td class="num">7</td><td class="num">0,340</td><td class="num">0,117</td><td class="num">559</td><td class="num">632</td><td><span class="pill ok">modelo</span></td></tr>
+    <tr><td>2015</td><td class="num">6</td><td class="num">0,340</td><td class="num">0,115</td><td class="num">591</td><td class="num">641</td><td><span class="pill ok">modelo</span></td></tr>
+    <tr><td>2016</td><td class="num">5</td><td class="num">0,340</td><td class="num">0,120</td><td class="num">682</td><td class="num">894</td><td><span class="pill ok">modelo</span></td></tr>
+  </tbody>
+</table></div>
+
+<figure>
+  <img src="analysis/validation_srilanka/out/fig_validation.png" alt="Esforço de pesca observado de 2004 a 2021, ajuste do iDPSIR em 2006–2014 e previsão para 2015–2021 com banda de 90%, persistência e tendência linear.">
+  <figcaption>Esforço observado (pontos), ajuste em 2006–2014 e previsão para 2015–2021 com banda de 90%; persistência de 2014 (pontilhado) e tendência linear (tracejado). Arquivo: <code>analysis/validation_srilanka/out/fig_validation.svg</code>.</figcaption>
+</figure>
+
+<div class="caveat"><strong>Leitura honesta.</strong> 2015–2021 é um platô, então o teste diz pouco sobre o efeito do auxílio. Com a origem em 2012 há só três anos pós-guerra, e o auxílio pós-guerra sai superestimado (0,21 contra 0,12); aí o modelo perde para a persistência. O resultado sustenta "consistente fora da amostra e melhor que referências ingênuas", não "validado".</div>
+
+<div class="where">
+  <h4>No manuscrito</h4>
+  <ul>
+    <li><b>Resumo:</b> o roadmap anterior sugeria "validada contra 32 anos de esforço". Trocar pela formulação fora da amostra.</li>
+    <li><b>§4.3 (Sri Lanka):</b> um parágrafo de validação com a tabela acima e a figura; separar "consistência com o modelo bioeconômico" de "validação".</li>
+    <li><b>§5 (Discussão):</b> a limitação do platô e da origem 2012.</li>
+  </ul>
+</div>
+<div class="en">
+  <span class="label">Texto sugerido</span>
+  <p>We calibrated the two aid links on the observed fishing effort of 2006–2014 and predicted 2015–2021 with those values fixed. Out of sample, the model's error (RMSE 559 thousand kW-days; bias +351) was lower than that of persistence of the 2014 value (632) and far lower than that of a linear trend (5,737), and the 90% prediction band covered all seven observed years. The test period is, however, a plateau (NSE −0.48), and with a rolling origin the model beats persistence from 2014 onwards, ties in 2013 and loses in 2012, when only three post-war years inform the post-war aid. We therefore describe the Sri Lanka network as consistent with the observed effort out of sample and better than naive references, not as validated.</p>
+</div>
+
+<h2 id="e3"><span class="phase-tag">E3</span>Incerteza estrutural</h2>
+<p>Resposta ao ponto 5: a literatura citada (Crozier et al. 2025; Tam et al. 2025) mostra que a estrutura pesa mais que a magnitude, e a confiança só reamostrava magnitudes.</p>
+
+<h3>O que foi feito</h3>
+<ul>
+  <li>Lista única de tipos de evidência (acrescentados <code>literature</code>, <code>regression</code>, <code>calibration</code>, <code>definition</code>).</li>
+  <li>Opção "Include structural uncertainty (links with weaker evidence may be absent)" ao lado do número de simulações, gravada no savepoint. Com ela, cada ligação some do sorteio com uma probabilidade dada pela evidência:</li>
+</ul>
+<div class="table-scroll"><table>
+  <thead><tr><th>Evidência ou origem da força</th><th class="num">Probabilidade de ausência</th></tr></thead>
+  <tbody>
+    <tr><td>definition, regression, calibration; força estimada de dados (r², calibrada)</td><td class="num">0</td></tr>
+    <tr><td>literature, literature_review, observational, monitoring, remote_sensing, epidemiological</td><td class="num">0,1</td></tr>
+    <tr><td>expert_assessment, policy_document, management_plan; tipo em branco</td><td class="num">0,2</td></tr>
+  </tbody>
+</table></div>
+<ul>
+  <li>Os sorteios de β são feitos antes das ausências, então desligar a opção reproduz exatamente os números antigos.</li>
+  <li>Variante do Sri Lanka sem as ligações auxílio → frota (<code>example_gnanapragasam_noaidfleet</code>), como teste de hipótese causal.</li>
+</ul>
+
+<h3>Resultado</h3>
+<h4>Confiança com incerteza estrutural: correção na contagem</h4>
+<p>Na primeira versão, um sorteio em que uma ligação do caminho da pressão faltava, e o Impacto deixava de ser piorado, contava como "neutralizado" (líquido ≤ 0). Isso inflava a confiança. Agora esses sorteios são contados à parte ("not worsened"): neutralizado, não neutralizado e não piorado somam 100%. A tela, o relatório e a aba Interpretation dizem em que fração dos sorteios isso aconteceu. Sem incerteza estrutural nada muda.</p>
+<div class="table-scroll"><table>
+  <thead><tr><th>Cenário 1, Impacto</th><th class="num">Neutralizado, só faixas</th><th class="num">Neutralizado, com estrutural</th><th class="num">Não piorado</th><th class="num">Não neutralizado</th></tr></thead>
+  <tbody>
+    <tr><td>Porto, alteração de comportamento da fauna</td><td class="num">0%</td><td class="num">0% <span class="muted">(era 29%)</span></td><td class="num">29%</td><td class="num">71%</td></tr>
+    <tr><td>Porto, produção primária</td><td class="num">0%</td><td class="num">0%</td><td class="num">28%</td><td class="num">72%</td></tr>
+    <tr><td>Mangi, rendimento por pescador</td><td class="num">11%</td><td class="num">29%</td><td class="num">0%</td><td class="num">71%</td></tr>
+    <tr><td>Mangi, meios de vida</td><td class="num">8%</td><td class="num">24%</td><td class="num">0,3%</td><td class="num">76%</td></tr>
+  </tbody>
+</table></div>
+<ul>
+  <li><b>Porto:</b> os 29% eram todos sorteios em que a pressão nem chegava à fauna. Corrigido, a confiança fica em 0%.</li>
+  <li><b>Mangi:</b> a alta é real. A pressão piora o rendimento em 100% dos sorteios, mas vários caminhos levam a ele; quando falta uma das ligações do lado da pressão (evidência de literatura, 10% de ausência), a piora diminui e a resposta passa a cobri-la.</li>
+  <li>O experimento de redes simuladas usou a contagem antiga só na condição secundária C4, que nenhuma hipótese usa e não é reportada (desvio 6 do pré-registro).</li>
+</ul>
+
+<h4>Variante sem auxílio → frota: comparação justa</h4>
+<p>O alcance do auxílio cai de 5 para 1 Impacto e o estoque nunca fica abaixo de B_MSY. Mas retirar as ligações retira também os dois únicos parâmetros ajustados, então "ajusta pior" seria esperado de qualquer jeito. A comparação foi refeita de três formas (<code>analysis/validation_srilanka/variant_test.R</code>):</p>
+<div class="table-scroll"><table>
+  <thead><tr><th>Modelo</th><th class="num">Parâmetros ajustados</th><th class="num">RMSE 2006–2021</th><th class="num">ΔAIC</th><th class="num">ΔBIC</th><th class="num">RMSE fora da amostra 2015–2021</th></tr></thead>
+  <tbody>
+    <tr><td>Auxílio → frota (publicado)</td><td class="num">2</td><td class="num">658</td><td class="num">0</td><td class="num">0</td><td class="num">559</td></tr>
+    <tr><td>Sem auxílio → frota</td><td class="num">0</td><td class="num">6.152</td><td class="num">67,5</td><td class="num">66,0</td><td class="num">6.871</td></tr>
+    <tr><td>Rival: sem auxílio; crescimento da frota e demanda → esforço ajustados</td><td class="num">2</td><td class="num">2.472</td><td class="num">42,4</td><td class="num">42,4</td><td class="num">10.867</td></tr>
+  </tbody>
+</table></div>
+<ul>
+  <li>O rival tem o mesmo número de parâmetros e representa a hipótese alternativa de verdade: o esforço teria subido sozinho, pelo crescimento da frota e pela demanda. Mesmo assim fica 42 pontos de AIC atrás, e fora da amostra é o pior dos três, porque uma tendência suave não produz os dois degraus do auxílio nem o platô depois de 2014.</li>
+  <li>O ajuste do rival bate no limite imposto a β demanda → esforço (1,5, já acima do plausível para um coeficiente padronizado): mesmo com essa folga ele não chega perto.</li>
+  <li>ΔAIC acima de 10 é considerado evidência muito forte (Burnham &amp; Anderson 2002). Os dados sustentam a hipótese de que o auxílio virou capacidade de pesca.</li>
+</ul>
+
+<div class="where">
+  <h4>No manuscrito</h4>
+  <ul>
+    <li><b>§3.2.1 (confiança):</b> descrever a opção estrutural e a tabela de probabilidades (configuráveis).</li>
+    <li><b>§4.3 (Sri Lanka):</b> a variante como teste da hipótese causal (a decisão M-d do roadmap anterior fica resolvida: pode entrar no texto principal ou no suplemento).</li>
+    <li><b>§3.2.1:</b> a confiança estrutural separa "não piorado" de "neutralizado".</li>
+    <li><b>§4.3 ou suplemento:</b> a tabela da comparação justa (AIC, fora da amostra, rival).</li>
+  </ul>
+</div>
+<div class="en">
+  <span class="label">Texto sugerido</span>
+  <p>Optionally, the resampling also removes links: in each draw a link is absent with a probability set by its evidence (0 for definitions and strengths estimated from data, 0.1 for literature and observation, 0.2 for expert judgement and policy documents). Draws in which the pressure no longer reaches an Impact are reported separately ("not worsened") rather than counted as neutralizations. Structural uncertainty can still raise confidence when one of several pressure pathways drops out and the remaining worsening is small enough for the response to cover. To test the causal assumption that post-disaster aid became fishing capacity, we compared the published network with two alternatives: the same network without the aid → fleet links, and a rival with as many fitted parameters in which effort rises through the fleet's own growth and demand instead. The aid → fleet model was strongly preferred (ΔAIC = 67 and 42) and predicted the 2015–2021 effort best (RMSE 559 against 6,871 and 10,867 thousand kW-days).</p>
+</div>
+
+<h2 id="e4"><span class="phase-tag">E4</span>Índice de prioridade: justificativa e sensibilidade</h2>
+<p>Resposta ao ponto 7: o produto v·D·ρ não tinha justificativa, nem teste de sensibilidade.</p>
+
+<h3>O que foi feito</h3>
+<ul>
+  <li><b>Justificativa do produto:</b> prioridade como perda esperada evitável, isto é, valor × tamanho do efeito × probabilidade de o sinal estar certo × fração não coberta. Um zero anula de propósito: Impacto não afetado não tem prioridade.</li>
+  <li><b>Forma aditiva opcional:</b> relevância = w<sub>v</sub>·v + w<sub>D</sub>·D + w<sub>ρ</sub>·ρ, pesos iguais por padrão.</li>
+  <li><b>Robustez da ordem</b> (<code>priority_robustness()</code>, 500 variações): v perturbado em ±20% (truncado em [0, 1]) e forma alternando entre produto e soma. Reporta a fração de variações em que cada Impacto mantém a posição, quem fica em 1º e o τ de Kendall médio contra a ordem-base.</li>
+  <li>Na tela e no relatório: coluna "Rank stability", figura de estabilidade da ordem (barras empilhadas por Impacto com a fração em 1º, 2º…) e mensagem na aba Interpretation quando o 1º lugar é instável (&lt; 80%).</li>
+</ul>
+
+<h3>Resultado</h3>
+<ul>
+  <li>Porto, cenário 1: a contaminação do pescado fica em 1º em <b>100%</b> das variações; τ médio = <b>0,80</b>; a fauna mantém a posição em só <b>41%</b>.</li>
+</ul>
+
+<div class="where">
+  <h4>No manuscrito</h4>
+  <ul>
+    <li><b>§3.4 (relevância e prioridade):</b> a justificativa do produto, a forma aditiva e o teste de robustez.</li>
+    <li><b>§4.1 (porto):</b> a figura de estabilidade da ordem junto da sequência de priorização.</li>
+    <li><b>§5:</b> ligar ao resultado H5 do experimento (a prioridade é mais sensível que o veredito).</li>
+  </ul>
+</div>
+<div class="en">
+  <span class="label">Texto sugerido</span>
+  <p>The priority index reads as an expected avoidable loss: the value of an Impact, the size of the effect it receives, the probability that the predicted sign is right and the share of the worsening the responses leave uncovered. The product is deliberate, since an Impact that is not affected should have no priority. Because the values v are elicited, the app reports how stable the priority order is when v varies by ±20% and the index switches between the product and an additive form (500 variations). In the port case, seafood contamination stayed first in all variations (mean Kendall τ = 0.80), whereas the rank of fauna disturbance held in only 41%.</p>
+</div>
+
+<h2 id="e5"><span class="phase-tag">E5</span>Experimento com redes DPSIR simuladas</h2>
+<p>Resposta ao ponto 4: transformar "estrutura primeiro, parâmetros depois" num resultado geral. Pergunta: em redes DPSIR plausíveis, com que frequência o veredito de suficiência e a prioridade mudam entre a rede crua (só estrutura e sinais) e a parametrizada, e o que explica as mudanças?</p>
+
+<h3>Desenho</h3>
+<ul>
+  <li><b>Pré-registro</b> (<code>analysis/sim_networks/PREREGISTRO.md</code>) commitado antes de qualquer execução (commit 33eb8a5; resultados em 8f31c23), com hipóteses H1–H5, desfechos e análise definidos antes.</li>
+  <li><b>Gerador</b> (<code>generate.R</code>): 10–25 nós (D 2–5, P 2–6, S 2–6, I 2–6, R 1–5), só ligações permitidas pelo schema, sem Estado → Estado, densidade por par de níveis em [0,15; 0,5], laços I→R com probabilidade q ∈ {0; 0,3; 0,6}, Σβ² &lt; 1 por fator, redes com ρ(B) ≥ 1 rejeitadas.</li>
+  <li><b>1000 redes × 20 sorteios de força</b>, rodando o motor do próprio app (nada reimplementado), em paralelo fora do app.</li>
+</ul>
+<div class="table-scroll"><table>
+  <thead><tr><th>Condição</th><th>Forças</th><th>Limiares</th><th>Crescimento</th><th>Leitura</th></tr></thead>
+  <tbody>
+    <tr><td>C0 crua</td><td>todas moderate (0,45)</td><td>não</td><td>não</td><td>estática</td></tr>
+    <tr><td>C1 forças</td><td>β sorteados</td><td>não</td><td>não</td><td>estática</td></tr>
+    <tr><td>C2 + limiares</td><td>β sorteados</td><td>sim</td><td>não</td><td>estática com gatilho</td></tr>
+    <tr><td>C2t (acrescentada)</td><td>β sorteados</td><td>sim</td><td>não</td><td>temporal, janela 20</td></tr>
+    <tr><td>C3 + crescimento</td><td>β sorteados</td><td>sim</td><td>sim</td><td>temporal, janela 20</td></tr>
+    <tr><td>C4 incerteza</td><td colspan="4">C1 com confiança e incerteza estrutural</td></tr>
+  </tbody>
+</table></div>
+<p>A condição C2t separa o efeito do crescimento do efeito de trocar a leitura estática pela temporal; sem ela, C2 → C3 misturaria os dois.</p>
+
+<h3>Resultados</h3>
+<p>1000 redes, nenhuma excluída, nenhum erro. 2.360 rodadas temporais divergiram (cerca de 5,9%) e ficaram fora das comparações que as usam.</p>
+<div class="table-scroll"><table>
+  <thead><tr><th>Hipótese</th><th>Estatística</th><th class="num">Estimativa</th><th class="num">IC 95%</th><th>Resultado</th></tr></thead>
+  <tbody>
+    <tr><td>H1: só as forças mudam &lt; 30% dos vereditos</td><td>taxa C0 → C1</td><td class="num">15,9%</td><td class="num">15,1–16,5</td><td><span class="pill ok">confirmada</span></td></tr>
+    <tr><td>H2: limiares e crescimento mudam mais que as forças</td><td>limiares: C1→C2 − C0→C1</td><td class="num">+3,0 p.p.</td><td class="num">1,4–4,8</td><td><span class="pill ok">sim, para limiares</span></td></tr>
+    <tr><td></td><td>crescimento: C2t→C3 − C0→C1</td><td class="num">−11,6 p.p.</td><td class="num">−12,4 a −10,8</td><td><span class="pill bad">refutada</span></td></tr>
+    <tr><td>H3: redes com laços mudam mais</td><td>coef. glmer, has_cycle</td><td class="num">−0,24 (OR 0,79)</td><td class="num">−0,42 a −0,06</td><td><span class="pill bad">refutada</span></td></tr>
+    <tr><td>H4: mudanças se concentram perto da neutralização</td><td>coef. glmer, |líquido|/piora &lt; 0,2</td><td class="num">1,69 (OR 5,4)</td><td class="num">1,63–1,76</td><td><span class="pill ok">confirmada</span></td></tr>
+    <tr><td>H5: a ordem de prioridade é mais estável que o veredito</td><td>τ de Kendall médio C0 vs C1</td><td class="num">0,64</td><td class="num">0,62–0,65</td><td><span class="pill bad">refutada</span></td></tr>
+  </tbody>
+</table></div>
+
+<div class="table-scroll"><table>
+  <thead><tr><th>Troca</th><th>O que muda</th><th class="num">Avaliações</th><th class="num">Vereditos que mudam</th><th class="num">IC 95%</th></tr></thead>
+  <tbody>
+    <tr><td>C0 → C1</td><td>forças</td><td class="num">80.340</td><td class="num">15,9%</td><td class="num">15,1–16,5</td></tr>
+    <tr><td>C1 → C2</td><td>limiares</td><td class="num">80.328</td><td class="num">18,9%</td><td class="num">17,4–20,5</td></tr>
+    <tr><td>C2 → C2t</td><td>leitura estática → temporal</td><td class="num">75.749</td><td class="num">17,8%</td><td class="num">16,7–19,0</td></tr>
+    <tr><td>C2t → C3</td><td>crescimento</td><td class="num">75.761</td><td class="num">4,3%</td><td class="num">3,8–4,7</td></tr>
+    <tr><td>C0 → C3</td><td>tudo</td><td class="num">75.761</td><td class="num">22,8%</td><td class="num">21,9–23,8</td></tr>
+  </tbody>
+</table></div>
+<p>O Impacto de maior prioridade muda em <b>35,3%</b> dos pares rede × sorteio com pelo menos 3 Impactos piorados.</p>
+
+<h4>O que explica uma mudança</h4>
+<p>Regressão logística com efeito aleatório por rede (coeficientes padronizados): perto da neutralização <b>+1,69</b>; força dos laços ρ(B) <b>+0,39</b>; fração de Impactos alcançados pelas respostas +0,16; densidade −0,13; número de nós −0,09; ter ciclo −0,24; comprimento médio dos caminhos D→I +0,06 (não significativo). A floresta aleatória ordena a importância da mesma forma: proximidade da neutralização, ρ(B), presença de ciclo, densidade, número de nós.</p>
+
+<div class="caveat"><strong>Cuidado ao escrever H3.</strong> Ter um ciclo, por si, reduz a chance de mudança; laços <em>fortes</em> (ρ(B) alto) aumentam. A formulação correta é que a amplificação dos laços importa, não a mera presença deles.</div>
+
+<div class="fig-grid">
+  <figure><img src="analysis/sim_networks/out/fig_a.png" alt="Barras: porcentagem de vereditos que mudam com forças (16%), limiares (19%) e crescimento (4%)."><figcaption>(a) O que muda o veredito.</figcaption></figure>
+  <figure><img src="analysis/sim_networks/out/fig_b.png" alt="Taxa de mudança de veredito contra a proximidade da neutralização na rede crua."><figcaption>(b) Mudanças perto da neutralização (H4).</figcaption></figure>
+  <figure><img src="analysis/sim_networks/out/fig_c.png" alt="Importância por permutação das propriedades da rede na floresta aleatória."><figcaption>(c) O que explica uma mudança (floresta aleatória).</figcaption></figure>
+  <figure><img src="analysis/sim_networks/out/fig_d.png" alt="Distribuição do tau de Kendall da ordem de prioridade entre a rede crua e a parametrizada."><figcaption>(d) Estabilidade da ordem de prioridade.</figcaption></figure>
+</div>
+<p>Arquivos SVG em <code>analysis/sim_networks/out/fig_[a-d].svg</code>.</p>
+
+<h4>Desvios do pré-registro (todos antes de rodar as condições)</h4>
+<ol>
+  <li>300 simulações para a confiabilidade ρ e para C4 (o padrão do app); N ficou em 1000.</li>
+  <li>Paralelismo com <code>parallel</code> (PSOCK) em vez de <code>future.apply</code>; sementes por rede, então o resultado não depende do número de processos.</li>
+  <li>Prioridade só existe nas condições estáticas; H5 compara C0 com C1, como planejado.</li>
+  <li>A rodada de cronometragem (50 redes) foi para <code>out_timing/</code> e não é analisada.</li>
+  <li>Caso não previsto: fechar um gatilho de Estado zera arestas e, numa matriz com sinais, pode elevar ρ acima de 1. O app passou a descartar esses sorteios (com teste); no experimento, condições que não puderam ser calculadas por isso foram contadas e deixadas fora.</li>
+</ol>
+
+<div class="where">
+  <h4>No manuscrito</h4>
+  <ul>
+    <li><b>Seção nova de redes simuladas</b> (ou §4.4): desenho, tabela de hipóteses, figuras a–d, desvios.</li>
+    <li><b>§4.4 e Discussão:</b> reescrever a mensagem "limiares e crescimento primeiro", que o experimento refuta. O tutorial e o README já foram corrigidos.</li>
+    <li><b>§3.7 (leitura interpretativa):</b> o aviso de veredito apertado nasce de H4.</li>
+    <li><b>Suplemento:</b> o pré-registro com as datas dos commits.</li>
+  </ul>
+</div>
+<div class="en">
+  <span class="label">Texto sugerido</span>
+  <p>To test whether "structure first, parameters later" holds in general, we generated 1,000 plausible DPSIR networks (10–25 factors) and evaluated each under 20 draws of link strengths, following a pre-registered protocol committed before any run. Link strengths alone changed 15.9% of the sufficiency verdicts (95% CI 15.1–16.5), State thresholds a similar share (18.9%), and driver growth only 4.3%, because growth shifts the baseline and the scenario together. Switching from the static to the temporal reading changed 17.8%. Changes concentrated among Impacts close to neutralization (odds ratio 5.4), and strongly amplifying loops, rather than the mere presence of a loop, made a change more likely. The priority order was more sensitive than the verdicts (mean Kendall τ 0.64; the top priority changed in 35% of the cases). In practice: build the structure first; give real values to thresholds and to the links behind verdicts close to neutralization; check the stability of the priority order before acting on it; and use growth mainly to time the response, not to decide whether it suffices.</p>
+</div>
+
+<h2 id="e7"><span class="phase-tag">E7</span>Protocolo de busca de ferramentas (Tabela 1)</h2>
+<p>Resposta ao ponto 6: a Tabela 1 precisava de uma busca documentada e de uma fonte por célula.</p>
+
+<h3>O que foi feito</h3>
+<ul>
+  <li><code>analysis/tool_search/PROTOCOLO.md</code>: critérios de inclusão, fontes, duas strings de busca (WoS/Scopus e Scholar/revistas), regras de codificação de cada coluna da Tabela 1.</li>
+  <li><code>tabela_ferramentas.csv</code>: 15 ferramentas ou métodos, com uma fonte por célula.</li>
+  <li>Feitas: busca na web, GitHub, CRAN e r-universe (30/09/2026). A cargo dos autores: WoS, Scopus, Scholar e as quatro revistas (acesso institucional), com as contagens para o fluxo tipo PRISMA do Suplemento S5.</li>
+</ul>
+
+<h3>Achados que mudam o texto</h3>
+<ol>
+  <li><b>Avaliação de suficiência não é exclusiva do iDPSIR.</b> Ahtiainen et al. (Marine Policy, doi 10.1016/j.marpol.2024.106480; online em nov. 2024, o manuscrito cita como 2025, conferir o ano do volume) e Bryhn et al. (2026, "Mind the GAP", Ocean &amp; Coastal Management) avaliam a suficiência de medidas numa cadeia tipo DPSIR, por elicitação de especialistas e sem software liberado.</li>
+  <li><b>QPress tem widgets Shiny</b> e avalia cenários de manejo como press, mas só o sinal da mudança (não magnitude, não neutralização).</li>
+  <li><b>Mapas cognitivos fuzzy já têm incerteza Monte Carlo</b> (In-Cognitive, SoftwareX 2023, aplicativo web aberto). A linha de FCM na Tabela 1 precisa ser qualificada.</li>
+  <li><b>Há ferramentas web para métodos vizinhos</b> (DAGitty, shinyBN, Insight Maker); nenhuma é estruturada em DPSIR nem lê suficiência.</li>
+  <li><b>Ramos-Quintana et al. (2018)</b>, Environmental Impact Assessment Review 69: 42–60, doi 10.1016/j.eiar.2017.11.004 (lido na íntegra): o precursor mais próximo. Rede causal DPSIR cujas relações são tendências de indicadores, combinadas por produto ao longo do caminho e soma entre caminhos (como o efeito total do iDPSIR), num único "estado ambiental global" classificado em regiões de risco fuzzy; ações de gestão com pesos ordinais (1/2). Sem software, sem ciclos, sem incerteza reamostrada, sem leitura por Impacto. Entra na Introdução e como linha "método sem software" na Tabela 1. A ideia de rodar esse exemplo no app ficou para depois: o modelo não tem Impacto definido.</li>
+</ol>
+
+<div class="where">
+  <h4>No manuscrito</h4>
+  <ul>
+    <li><b>Introdução:</b> citar Ahtiainen, Bryhn e Ramos-Quintana; reformular a novidade.</li>
+    <li><b>Tabela 1:</b> linhas novas (Bryhn; Ramos-Quintana como método), QPress e FCM qualificados.</li>
+    <li><b>Suplemento S5:</b> protocolo, fluxo de busca e a tabela com fontes.</li>
+  </ul>
+</div>
+<div class="en">
+  <span class="label">Texto sugerido</span>
+  <p>Assessing whether management measures suffice to reach environmental targets is not new: recent work elicits the effectiveness and sufficiency of measures on DPSIR-type chains (Ahtiainen et al.; Bryhn et al. 2026), and Ramos-Quintana et al. (2018) combined indicator trends along the paths of a DPSIR causal network into a global environmental state. What we did not find, in a documented search (Supplement S5), is an openly available, no-install tool that reads sufficiency by propagating effects through a signed causal network, with evidence and uncertainty recorded for each link.</p>
+</div>
+
+<h2 id="e8"><span class="phase-tag">E8</span>Script único de números e figuras</h2>
+<ul>
+  <li><code>data-raw/manuscript_build.R</code> gera os números citados: porto, Mangi e Sri Lanka (crus e parametrizados), sensibilidade a s, validação, confiança com e sem incerteza estrutural, robustez da prioridade e os resultados das redes simuladas (lidos de <code>analysis/sim_networks/out</code>, sem rodar de novo).</li>
+  <li>Saída em <code>manuscrito_v5/build/numeros.json</code> (fora do git, como o manuscrito).</li>
+  <li><code>tests/testthat/fixtures/manuscript_numbers.json</code> congela <b>94 números</b>; <code>test-manuscript-numbers.R</code> falha se algum mudar. Para atualizar de propósito: <code>Rscript data-raw/manuscript_build.R --freeze</code>.</li>
+  <li><b>Falta:</b> gerar as tabelas (CSV) e figuras (PNG 300 dpi e SVG) do texto, assim que a lista final de tabelas e figuras do manuscrito estiver fechada.</li>
+</ul>
+
+<h2 id="app">Mudanças no app que o texto deve descrever</h2>
+
+<h3>Limite de 300 simulações e aviso de tempo</h3>
+<ul>
+  <li>No app, as leituras de confiança usam 100 ou 300 simulações (antes havia 1000). O experimento do artigo usa mais, em paralelo, fora do app.</li>
+  <li>Ao lado do botão, uma nota estima quanto "Apply scenario" vai levar, medida na própria rede e no próprio computador; acima de 10 s ela fica destacada e sugere 100 simulações. Ao aplicar, uma notificação repete a estimativa. No teste ao vivo: estimativa de 14 s, tempo real de 14 s.</li>
+  <li>Savepoints antigos com 1000 simulações abrem com 300.</li>
+</ul>
+<div class="where"><h4>No manuscrito</h4><ul><li><b>§3.2.1:</b> trocar "N = 300 padrão, 100/1000 opcionais" por "100 ou 300 no app; 1000 no experimento de redes simuladas, fora do app".</li></ul></div>
+
+<h3>Sorteios em que um gatilho eleva ρ</h3>
+<p>Fechar um gatilho de Estado zera arestas; numa matriz com sinais isso pode elevar ρ acima de 1 (remove um cancelamento). Esses sorteios passaram a ser descartados e declarados, como os de ρ(B) ≥ 1.</p>
+<div class="where"><h4>No manuscrito</h4><ul><li><b>§3.2.1 e §3.3:</b> uma frase sobre o descarte.</li></ul></div>
+
+<h3>Aviso de veredito apertado</h3>
+<ul>
+  <li>Consequência direta de H4. Um Impacto piorado cujo saldo fica a menos de 20% da piora (|líquido| / piora &lt; 0,2) recebe o aviso na aba Interpretation e no relatório.</li>
+  <li>O aviso lista as <b>5 ligações que mais movem o saldo</b> daquele Impacto (cada β aumentado em 10%, recalculando com os gatilhos) e marca como <em>(assumed)</em> as de força tirada de uma classe ou do padrão.</li>
+  <li>Nos exemplos: Mangi, cenários 1 e 3 (rendimento por pescador e meios de vida; ligações mais influentes: esforço de pesca → abundância de peixes, pobreza → uso de artes destrutivas); porto, cenários 2 a 4 (até 4 Impactos; contaminação e qualidade da água dependem sobretudo de terminal de carga → escoamento e tratamento → escoamento).</li>
+</ul>
+<div class="en">
+  <span class="label">Texto sugerido</span>
+  <p>Because verdicts near neutralization are the most sensitive to link strengths (Section X), the interpretation flags a worsened Impact whose net effect is within 20% of the worsening as a tight verdict, and names the five links that move that net most (each β raised by 10%), marking those whose strength was assumed from a class or the default. These are the values worth checking first.</p>
+</div>
+
+<h3>Força e confiança da rede como um todo (aba Metrics)</h3>
+<p>Nova subaba "Strength &amp; confidence", também no relatório. Não há índice composto: cada linha mede uma coisa só.</p>
+<ul>
+  <li><b>Força:</b> ligações por classe; |β| médio e mediano; variância explicada por fator (soma dos β² que chegam); amplificação dos laços ρ(B); efeito total Driver → Impacto (média, máximo e o par mais forte).</li>
+  <li><b>Confiança:</b> origem das forças (dados / digitada / classe / padrão); confiança média das ligações pela largura da faixa; ligações com tipo de evidência e com referência; número esperado de ligações ausentes; fração dos efeitos Driver → Impacto com sinal determinado (≥ 95% de 200 sorteios); intervalo de 90% desses efeitos dividido pelo valor (mediana); Estados com limiar.</li>
+  <li>Uma segunda tabela repete por transição (D→P, P→S…), a menos fundamentada primeiro.</li>
+</ul>
+<div class="table-scroll"><table>
+  <thead><tr><th>Medida</th><th>Sri Lanka parametrizado</th><th>Sri Lanka default</th><th>Mangi</th><th>Porto</th></tr></thead>
+  <tbody>
+    <tr><td>Ligações fraca / moderada / forte</td><td>3 / 10 / 7</td><td>0 / 20 / 0</td><td>4 / 19 / 10</td><td>4 / 6 / 10</td></tr>
+    <tr><td>Força vinda de dados</td><td class="num">30%</td><td class="num">0%</td><td class="num">0%</td><td class="num">0%</td></tr>
+    <tr><td>Variância explicada (média; máx.)</td><td>57%; 95%</td><td>32%; 61%</td><td>68%; 89%</td><td>67%; 84%</td></tr>
+    <tr><td>Efeito total D → I (média; máx.)</td><td>0,26; 0,85</td><td>0,12; 0,18</td><td>0,29; 0,73</td><td>0,31; 0,80</td></tr>
+    <tr><td>Confiança média das ligações</td><td class="num">0,36</td><td class="num">0,33</td><td class="num">0,34</td><td class="num">0,35</td></tr>
+    <tr><td>Ligações ausentes esperadas</td><td>1,7 de 20</td><td>1,7 de 20</td><td>3,3 de 33</td><td>4,0 de 20</td></tr>
+    <tr><td>Intervalo de 90% / valor (mediana)</td><td class="num">107%</td><td class="num">107%</td><td class="num">99%</td><td class="num">120%</td></tr>
+    <tr><td>Estados com limiar</td><td>1 de 2</td><td>0 de 2</td><td>0 de 3</td><td>0 de 3</td></tr>
+  </tbody>
+</table></div>
+<div class="caveat"><strong>Duas leituras para o texto.</strong> A fração com sinal determinado dá 100% em todos os exemplos: sem ciclos e com faixas que não cruzam zero, o sinal não tem como virar. A medida só informa com ciclos ou faixas que cruzam zero. O intervalo de 90% do efeito total fica perto ou acima do próprio efeito (99–120%) porque as incertezas se multiplicam ao longo da cadeia; isso reforça que os vereditos devem ser lidos com a sua confiança.</div>
+<div class="where"><h4>No manuscrito</h4><ul><li><b>§2.4 (ambiente de análise):</b> descrever a subaba.</li><li><b>§4.4:</b> a tabela acima pode acompanhar a comparação rede crua × parametrizada.</li></ul></div>
+
+<h2 id="e6"><span class="phase-tag">E6</span>Teste de usabilidade: fora do plano</h2>
+<p>Decisão do autor (30/09): tudo no app e no manuscrito vem da literatura ou de resultados hipotéticos, não há coleta com participantes, e nada depende de CEP. As fases E6.1–E6.3 não foram feitas e o modo de estudo foi retirado do app. O manuscrito não deve reivindicar usabilidade medida (SUS, taxa de sucesso, compreensão por não especialistas).</p>
+
+<hr>
+
+<h2 id="numeros">Números para citar</h2>
+<p>Todos saem de <code>data-raw/manuscript_build.R</code>; a chave é a de <code>numeros.json</code>.</p>
+<div class="table-scroll"><table>
+  <thead><tr><th>O quê</th><th class="num">Valor</th><th>Chave</th></tr></thead>
+  <tbody>
+    <tr><td>Validação: RMSE fora da amostra</td><td class="num">559</td><td><code>val.rmse</code></td></tr>
+    <tr><td>Validação: viés</td><td class="num">+351</td><td><code>val.bias</code></td></tr>
+    <tr><td>Validação: NSE</td><td class="num">−0,48</td><td><code>val.nse</code></td></tr>
+    <tr><td>RMSE persistência / tendência</td><td class="num">632 / 5.737</td><td><code>val.rmse_persistence</code>, <code>val.rmse_trend</code></td></tr>
+    <tr><td>Cobertura da banda de 90%</td><td class="num">100%</td><td><code>val.band_coverage</code></td></tr>
+    <tr><td>Origem 2012: RMSE modelo / persistência</td><td class="num">1.348 / 488</td><td><code>val.rolling2012.*</code></td></tr>
+    <tr><td>Calibração 2006–2021: β R1, β R2, NSE</td><td class="num">0,342; 0,089; 0,93</td><td><code>val.full.*</code></td></tr>
+    <tr><td>Auxílio → frota contra sem auxílio / rival: ΔAIC</td><td class="num">67,5 / 42,4</td><td><code>var.no_aid.delta_aic</code>, <code>var.rival.delta_aic</code></td></tr>
+    <tr><td>RMSE fora da amostra: auxílio / sem / rival</td><td class="num">559 / 6.871 / 10.867</td><td><code>var.*.rmse_test</code></td></tr>
+    <tr><td>Sri Lanka: alcance do auxílio (rede / variante)</td><td class="num">5 / 1 Impactos</td><td><code>sl.aid_reach_impacts</code>, <code>sl.variant.*</code></td></tr>
+    <tr><td>Sri Lanka: ano abaixo de B_MSY; estoque 2021</td><td class="num">2012; 307 kt</td><td><code>sl.year_below_bmsy</code>, <code>sl.stock_2021</code></td></tr>
+    <tr><td>Porto 1: confiança fauna sem / com estrutural; não piorada</td><td class="num">0% / 0%; 29%</td><td><code>port.s1.conf_fauna*</code>, <code>port.s1.fauna_not_worsened_structural</code></td></tr>
+    <tr><td>Mangi 1: confiança rendimento sem / com estrutural (não piorado 0%)</td><td class="num">11% / 29%</td><td><code>mangi.s1.conf_catch*</code></td></tr>
+    <tr><td>Porto 1: 1º lugar estável; τ; fauna mantém posição</td><td class="num">100%; 0,80; 41%</td><td><code>port.s1.rank_*</code>, <code>port.s1.fauna_keeps_rank</code></td></tr>
+    <tr><td>Porto 1: Impactos cujo veredito depende de s</td><td class="num">2</td><td><code>port.s1.sr_depends_n</code></td></tr>
+    <tr><td>H1: forças mudam</td><td class="num">15,9%</td><td><code>sim.H1.estimate</code></td></tr>
+    <tr><td>H2: limiares − forças; crescimento − forças</td><td class="num">+3,0; −11,6 p.p.</td><td><code>sim.H2_*</code></td></tr>
+    <tr><td>H3: coef. has_cycle</td><td class="num">−0,24</td><td><code>sim.H3.estimate</code></td></tr>
+    <tr><td>H4: coef. perto da neutralização</td><td class="num">1,69</td><td><code>sim.H4.estimate</code></td></tr>
+    <tr><td>H5: τ médio</td><td class="num">0,64</td><td><code>sim.H5.estimate</code></td></tr>
+  </tbody>
+</table></div>
+<p>As taxas de mudança por troca (18,9%, 17,8%, 4,3%, 22,8%) e o 35,3% do 1º lugar vêm de <code>analysis/sim_networks/out/summary.md</code> e <code>change_rates.csv</code>; os números dos casos (porto, Mangi, Sri Lanka) seguem os do roadmap anterior e estão todos no <code>numeros.json</code>.</p>
+
+<h2 id="secoes">Mapa por seção do manuscrito</h2>
+<div class="table-scroll"><table>
+  <thead><tr><th>Seção</th><th>O que entra da Revisão 3</th></tr></thead>
+  <tbody>
+    <tr><td>Resumo</td><td>Tirar "validated"; resultados do experimento (H1, H4, H5) numa frase; novidade reformulada.</td></tr>
+    <tr><td>Introdução</td><td>Ahtiainen, Bryhn, Ramos-Quintana; novidade = propagação numa rede causal, aberta, sem instalação.</td></tr>
+    <tr><td>Tabela 1</td><td>Linhas novas e células revisadas, com fonte (E7); Suplemento S5.</td></tr>
+    <tr><td>§2 Software</td><td>Metrics com força e confiança; limite de 300 simulações e aviso de tempo; opção de incerteza estrutural.</td></tr>
+    <tr><td>§3 Métodos</td><td>Modelo formal com premissas (E1); incerteza estrutural (E3); justificativa e robustez da prioridade (E4); descarte de sorteios; aviso de veredito apertado.</td></tr>
+    <tr><td>§4.1 Porto</td><td>Figura de estabilidade da ordem; confiança com incerteza estrutural; sensibilidade a s.</td></tr>
+    <tr><td>§4.2 Mangi</td><td>Vereditos apertados e as ligações a conferir; confiança com incerteza estrutural.</td></tr>
+    <tr><td>§4.3 Sri Lanka</td><td>Validação fora da amostra (tabela e figura); variante sem auxílio → frota com a comparação justa (AIC, fora da amostra, rival).</td></tr>
+    <tr><td>§4.4 ou seção nova</td><td>Redes simuladas: desenho, hipóteses, figuras a–d; tabela de força e confiança crua × parametrizada.</td></tr>
+    <tr><td>§5 Discussão</td><td>Nova mensagem prática (estrutura; limiares e ligações dos vereditos apertados; estabilidade da prioridade; crescimento para o tempo). Limitações: platô da validação, leitura estática com s = 1, sinal determinado trivial em DAGs.</td></tr>
+    <tr><td>Declarações</td><td>Sem usabilidade medida; pré-registro citado; uso de IA.</td></tr>
+  </tbody>
+</table></div>
+
+<h2 id="pendencias">Pendências</h2>
+<h4>Dos autores</h4>
+<ul class="checklist">
+  <li>Rodar as strings de busca em WoS, Scopus, Scholar e nas quatro revistas; preencher as contagens do fluxo (S5).</li>
+  <li>Ler na íntegra Bryhn et al. 2026 e confirmar o ano do volume de Ahtiainen et al.</li>
+  <li>Fonte do exemplo do porto (EIA/RIMA ou declarar como hipotético; decisão M-f).</li>
+  <li>Decidir se a variante do Sri Lanka e a tabela de força e confiança vão para o texto ou para o suplemento.</li>
+</ul>
+<h4>No repositório</h4>
+<ul class="checklist">
+  <li>Tabelas e figuras do E8 assim que a lista do manuscrito estiver fechada.</li>
+  <li>Atualizar o PDF da especificação de relevância (seções 4 e 7.4; eficácia = cobertura; forma aditiva e robustez).</li>
+  <li>Mesclar as branches das Revisões 2 e 3 em <code>main</code>; release v1.0.0 com DOI (Zenodo).</li>
+  <li>Exemplo de Ramos-Quintana (2018) no app: adiado até definir o Impacto.</li>
+  <li>Se a condição C4 das redes simuladas for citada, rodá-la de novo com a contagem corrigida.</li>
+</ul>
+
+<h2 id="arquivos">Onde está cada coisa</h2>
+<div class="table-scroll"><table>
+  <thead><tr><th>Assunto</th><th>Arquivos</th></tr></thead>
+  <tbody>
+    <tr><td>Roadmaps</td><td><code>ROADMAP_REVISAO3_iDPSIR.md</code>, <code>ROADMAP_MANUSCRITO_iDPSIR.md</code></td></tr>
+    <tr><td>E1</td><td><code>R/sufficiency.R</code>, <code>R/temporal.R</code>, <code>tests/testthat/test-equivalence.R</code></td></tr>
+    <tr><td>E2</td><td><code>analysis/validation_srilanka/</code> (<code>calibrate.R</code>, <code>validate.R</code>, <code>variant_test.R</code>, <code>out/</code>)</td></tr>
+    <tr><td>E3</td><td><code>R/structural.R</code> (<code>structural_absence_defaults()</code>), <code>data-raw/gnanapragasam2026_variant_build.R</code>, <code>docs/example_gnanapragasam_noaidfleet.idpsir.json</code></td></tr>
+    <tr><td>E4</td><td><code>R/relevance.R</code> (<code>priority_robustness()</code>), <code>R/scenario_plots.R</code> (<code>draw_rank_stability_plot()</code>)</td></tr>
+    <tr><td>E5</td><td><code>analysis/sim_networks/</code> (<code>PREREGISTRO.md</code>, <code>generate.R</code>, <code>run.R</code>, <code>analyze.R</code>, <code>run_all.R</code>, <code>out/</code>)</td></tr>
+    <tr><td>E7</td><td><code>analysis/tool_search/PROTOCOLO.md</code>, <code>tabela_ferramentas.csv</code></td></tr>
+    <tr><td>E8</td><td><code>data-raw/manuscript_build.R</code>, <code>tests/testthat/fixtures/manuscript_numbers.json</code></td></tr>
+    <tr><td>Aviso de veredito apertado</td><td><code>R/interpretation.R</code> (<code>tight_verdict_links()</code>)</td></tr>
+    <tr><td>Força e confiança</td><td><code>R/metrics.R</code> (<code>network_strength_confidence()</code>), <code>R/modules/mod_metrics.R</code></td></tr>
+  </tbody>
+</table></div>
+
+<footer>Gerado a partir do repositório gfonseca-unifesp/iDPSIR, branch <code>revisao3</code>, commit a4f76a3.</footer>
+</main>
+</div>
+
+</body>
+</html>

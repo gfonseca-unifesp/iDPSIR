@@ -121,6 +121,8 @@ interpret_scenario <- function(g, sc, threshold = 1e-9) {
                           ifelse(m < -threshold, "partial", ifelse(m > threshold, "worsened_by_response", "not_covered"))))
   coverage <- ifelse(w > threshold, pmax(0, -m) / w, NA_real_)
   confidence <- vapply(s$node, conf_of, numeric(1))
+  nw_all <- if (!is.null(conf)) attr(conf, "not_worsened") else NULL
+  not_worsened <- if (is.null(nw_all)) rep(NA_real_, nrow(s)) else unname(nw_all[s$node])
   tight <- w > threshold & abs(n) < INTERPRETATION_TIGHT * w
   pushed <- unique(c(names(sc$p_D)[sc$p_D != 0], names(sc$press)[sc$press != 0]))
   tight_links <- lapply(seq_len(nrow(s)), function(i) {
@@ -161,6 +163,10 @@ interpret_scenario <- function(g, sc, threshold = 1e-9) {
                    if (ci >= INTERPRETATION_FRAGILE[1] && ci <= INTERPRETATION_FRAGILE[2]) " - a fragile verdict" else "")
       else ""
     } else ""
+    if (status[i] %in% c("neutralized", "partial", "not_covered", "worsened_by_response") &&
+        !is.na(not_worsened[i]) && not_worsened[i] >= 0.5) {
+      c_txt <- paste0(c_txt, sprintf(" In %.0f%% of the draws a link on the pressure's path is absent and the Impact is not worsened at all; those draws are not counted as neutralized.", not_worsened[i]))
+    }
     a_txt <- if (w[i] > threshold && !s$neutralized[i]) alone_text(s$node[i]) else ""
     paste0(base, c_txt, tight_text[i], a_txt)
   }, character(1))
