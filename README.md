@@ -55,7 +55,7 @@ The steps are in the order a team usually meets them, but any step can send the 
 back to an earlier one. Steps 1–5 and 7 run entirely in the application. Part of step 6,
 the statistical tests against observed series, runs outside it, in R scripts that read
 the same saved network and use the same engine
-([Testing a network against observed data](#testing-a-network-against-observed-data-outside-the-app)).
+([`analysis/templates/validate_network.R`](analysis/templates/validate_network.R)).
 
 | Step | Question | What iDPSIR shows | For decision and monitoring |
 |---|---|---|---|
@@ -68,7 +68,7 @@ the same saved network and use the same engine
 | 7. Decide, monitor, return | Which response, how strong, which Impact first, when? | Sufficiency with confidence; priority with stability; timing; report and savepoint | What remains uncertain becomes the next monitoring programme |
 
 **Why this order.** In a pre-registered experiment with 1,000 simulated DPSIR networks
-([below](#how-general-1000-simulated-networks)), the bare structure decided about five
+([`analysis/sim_networks/`](analysis/sim_networks/); details in the accompanying paper), the bare structure decided about five
 of every six sufficiency verdicts:
 - link strengths and State thresholds each changed about one in six;
 - growth trends changed about one in twenty-five;
@@ -172,8 +172,9 @@ numbers.
     growth overtakes it. The gap is compliance, not the choice of measures.
   - Four saved scenarios.
 - **Sri Lankan small-scale fishery (Gnanapragasam et al. 2026)**: 17 factors, 20 links,
-  one window per year from 2004, parameterized from the paper's own data
-  ([how](#sri-lanka-example-how-it-was-parametrized)); *Marine Policy* 189, 107095.
+  one window per year from 2004, parameterized from the paper's own data (parameters and
+  sources in [`data/gnanapragasam2026_parameters.csv`](data/gnanapragasam2026_parameters.csv));
+  *Marine Policy* 189, 107095.
   [`docs/example_gnanapragasam.idpsir.json`](docs/example_gnanapragasam.idpsir.json), or
   [`data/gnanapragasam2026_nodes.csv`](data/gnanapragasam2026_nodes.csv) /
   [`data/gnanapragasam2026_edges.csv`](data/gnanapragasam2026_edges.csv).
@@ -197,232 +198,10 @@ numbers.
   built by [`data-raw/gnanapragasam2026_variant_build.R`](data-raw/gnanapragasam2026_variant_build.R).
   - **What it is:** the Sri Lanka network without the two aid → fleet capacity links.
   - **What it shows:** the aid then reaches only income loss, and the stock never falls
-    below B_MSY. The observed effort rejects this variant
-    ([tested outside the app](#testing-a-network-against-observed-data-outside-the-app)).
+    below B_MSY. The observed effort rejects this variant (tested outside the app, with
+    [`analysis/validation_srilanka/variant_test.R`](analysis/validation_srilanka/variant_test.R)).
 - **Fisheries (orientation)**: 5 nodes and one closed feedback loop, the simplest way to
   get to know the wizard. [`docs/example_fisheries.idpsir.json`](docs/example_fisheries.idpsir.json).
-
-### Sri Lanka example: how it was parametrized
-
-One window is one year; window 0 is 2004, the last year before the post-tsunami aid, so
-the reference values are 2004 levels. Every value below is either taken from the paper,
-derived from it, calibrated against it, or — where marked — from outside it. The tables
-are built by [`data-raw/gnanapragasam2026_build.R`](data-raw/gnanapragasam2026_build.R),
-which also writes the savepoint; [`data-raw/gnanapragasam2026_figures.R`](data-raw/gnanapragasam2026_figures.R)
-draws the figures.
-
-- **Fishing effort** was digitized exactly from the paper's Fig. 4 (a vector figure):
-  [`data/gnanapragasam2026_effort_observed.csv`](data/gnanapragasam2026_effort_observed.csv),
-  7,181 thousand kW-days in 1990 to 16,531 in 2021. Its SD over that series (4,877) is
-  the model unit of effort, fleet capacity and the quota — the same sample the paper's
-  standardized relationships were estimated on.
-- **Fish stock** comes from the paper's Gordon-Schaefer model: B_MSY = 1.5 × H_MSY =
-  345 kt, so K = 690 kt and, at equilibrium, B(E) = K(1 − E/30,924), which reproduces
-  the paper's Table 4. Its threshold is B_MSY itself (falling): the usual limit
-  reference point, half of B_MSY (a management convention, not in the paper), was tried
-  first and is never crossed at realistic levels, so the stock would never reach its
-  Impacts.
-- **The two aid strengths** were fitted to the observed effort, 2006–2021
-  (R² = 0.93 within the fitted years; fit rewritten in
-  [`analysis/validation_srilanka/calibrate.R`](analysis/validation_srilanka/calibrate.R)).
-- **Self-regulation**: in the temporal simulation a link passes its strength every
-  window, and a factor with self-regulation *s* settles at strength ÷ *s*. States whose
-  strengths come from an equilibrium (the Schaefer stock, the motorized share) keep
-  *s* = 1 so the static and temporal readings agree; the fleet, whose boats persist,
-  keeps 0.02.
-
-**Validation against data** (fit on 2006-2014, prediction of 2015-2021, rival networks) is
-described in [Testing a network against observed data](#testing-a-network-against-observed-data-outside-the-app).
-
-Consistency with the bioeconomic model: the stock falls below B_MSY in 2012 (the
-paper: catch passes H_MSY in 2012) and is at 307 kt in 2021 (≈ 321 kt); with the 25%
-quota from 2022, effort reaches 12,470 thousand kW-days in 2030 (E_MEY = 12,287) and
-the stock 406 kt (413 kt in Table 4).
-
-![Effort and fish stock, observed and simulated](docs/example_gnanapragasam_validation.png)
-
-**Parameters and sources** (`data/gnanapragasam2026_parameters.csv`):
-
-| item | value | source |
-|---|---|---|
-| Window length | 1 year | Annual statistics (article, 1990-2021) |
-| Window 0 | 2004 | Last year before the post-tsunami aid |
-| Effort SD (P1, D3, R3 units) | 4877 thousand kW-days | SD of the 1990-2021 series digitized from Fig. 4 (vector figure) |
-| Effort in 2004 (reference, P1 and D3) | 8328 thousand kW-days | Fig. 4 (digitized) |
-| Fishing effort -> Fish stock (beta) | -0.825 | sqrt(R2 = 0.68), CPUE vs effort (section 3.3); sign: more effort, less stock |
-| Fishing effort -> Fish stock (band) | 0.622 - 1.027 | 95% interval of beta from R2 and n = 32 years |
-| Carrying capacity K | 690 kt | 2 x B_MSY; B_MSY = 1.5 x H_MSY (section 3.5.1, Table 3) |
-| Intrinsic growth r | 1.33 per year | 4 x H_MSY / K (Gordon-Schaefer) |
-| Fish stock in 2004 (reference) | 504.4 kt | Equilibrium K (1 - E / E_max) at the 2004 effort; reproduces Table 4 |
-| Fish stock SD | 108.9 kt | (K / E_max) x effort SD |
-| Fish stock self-regulation | 1 | Biomass taken at its Schaefer equilibrium each year (r = 1.33/yr: recovery rate r B / K about 0.72/yr); sr = 1 keeps the temporal equilibrium equal to B(E) |
-| Fish stock threshold (B_MSY) | 345.2 kt (falling) | B_MSY = 1.5 x H_MSY (article). B_lim = 0.5 B_MSY (convention) was tested and is never crossed |
-| Coastal population growth | 0.8% per year | External (national statistics), not in the article |
-| Coastal population in 2004 | 19.4 million | External (national statistics), not in the article |
-| Per-capita demand growth | 2.3% per year | Consumption doubled over three decades (section 3.1, Fig. 5) |
-| Per-capita demand ceiling | 31 kg per person | Peak of 31 kg in 2016 (section 3.1) |
-| Per-capita demand in 2004 | 23.5 kg per person | 31 kg discounted at 2.3%/yr back to 2004 |
-| Fleet capacity growth | 1% per year | Effort trend 1990-2004 (Fig. 4), before the aid |
-| Fleet capacity self-regulation | 0.02 | Boats persist; effort stayed on a plateau after the aid (Fig. 4) |
-| Post-tsunami aid -> Fleet capacity | 0.34 | Fitted with the post-war aid by least squares to Fig. 4, 2006-2021 (R2 = 0.93; a common value fits worse, R2 = 0.84) |
-| Post-war aid -> Fleet capacity | 0.08 | Fitted with the post-tsunami aid (same fit) |
-| Aid periods | 2005-2009 (windows 1-5); 2010-2012 (windows 6-8) | Section 3.1 and Fig. 6 |
-| Fleet capacity -> Fishing effort | 0.85 (band 0.75 - 0.95) | Effort = boat power x fishing days (section 2.2.1): capacity sets effort; kept below 0.9 so the three drivers of effort explain at most 100% of its variation |
-| Fleet motorization in 2004 / SD | 40% / 15.5 points | Fleet split 60:40 non-motorized before 2004, 60:40 motorized now (section 3.4); SD calibrated to that rise |
-| Effort-based quota -> Fishing effort | 1 (definitional) | The quota cuts effort directly, in effort units |
-| Quota size | 5% of 2021 effort = 827; 25% = 4,133 thousand kW-days | Table 4 (5% = MSY, 25% = MEY) |
-| Flow factors' self-regulation | 1 (no memory) | Effort, demand, catch and income are flows, not stocks |
-| Other edge strengths | classes weak 0.15 / moderate 0.45 / strong 0.80 | Qualitative links (section 3, Table 2) |
-
-**Nodes** (`data/gnanapragasam2026_nodes.csv`, main columns):
-
-| id | label | category | self_regulation | growth_rate | growth_cap | reference_value | sd | threshold_level |
-|---|---|---|---|---|---|---|---|---|
-| D1 | Coastal population | Driver | 0.50 | 0.008 |  |   19.4 |  |  |
-| D2 | Per-capita fish demand | Driver | 1.00 | 0.023 | 31 |   23.5 |  |  |
-| D3 | Fleet capacity (boats x power) | Driver | 0.02 | 0.01 |  | 8328.0 | 4877.0 |  |
-| D4 | Indian trawler incursions | Driver | 1.00 |  |  |  |  |  |
-| P1 | Fishing effort | Pressure | 1.00 |  |  | 8328.0 | 4877.0 |  |
-| P2 | Illegal bottom trawling | Pressure | 1.00 |  |  |  |  |  |
-| S1 | Fish stock (biomass) | State | 1.00 |  |  |  504.4 |  108.9 | 345.2 |
-| S2 | Fleet motorization (% motorized) | State | 1.00 |  |  |   40.0 |   15.5 |  |
-| I1 | Catch decline | Impact | 1.00 |  |  |  |  |  |
-| I2 | Fisher income loss | Impact | 1.00 |  |  |  |  |  |
-| I3 | Conflict with Indian fishermen | Impact | 0.50 |  |  |  |  |  |
-| I4 | Traditional fishing decline | Impact | 0.50 |  |  |  |  |  |
-| I5 | Loss of traditional fishing culture | Impact | 0.30 |  |  |  |  |  |
-| R1 | Post-tsunami aid (2005-2009) | Response | 1.00 |  |  |  |  |  |
-| R2 | Post-war aid (2010-2012) | Response | 1.00 |  |  |  |  |  |
-| R3 | Effort-based quota | Response | 1.00 |  |  |  | 4877.0 |  |
-| R4 | Combating poaching | Response | 1.00 |  |  |  |  |  |
-
-**Edges** (`data/gnanapragasam2026_edges.csv`):
-
-| link | sign | strength | band | source |
-|---|---|---|---|---|
-| Coastal population → Fishing effort | positive | weak |  | class |
-| Per-capita fish demand → Fishing effort | positive | moderate |  | class |
-| Fleet capacity (boats x power) → Fishing effort | positive | 0.850 | 0.75 – 0.95 | given |
-| Indian trawler incursions → Illegal bottom trawling | positive | strong |  | class |
-| Fishing effort → Fish stock (biomass) | negative | 0.825 | 0.622 – 1.027 | r2 |
-| Fishing effort → Fleet motorization (% motorized) | positive | 0.750 |  | calibrated |
-| Illegal bottom trawling → Fish stock (biomass) | negative | moderate |  | class |
-| Fish stock (biomass) → Catch decline | negative | strong |  | class |
-| Fish stock (biomass) → Fisher income loss | negative | moderate |  | class |
-| Fish stock (biomass) → Conflict with Indian fishermen | negative | moderate |  | class |
-| Fleet motorization (% motorized) → Catch decline | positive | moderate |  | class |
-| Fleet motorization (% motorized) → Conflict with Indian fishermen | positive | weak |  | class |
-| Fleet motorization (% motorized) → Traditional fishing decline | positive | strong |  | class |
-| Fleet motorization (% motorized) → Loss of traditional fishing culture | positive | moderate |  | class |
-| Post-tsunami aid (2005-2009) → Fleet capacity (boats x power) | positive | 0.345 |  | calibrated |
-| Post-tsunami aid (2005-2009) → Fisher income loss | negative | moderate |  | class |
-| Post-war aid (2010-2012) → Fleet capacity (boats x power) | positive | 0.085 |  | calibrated |
-| Post-war aid (2010-2012) → Fisher income loss | negative | moderate |  | class |
-| Effort-based quota → Fishing effort | negative | 1.000 | 0.9 – 1 | given |
-| Combating poaching → Indian trawler incursions | negative | moderate |  | class |
-
-## Testing a network against observed data (outside the app)
-
-Step 6 needs three statistical tasks that the application does not perform:
-1. fitting link strengths to an observed series;
-2. predicting years not used in the fit;
-3. comparing alternative networks by information criteria.
-
-They run in R scripts that read a saved network (`.idpsir.json`) and run it with the
-application's own engine (`R/`). The network tested is therefore exactly the one used
-for the decision, and a fitted value goes back into the app as an ordinary link
-strength (evidence type *calibration*).
-
-For the Sri Lankan case, from the repository root:
-
-```bash
-Rscript analysis/validation_srilanka/validate.R
-```
-
-```bash
-Rscript analysis/validation_srilanka/variant_test.R
-```
-
-- **`calibrate.R`:** least-squares fit of the two aid → fleet strengths to the observed
-  fishing effort.
-- **`validate.R`:**
-  - fits on 2006–2014 and predicts 2015–2021;
-  - compares with persistence of the 2014 value and with the 2006–2014 trend;
-  - 90% prediction band;
-  - rolling origin from 2012 to 2016.
-  
-  Result: RMSE 559 thousand kW-days, against 632 for persistence and 5,737 for the trend.
-  The band covers all seven years.
-- **`variant_test.R`:** compares the published network with the variant without
-  aid → fleet, and with a rival that has as many fitted parameters (the fleet's own
-  growth and demand → effort fitted instead).
-  - The published network is preferred by ΔAIC 67.5 and 42.4.
-  - It also predicts 2015–2021 best: RMSE 559, against 6,871 and 10,867.
-
-Outputs go to `analysis/validation_srilanka/out/`.
-
-**With your own network.** These scripts are the generic template
-[`analysis/templates/validate_network.R`](analysis/templates/validate_network.R) configured
-for the Sri Lankan case.
-
-What you give it:
-- a savepoint;
-- a CSV with an observed series of one factor, in its own units (the factor needs a
-  reference level and an SD);
-- the links (or node attributes, such as a growth rate) to fit;
-- the calibration and test periods;
-- optionally, alternative networks.
-
-What it returns:
-- fitted values with standard errors;
-- out-of-sample metrics against persistence and trend, with a 90% band and a rolling
-  origin;
-- an AIC/AICc/BIC comparison of the networks, with the residual autocorrelation;
-- a figure in the style of the paper's Fig. 5b.
-
-To use it, copy `vn_example_srilanka()` at the end of the file, adapt it, and run
-`Rscript analysis/templates/validate_network.R`. A test checks that the template
-reproduces the Sri Lankan numbers cited in the paper.
-
-**Two checks, kept apart:**
-- *Consistency* compares the network with another model of the same system (here, the
-  paper's bioeconomic model). It shows agreement, not validity.
-- *Validation* compares it with observations not used in the fit, against naive
-  references and rival explanations.
-
-The 2015–2021 test period is a plateau, so the network is described as consistent with
-the observed effort out of sample, not as validated.
-
-## How general? 1,000 simulated networks
-
-[`analysis/sim_networks/`](analysis/sim_networks/) holds a pre-registered experiment.
-The pre-registration (`PREREGISTRO.md`) was committed before any run, and its deviations
-are recorded there.
-
-**Design:**
-- 1,000 plausible DPSIR networks (10–25 factors), each under 20 draws of link strengths;
-- the same engine as the app;
-- elements added in turn: link strengths, State thresholds, the temporal reading,
-  growth trends.
-
-| What is added | Verdicts that change (95% CI) |
-|---|---|
-| Link strengths (bare structure → drawn strengths) | 15.9% (15.1–16.5) |
-| State thresholds | 18.9% (17.4–20.5) |
-| Static → temporal reading | 17.8% (16.7–19.0) |
-| Growth trends | 4.3% (3.8–4.7) |
-| All of the above | 22.8% (21.9–23.8) |
-
-**Other results:**
-- Changes concentrate near neutralization (odds ratio 5.4). This is why the app flags
-  tight verdicts.
-- Strongly amplifying loops make a change more likely; the mere presence of a loop does
-  not.
-- The priority order is more sensitive than the verdicts: mean Kendall τ 0.64, and the
-  top priority changed in 35% of the cases.
-
-`Rscript analysis/sim_networks/run_all.R 1000 20` reproduces everything (about 1.5 h on
-20 processes). The figures and the summary are in `analysis/sim_networks/out/`.
 
 ## The application, screen by screen
 
@@ -721,22 +500,6 @@ typical variation also takes its push in its own units. Older files with an
   The cited numbers are frozen in `tests/testthat/fixtures/manuscript_numbers.json`, so a
   change of the engine that alters one of them fails the suite.
 
-## Paper and supplementary material
-
-The application accompanies the paper *From DPSIR diagram to management decision: a
-guided, open software to test whether responses are sufficient (iDPSIR)* (Fonseca and
-Davanso, in preparation). Its supplementary material maps onto this repository:
-
-| Supplement | Content | In the repository |
-|---|---|---|
-| S1 | Port: savepoint, links, scenarios and their schedules, Data needs | `docs/example_port.idpsir.json`, `data/port_*.csv`, `data-raw/port_build.R`; tables: `data-raw/manuscript_supplement.R` |
-| S2 | Kenyan reef fishery: savepoints (full and first run), Data needs | `docs/example_mangi*.idpsir.json`, `data/mangi2007_*.csv`, `data-raw/mangi2007_build.R` |
-| S3 | Sri Lankan fishery: savepoints (published, first run, variant), parameters and sources, observed effort | `docs/example_gnanapragasam*.idpsir.json`, `data/gnanapragasam2026_*.csv` |
-| S4 | Pre-registration of the simulation experiment and its deviations | `analysis/sim_networks/` |
-| S5 | Tool-search protocol, with a source for each cell of Table 1 | `analysis/tool_search/` |
-| S6 | Plain-language guide to every input and result | (with the paper); see also the tutorial and [Data format](#data-format) |
-| S7 | Methods run outside the app: calibration, out-of-sample validation, comparison of networks | `analysis/templates/validate_network.R`, `analysis/validation_srilanka/` |
-
 ## Limitations
 
 - **Garbage in, garbage out.** iDPSIR compares and ranks responses given the knowledge
@@ -755,7 +518,7 @@ Davanso, in preparation). Its supplementary material maps onto this repository:
 - **Structural uncertainty covers only drawn links.** It is the possible absence of
   links that were drawn, not links nobody drew.
 - **Fitting, validation and comparison need R.** They run outside the app, in R scripts
-  (see above).
+  ([`analysis/templates/validate_network.R`](analysis/templates/validate_network.R)).
 - **No user testing.** The app has not been tested with users; its accessibility is a
   design property, not a measured one.
 - **No orientation check.** The app does not infer whether more of a factor is better
