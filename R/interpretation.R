@@ -255,9 +255,11 @@ compare_scenario_interpretations <- function(g, scenarios) {
   do.call(rbind, lapply(rows, function(r) { r[setdiff(cols, names(r))] <- "-"; r[cols] }))
 }
 
-# Coverage chart: for each Impact, the pressure's worsening (red bar), what
-# the response offsets (green bar) and the net (black diamond; at or left
-# of zero = neutralized). Impacts in priority order, top = first.
+# Coverage chart, read as a cascade: for each Impact the pressure's
+# worsening (red bar, from 0), then what the response offsets (green bar,
+# from the worsening back to the net) and the net (diamond). The green bar
+# crosses zero when the response goes beyond neutral; the shaded side of
+# zero is the neutralized zone. Impacts in priority order, top = first.
 draw_sufficiency_plot <- function(interp_df) {
   df <- interp_df[interp_df$worsening > 1e-9 | abs(interp_df$mitigation) > 1e-9, , drop = FALSE]
   if (nrow(df) == 0) {
@@ -266,30 +268,36 @@ draw_sufficiency_plot <- function(interp_df) {
     return(invisible())
   }
   df <- df[rev(seq_len(nrow(df))), , drop = FALSE]
-  offset <- pmax(0, -df$mitigation)
+  w <- pmax(0, df$worsening)
   extra <- pmax(0, df$mitigation)
-  xr <- range(0, df$worsening + extra, offset, df$net)
-  xr <- xr + c(-0.05, 0.05) * diff(xr)
+  offset <- pmax(0, -df$mitigation)
+  xr <- range(0, w + extra, df$net)
+  xr <- xr + c(-0.05, 0.05) * max(diff(xr), 1e-9)
   old <- graphics::par(mar = c(4, max(8, max(nchar(df$node)) * 0.55), 1.5, 1))
   on.exit(graphics::par(old))
   y <- seq_len(nrow(df))
   graphics::plot(NA, xlim = xr, ylim = c(0.4, nrow(df) + 1.4), yaxt = "n", ylab = "",
                  xlab = "effect on the Impact (+ worse, - better)", bty = "n")
+  # Neutralized zone (net <= 0), as in the temporal chart.
+  if (xr[1] < 0) graphics::rect(xr[1], 0.5, 0, nrow(df) + 0.5, col = "#e7f4ea", border = NA)
   graphics::axis(2, at = y, labels = df$node, las = 1, tick = FALSE, cex.axis = 0.85)
-  graphics::abline(v = 0, col = "grey50")
-  graphics::rect(0, y + 0.04, df$worsening, y + 0.34, col = "#e8a0a0", border = NA)
-  graphics::rect(df$worsening, y + 0.04, df$worsening + extra, y + 0.34, col = "#b03030", border = NA)
-  graphics::rect(0, y - 0.34, offset, y - 0.04, col = "#8fcf9f", border = NA)
+  graphics::abline(v = 0, col = "grey40")
+  graphics::rect(0, y + 0.04, w, y + 0.34, col = "#e8a0a0", border = NA)
+  graphics::rect(w, y + 0.04, w + extra, y + 0.34, col = "#b03030", border = NA)
+  # Offset: from the worsening back to the net (crosses zero when the
+  # response goes beyond neutral).
+  has_off <- offset > 1e-9
+  graphics::rect(pmin(w, df$net)[has_off], (y - 0.34)[has_off], w[has_off], (y - 0.04)[has_off], col = "#8fcf9f", border = NA)
   graphics::points(df$net, y, pch = 23, bg = ifelse(df$neutralized, "#1b8a3a", "#1f2937"), col = "#1f2937", cex = 1.4)
   # Only what is drawn gets a legend entry (the dark red segment exists only
   # when the response itself worsens an Impact).
   items <- data.frame(
-    label = c("worsening by the pressure", "worsening added by the response", "offset by the response",
-              "net: neutralized (<= 0)", "net: not neutralized"),
-    pch = c(15, 15, 15, 23, 23),
-    col = c("#e8a0a0", "#b03030", "#8fcf9f", "#1f2937", "#1f2937"),
-    bg = c(NA, NA, NA, "#1b8a3a", "#1f2937"),
-    shown = c(any(df$worsening > 1e-9), any(extra > 1e-9), any(offset > 1e-9), any(df$neutralized), any(!df$neutralized)),
+    label = c("worsening by the pressure", "worsening added by the response", "offset by the response (worsening -> net)",
+              "net: neutralized (<= 0)", "net: not neutralized", "neutralized zone"),
+    pch = c(15, 15, 15, 23, 23, 22),
+    col = c("#e8a0a0", "#b03030", "#8fcf9f", "#1f2937", "#1f2937", "#9fbfa8"),
+    bg = c(NA, NA, NA, "#1b8a3a", "#1f2937", "#e7f4ea"),
+    shown = c(any(w > 1e-9), any(extra > 1e-9), any(has_off), any(df$neutralized), any(!df$neutralized), xr[1] < 0),
     stringsAsFactors = FALSE)
   items <- items[items$shown, , drop = FALSE]
   graphics::legend("top", bty = "n", cex = 0.8, ncol = 2, pch = items$pch, col = items$col, pt.bg = items$bg,

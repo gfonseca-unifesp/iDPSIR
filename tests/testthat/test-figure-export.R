@@ -72,3 +72,27 @@ test_that("report: print quality gives more pixels, and the static network is in
   html0 <- as.character(htmltools::renderTags(build_full_report_html(x$schema, x$g))$html)
   expect_false(grepl("<h3>Network</h3>", html0, fixed = TRUE))
 })
+
+test_that("static network: circle layout and line-type links", {
+  x <- fx_graph("example_mangi")
+  lay <- network_circle_layout(x$g, x$schema)
+  # Every node on the unit circle, grouped by level (one level per arc).
+  expect_equal(lay$x^2 + lay$y^2, rep(1, length(lay$x)), tolerance = 1e-9)
+  ord <- order(-lay$ang)   # the angles decrease clockwise from the first level
+  expect_false(is.unsorted(match(lay$cats, lay$cat_order)[ord]))
+  for (st in c("color", "linetype")) {
+    h <- network_static_height_mm(x$g, x$schema, 190, 9, layout = "circle", edge_style = st)
+    expect_gt(h, 150)
+    f <- tempfile(fileext = ".png")
+    expect_silent(export_figure(function() draw_network_static(x$g, x$schema, layout = "circle", edge_style = st), f, "png", 190, h, 100, 9))
+    f2 <- tempfile(fileext = ".png")
+    expect_silent(export_figure(function() draw_network_static(x$g, x$schema, layout = "columns", edge_style = st), f2, "png", 190, 120, 100, 9))
+  }
+  # Line type: dashed + bar for a decrease, solid + arrow for an increase; width by class.
+  neg <- network_edge_look("negative", 0.15, "linetype"); pos <- network_edge_look("positive", 0.8, "linetype")
+  expect_equal(c(neg$lty, neg$head), c(2, "bar")); expect_equal(c(pos$lty, pos$head), c(1, "arrow"))
+  expect_lt(neg$lwd, pos$lwd)
+  html <- as.character(htmltools::renderTags(build_full_report_html(x$schema, x$g, include_static_network = TRUE,
+                                                                      network_layout = "circle", network_edge_style = "linetype"))$html)
+  expect_true(grepl("on a circle", html, fixed = TRUE))
+})

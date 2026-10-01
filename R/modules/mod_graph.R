@@ -584,9 +584,18 @@ mod_graph_server <- function(id, schema, nodes, edges, graph, positions, set_pos
       paste0(paste(parts, collapse = "; "), ".")
     }
 
+    # Layout (columns by level, or a circle with radial labels) and link
+    # style (colour, or line type for black and white) of the print drawing.
+    net_opt <- function(x, default) input[[paste0("figexp_network_static_", x)]] %||% default
     register_figure_export(input, output, session, "network_static", filename = "network",
-      draw = function() draw_network_static(graph(), schema()),
-      height = function(w, font) network_static_height_mm(graph(), schema(), w, font))
+      draw = function() draw_network_static(graph(), schema(), layout = net_opt("layout", "columns"),
+                                            edge_style = net_opt("edges", "color")),
+      height = function(w, font) network_static_height_mm(graph(), schema(), w, font, layout = net_opt("layout", "columns"),
+                                                          edge_style = net_opt("edges", "color")),
+      extra_ui = function(key) fluidRow(
+        column(6, selectInput(key("layout"), "Layout", choices = NETWORK_LAYOUT_CHOICES, selected = net_opt("layout", "columns"))),
+        column(6, selectInput(key("edges"), "Links", choices = NETWORK_EDGE_CHOICES, selected = net_opt("edges", "color")))
+      ))
 
     observeEvent(input$save_snapshot, {
       name <- trimws(input$snapshot_name)

@@ -60,7 +60,9 @@ build_full_report_html <- function(
     metadata = NULL,
     savepoint_filename = NULL,
     figure_res = 96,
-    include_static_network = FALSE
+    include_static_network = FALSE,
+    network_layout = "columns",
+    network_edge_style = "color"
 ) {
   # Sequential "Figure N"/"Table N" numbering across the whole report, plus
   # a caption paragraph under each - both requested so the report reads like
@@ -221,7 +223,7 @@ build_full_report_html <- function(
           tags$img(src = plot_to_data_uri(function() draw_sufficiency_plot(imp), width = 900, height = 140 + 60 * max(1, n_plot), res = figure_res),
                    style = "max-width: 100%;"),
           caption_tag("Figure", next_figure_n(), sprintf(
-            "For \"%s\": the pressure's worsening of each Impact (red; dark red = added by the response itself), what the response offsets (green) and the net effect (diamond; at or left of zero = neutralized). Impacts in priority order, top first.",
+            "For \"%s\": the pressure's worsening of each Impact (red; dark red = added by the response itself), what the response offsets (green, from the worsening back to the net) and the net effect (diamond; in the shaded zone, at or left of zero = neutralized). Impacts in priority order, top first.",
             scenario_name)),
           {
             dn <- data_needs(graph, sc)
@@ -594,14 +596,16 @@ build_full_report_html <- function(
 
   # Revisao 3: the network drawn for print (DPSIR columns, sign legend).
   if (isTRUE(include_static_network) && !is.null(graph) && igraph::vcount(graph) > 0) {
-    h_mm <- network_static_height_mm(graph, schema, 190, 8)
+    h_mm <- network_static_height_mm(graph, schema, 190, 8, layout = network_layout, edge_style = network_edge_style)
     px_w <- 900; px_h <- round(px_w * h_mm / 190)
     appendix_sections <- c(appendix_sections, list(
       tags$h3("Network"),
-      tags$img(src = plot_to_data_uri(function() draw_network_static(graph, schema),
+      tags$img(src = plot_to_data_uri(function() draw_network_static(graph, schema, layout = network_layout, edge_style = network_edge_style),
                                       width = px_w, height = px_h, res = figure_res), style = "max-width: 100%;"),
       caption_tag("Figure", next_figure_n(),
-        "The network by DPSIR level (columns, in the order of the model). Green links increase their target, red ones decrease it; line width is proportional to the strength |beta|.")
+        paste(if (identical(network_layout, "circle")) "The network on a circle, grouped by DPSIR level in the order of the model." else "The network by DPSIR level (columns, in the order of the model).",
+              if (identical(network_edge_style, "linetype")) "Solid links with an arrowhead increase their target, dashed links ending in a bar decrease it; line width shows the strength class (weak, moderate, strong)."
+              else "Green links increase their target, red ones decrease it; line width is proportional to the strength |beta|."))
     ))
   }
 

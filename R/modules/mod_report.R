@@ -215,7 +215,10 @@ mod_report_ui <- function(id) {
       column(
         width = 4,
         h5("Graph images"),
-        checkboxInput(ns("include_static_network"), "Network figure drawn for print (DPSIR columns, sign legend)", value = TRUE),
+        checkboxInput(ns("include_static_network"), "Network figure drawn for print (by DPSIR level, sign legend)", value = TRUE),
+        conditionalPanel(sprintf("input['%s']", ns("include_static_network")),
+          selectInput(ns("network_layout"), "Network layout", choices = NETWORK_LAYOUT_CHOICES, selected = "columns"),
+          selectInput(ns("network_edge_style"), "Network links", choices = NETWORK_EDGE_CHOICES, selected = "color")),
         p("Saved views of the interactive graph (save one from the Graph tab's \"Save current view\" button):"),
         DTOutput(ns("graph_snapshots_table"))
       ),
@@ -316,7 +319,9 @@ mod_report_server <- function(id, schema, nodes, edges, graph, saved_scenarios, 
           metadata = if (is.null(metadata)) NULL else metadata(),
           savepoint_filename = if (is.null(savepoint_filename)) NULL else savepoint_filename(),
           figure_res = as.numeric(input$figure_res %||% 96),
-          include_static_network = !isFALSE(input$include_static_network)
+          include_static_network = !isFALSE(input$include_static_network),
+          network_layout = input$network_layout %||% "columns",
+          network_edge_style = input$network_edge_style %||% "color"
         ), error = function(e) {
           showNotification(paste("Could not build the report:", conditionMessage(e)), type = "error", duration = NULL)
           htmltools::tags$html(htmltools::tags$body(

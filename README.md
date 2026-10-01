@@ -546,7 +546,9 @@ has four tabs:
   the report opens its scenario part with the same reading.
 - **Figures** — every chart (and the network, drawn for print in DPSIR columns) has a
   **Download figure…** button: PNG or TIFF at 150/300/600 dpi, PDF or SVG; journal widths
-  (90, 140, 190 mm) or any width; font size in points as printed. The report has a figure
+  (90, 140, 190 mm) or any width; font size in points as printed. The network figure can
+  be drawn in columns by level or on a circle (radial labels outside), with links in colour
+  or by line type (solid = increases, dashed with a bar = decreases, width = strength class). The report has a figure
   quality option (screen 96 dpi or print 300 dpi) and can include the print drawing of the
   network.
 - **Metrics** — general network metrics; **strength and confidence** of the network as
