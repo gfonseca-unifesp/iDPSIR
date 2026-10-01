@@ -58,7 +58,9 @@ build_full_report_html <- function(
     include_temporal_section = FALSE,
     include_interpretation = TRUE,
     metadata = NULL,
-    savepoint_filename = NULL
+    savepoint_filename = NULL,
+    figure_res = 96,
+    include_static_network = FALSE
 ) {
   # Sequential "Figure N"/"Table N" numbering across the whole report, plus
   # a caption paragraph under each - both requested so the report reads like
@@ -216,7 +218,7 @@ build_full_report_html <- function(
           tags$p(tags$strong(it$headline)),
           if (length(it$messages) > 0) tags$ul(lapply(it$messages, tags$li)),
           tags$ol(lapply(seq_len(nrow(imp)), function(k) tags$li(tags$strong(imp$node[k]), ": ", imp$text[k]))),
-          tags$img(src = plot_to_data_uri(function() draw_sufficiency_plot(imp), width = 900, height = 140 + 60 * max(1, n_plot)),
+          tags$img(src = plot_to_data_uri(function() draw_sufficiency_plot(imp), width = 900, height = 140 + 60 * max(1, n_plot), res = figure_res),
                    style = "max-width: 100%;"),
           caption_tag("Figure", next_figure_n(), sprintf(
             "For \"%s\": the pressure's worsening of each Impact (red; dark red = added by the response itself), what the response offsets (green) and the net effect (diamond; at or left of zero = neutralized). Impacts in priority order, top first.",
@@ -326,7 +328,7 @@ build_full_report_html <- function(
             report_html_table(format_prioritization_table(sc$prioritization, sc$priority_robustness)),
             priority_robustness_note(sc$priority_robustness, function(x) tags$p(x)),
             if (!is.null(sc$priority_robustness) && nrow(sc$priority_robustness) > 0) tagList(
-              tags$img(src = plot_to_data_uri(function() draw_rank_stability_plot(sc$priority_robustness), width = 800, height = 340), style = "max-width: 100%;"),
+              tags$img(src = plot_to_data_uri(function() draw_rank_stability_plot(sc$priority_robustness), width = 800, height = 340, res = figure_res), style = "max-width: 100%;"),
               caption_tag("Figure", next_figure_n(), sprintf(
                 "For \"%s\": share of 500 variations (values v changed by up to 20%%, index as a product or a sum) in which each Impact ended at each rank; the tick marks its rank in the reading above.", scenario_name))
             ),
@@ -334,7 +336,7 @@ build_full_report_html <- function(
               "Table", next_table_n(),
               sprintf("For \"%s\": relevance of each Impact (value v x importance D x reliability) and priority (relevance x the share of the worsening the response leaves uncovered). %s", scenario_name, PRIORITIZATION_METHOD_NOTE)
             ),
-            tags$img(src = plot_to_data_uri(function() draw_prioritization_plot(sc$prioritization), width = 800, height = 380), style = "max-width: 100%;"),
+            tags$img(src = plot_to_data_uri(function() draw_prioritization_plot(sc$prioritization), width = 800, height = 380, res = figure_res), style = "max-width: 100%;"),
             caption_tag("Figure", next_figure_n(), sprintf("For \"%s\": relevance (bars) and priority (markers) of each worsened Impact.", scenario_name))
           )
         }
@@ -467,7 +469,7 @@ build_full_report_html <- function(
 
         img_uri <- plot_to_data_uri(
           function() plot_temporal_storyboard(raw_df, reinforcing_warning = isTRUE(tr$stability$unbounded), neutralized_at = tr$neutralized_at),
-          width = 900, height = 700
+          width = 900, height = 700, res = figure_res
         )
 
         # Revisao 2, items A2/C0/C3: how the run ended, the trigger criterion
@@ -589,6 +591,19 @@ build_full_report_html <- function(
   # same flags, just moved and demoted from h2 to h3 under one shared
   # appendix heading.
   appendix_sections <- list()
+
+  # Revisao 3: the network drawn for print (DPSIR columns, sign legend).
+  if (isTRUE(include_static_network) && !is.null(graph) && igraph::vcount(graph) > 0) {
+    h_mm <- network_static_height_mm(graph, schema, 190, 8)
+    px_w <- 900; px_h <- round(px_w * h_mm / 190)
+    appendix_sections <- c(appendix_sections, list(
+      tags$h3("Network"),
+      tags$img(src = plot_to_data_uri(function() draw_network_static(graph, schema),
+                                      width = px_w, height = px_h, res = figure_res), style = "max-width: 100%;"),
+      caption_tag("Figure", next_figure_n(),
+        "The network by DPSIR level (columns, in the order of the model). Green links increase their target, red ones decrease it; line width is proportional to the strength |beta|.")
+    ))
+  }
 
   if (length(selected_snapshot_names) > 0 && length(graph_snapshots) > 0) {
     snapshot_sections <- lapply(selected_snapshot_names, function(snapshot_name) {

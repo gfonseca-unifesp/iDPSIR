@@ -31,17 +31,13 @@ VERDICT_COL <- c("Improved beyond neutral" = OI[["green"]], "Neutralized" = OI[[
                  "Neutralized (relative)" = OI[["sky"]], "Partial" = OI[["orange"]],
                  "Failure/worsened" = OI[["vermilion"]], "Not affected" = "#ffffff", "—" = "#ffffff")
 
-# Writes `draw()` to <out_dir>/<stem>.png / .tif / .pdf at width_mm x height_mm.
+# Writes `draw()` to <out_dir>/<stem>.png / .tif / .pdf at width_mm x height_mm,
+# through the app's exporter (R/figure_export.R).
 ms_save <- function(stem, draw, width_mm, height_mm, out_dir) {
-  w <- width_mm / 25.4; h <- height_mm / 25.4
   files <- file.path(out_dir, paste0(stem, c(".png", ".tif", ".pdf")))
-  grDevices::png(files[1], width = w, height = h, units = "in", res = MS_DPI, pointsize = MS_PT, type = "cairo", bg = "white")
-  tryCatch(draw(), finally = grDevices::dev.off())
-  grDevices::tiff(files[2], width = w, height = h, units = "in", res = MS_DPI, pointsize = MS_PT, type = "cairo",
-                  compression = "lzw", bg = "white")
-  tryCatch(draw(), finally = grDevices::dev.off())
-  grDevices::cairo_pdf(files[3], width = w, height = h, pointsize = MS_PT, bg = "white")
-  tryCatch(draw(), finally = grDevices::dev.off())
+  for (k in seq_along(files)) {
+    export_figure(draw, files[k], c("png", "tiff", "pdf")[k], width_mm, height_mm, dpi = MS_DPI, font_pt = MS_PT)
+  }
   invisible(files)
 }
 
@@ -197,84 +193,13 @@ fig2_architecture <- function() {
 # ---------------------------------------------------------------------------
 # Columns by DPSIR level (schema order); in each column the nodes are stacked
 # with room for their wrapped label, so the vertical unit is one text line of
-# the labels (MS_LINE_MM in print) and the panel height follows the content.
-MS_LINE_MM <- 3.0        # one label line at 7 pt, in mm
-MS_NODE_LINES <- 1.5     # vertical room of a node marker, in label lines
-MS_PAD_LINES <- 0.9      # gap below each label
-
-ms_network_layout <- function(g, schema, wrap = 22) {
-  cats <- igraph::V(g)$dpsir_category
-  cat_order <- schema$name[order(schema$order)]
-  labs <- vapply(igraph::V(g)$label, function(s) paste(strwrap(s, wrap), collapse = "\n"), "")
-  nl <- lengths(regmatches(labs, gregexpr("\n", labs))) + 1
-  block <- MS_NODE_LINES + nl + MS_PAD_LINES
-  col_h <- tapply(block, factor(cats, levels = cat_order), sum)
-  col_h[is.na(col_h)] <- 0
-  H <- max(col_h)
-  x <- match(cats, cat_order)
-  y <- numeric(length(cats))
-  for (cc in cat_order) {
-    k <- which(cats == cc)
-    if (!length(k)) next
-    top <- -(H - col_h[[cc]]) / 2
-    cum <- c(0, cumsum(block[k]))[seq_along(k)]
-    y[k] <- top - cum - MS_NODE_LINES / 2
-  }
-  list(x = x, y = y, labs = labs, H = H, n_cols = length(cat_order), cat_order = cat_order,
-       cols = setNames(schema$color, schema$name), cats = cats)
-}
-
-ms_network_panel <- function(g, lay, node_cex = 2.1, label_cex = 0.875) {
-  graphics::par(mar = c(0, 0, 0, 0), lheight = 1)
-  graphics::plot.new()
-  graphics::plot.window(xlim = c(0.45, lay$n_cols + 0.55), ylim = c(-lay$H, 0), xaxs = "i", yaxs = "i")
-  x <- lay$x; y <- lay$y
-  el <- igraph::as_edgelist(g, names = FALSE)
-  w <- abs(igraph::E(g)$weight)
-  sgn <- igraph::E(g)$interaction_type
-  rad_x <- graphics::strwidth("O", cex = node_cex) * 0.5
-  rad_y <- graphics::strheight("O", cex = node_cex) * 0.62
-  for (e in seq_len(nrow(el))) {
-    a <- el[e, 1]; b <- el[e, 2]
-    x0 <- x[a]; y0 <- y[a]; x1 <- x[b]; y1 <- y[b]
-    back <- x1 <= x0
-    # Quadratic Bezier; links going back (from Responses) bow upwards more,
-    # so they stay clear of the forward links.
-    mx <- (x0 + x1) / 2; my <- (y0 + y1) / 2
-    cxp <- mx; cyp <- my + if (back) 0.10 * lay$H * (0.4 + abs(x1 - x0) / lay$n_cols) else 0.05 * (x1 - x0) * lay$H / 10
-    t <- seq(0, 1, length.out = 60)
-    bx <- (1 - t)^2 * x0 + 2 * (1 - t) * t * cxp + t^2 * x1
-    by <- (1 - t)^2 * y0 + 2 * (1 - t) * t * cyp + t^2 * y1
-    inside <- function(px, py, cx, cy) ((px - cx) / rad_x)^2 + ((py - cy) / rad_y)^2 < 1
-    keep <- !inside(bx, by, x0, y0) & !inside(bx, by, x1, y1)
-    bx <- bx[keep]; by <- by[keep]
-    if (length(bx) < 3) next
-    col <- grDevices::adjustcolor(SIGN_COL[[sgn[e]]], 0.9)
-    lwd <- 0.5 + 1.8 * w[e]
-    m <- length(bx)
-    graphics::lines(bx[-m], by[-m], col = col, lwd = lwd)
-    graphics::arrows(bx[m - 1], by[m - 1], bx[m], by[m], length = 0.045, angle = 25, col = col, lwd = lwd)
-  }
-  # Labels on a white ground, so the links never cross the text.
-  ly <- y - MS_NODE_LINES / 2 - 0.05
-  lw <- graphics::strwidth(lay$labs, cex = label_cex)
-  lh <- graphics::strheight(lay$labs, cex = label_cex)
-  graphics::rect(x - lw / 2 - 0.02, ly - lh - 0.25, x + lw / 2 + 0.02, ly + 0.1,
-                 col = grDevices::adjustcolor("white", 0.9), border = NA)
-  graphics::points(x, y, pch = 21, bg = lay$cols[lay$cats], col = INK, cex = node_cex, lwd = 0.6)
-  graphics::text(x, ly, lay$labs, adj = c(0.5, 1), cex = label_cex, col = INK)
-}
-
-ms_network_legend <- function(schema) {
-  cat_order <- schema$name[order(schema$order)]
-  cols <- setNames(schema$color, schema$name)
-  graphics::par(mar = c(0, 0, 0, 0))
-  graphics::plot.new()
-  graphics::legend("left", horiz = TRUE, bty = "n", legend = cat_order, pt.bg = cols[cat_order], pch = 21,
-                   pt.cex = 1.5, col = INK, cex = 0.9, x.intersp = 0.8, text.col = INK, text.width = 0.09, inset = 0.01)
-  graphics::legend("right", horiz = TRUE, bty = "n", legend = c("increases its target", "decreases its target"),
-                   col = SIGN_COL[c("positive", "negative")], lwd = 2, cex = 0.9, x.intersp = 0.6, seg.len = 1.6, text.col = INK, inset = 0.01)
-}
+# the labels (ms_line_mm() in print) and the panel height follows the content.
+# The network drawing is the app's own (R/figure_export.R), so the figure
+# in the article and the one downloaded from the Graph tab are the same.
+ms_line_mm <- function() network_line_mm(MS_PT)
+ms_network_layout <- function(g, schema, wrap = 22) network_static_layout(g, schema, wrap)
+ms_network_panel <- function(g, lay, node_cex = 2.1, label_cex = 0.875) draw_network_static_panel(g, lay, node_cex, label_cex)
+ms_network_legend <- function(schema) draw_network_static_legend(schema)
 
 # ---------------------------------------------------------------------------
 # Temporal panels (Figs. 3b, 4b) - same data as the app's chart
@@ -325,7 +250,7 @@ ms_temporal_panels <- function(tb, region, xlab, ncol = NULL, legend_frac = 0.09
 # the network's from its content, (b) as given. Returns the drawing function
 # and the total height.
 ms_case_figure <- function(g, schema, lay, draw_b, b_mm, width_mm = 190, node_cex = 2.1) {
-  letter_mm <- 5; net_mm <- lay$H * MS_LINE_MM; legend_mm <- 7; gap_mm <- 3
+  letter_mm <- 5; net_mm <- lay$H * ms_line_mm(); legend_mm <- 7; gap_mm <- 3
   total <- letter_mm + net_mm + legend_mm + gap_mm + letter_mm + b_mm
   f <- function(mm) mm / total
   draw <- function() {

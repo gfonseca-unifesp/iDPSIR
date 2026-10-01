@@ -209,12 +209,14 @@ mod_report_ui <- function(id) {
         checkboxInput(ns("include_centralities"), "Centralities", value = FALSE),
         checkboxInput(ns("include_descriptors"), "DPSIR descriptors", value = FALSE),
         checkboxInput(ns("include_references"), "Edge references", value = FALSE),
-        checkboxInput(ns("include_reproducibility"), "Reproducibility info (session, package versions, analysis parameters)", value = FALSE)
+        checkboxInput(ns("include_reproducibility"), "Reproducibility info (session, package versions, analysis parameters)", value = FALSE),
+        selectInput(ns("figure_res"), "Figure quality", choices = c("Screen (96 dpi, smaller file)" = 96, "Print (300 dpi)" = 300), selected = 96)
       ),
       column(
         width = 4,
         h5("Graph images"),
-        p("Select saved snapshots to include (save one from the Graph tab's \"Save current view\" button)."),
+        checkboxInput(ns("include_static_network"), "Network figure drawn for print (DPSIR columns, sign legend)", value = TRUE),
+        p("Saved views of the interactive graph (save one from the Graph tab's \"Save current view\" button):"),
         DTOutput(ns("graph_snapshots_table"))
       ),
       column(
@@ -312,7 +314,9 @@ mod_report_server <- function(id, schema, nodes, edges, graph, saved_scenarios, 
           include_temporal_section = isTRUE(input$include_temporal_section),
           include_interpretation = !isFALSE(input$include_interpretation),
           metadata = if (is.null(metadata)) NULL else metadata(),
-          savepoint_filename = if (is.null(savepoint_filename)) NULL else savepoint_filename()
+          savepoint_filename = if (is.null(savepoint_filename)) NULL else savepoint_filename(),
+          figure_res = as.numeric(input$figure_res %||% 96),
+          include_static_network = !isFALSE(input$include_static_network)
         ), error = function(e) {
           showNotification(paste("Could not build the report:", conditionMessage(e)), type = "error", duration = NULL)
           htmltools::tags$html(htmltools::tags$body(

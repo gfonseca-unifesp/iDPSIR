@@ -89,10 +89,13 @@ plot_temporal_storyboard <- function(temporal_df, reinforcing_warning = FALSE, b
   # como linha em vez de coluna).
   grid_mat <- rbind(grid_mat, rep(legend_id, ncol_grid))
 
-  old_par <- graphics::par(mar = c(3.2, 3.5, 2, 1))
+  old_par <- graphics::par(mar = c(3.2, 3.5, 2, 1), mgp = c(2, 0.6, 0))
   on.exit(graphics::par(old_par))
   legend_height <- max(0.22, 0.55 / (nrow_grid + 1))
   graphics::layout(grid_mat, heights = c(rep(1, nrow_grid), legend_height))
+  # layout() shrinks the text to 66% with three or more rows; keep it at the
+  # device's size, so a download at a chosen font size prints at that size.
+  graphics::par(cex = 0.9)
 
   for (impact in impacts) {
     sub <- temporal_df[temporal_df$node == impact, ]
@@ -109,7 +112,7 @@ plot_temporal_storyboard <- function(temporal_df, reinforcing_warning = FALSE, b
 
     graphics::plot(
       sub$window, sub$net_impact, type = "n",
-      xlab = "window", ylab = "value  (+ worse . - improved)",
+      xlab = "window", ylab = "change (+ worse, - better)",
       ylim = ylim, main = impact, cex.main = 0.95
     )
 
@@ -148,8 +151,9 @@ plot_temporal_storyboard <- function(temporal_df, reinforcing_warning = FALSE, b
 draw_temporal_legend <- function(reinforcing_warning = FALSE) {
   graphics::par(mar = c(0.2, 1, 0.2, 1))
   graphics::plot.new()
+  # Two rows, so it fits at any width and font size.
   graphics::legend(
-    "left", horiz = TRUE, bty = "n", cex = 0.85, x.intersp = 0.6,
+    "center", ncol = 3, bty = "n", cex = 0.85, x.intersp = 0.6, text.width = NA,
     legend = c(
       "Baseline (pressure only)",
       "Net: neutralized / improved (≤ 0)",
@@ -192,10 +196,16 @@ render_plot_svg <- function(draw_fn, path, width = 8.33, height = 4.69) {
 # Shared by report.R for both charts - render to a tempfile, read back as
 # a base64 data URI, clean up. Kept here (not duplicated in report.R)
 # since it's presentation plumbing, not report-assembly logic.
-plot_to_data_uri <- function(draw_fn, width = 800, height = 450) {
+# `res` (Revisao 3): the report's figure quality - the figure keeps its size
+# on the page (width/96 inches) and gains pixels (300 = print quality).
+plot_to_data_uri <- function(draw_fn, width = 800, height = 450, res = 96) {
   tmp <- tempfile(fileext = ".png")
   on.exit(unlink(tmp))
-  render_plot_png(draw_fn, tmp, width = width, height = height)
+  if (res == 96) render_plot_png(draw_fn, tmp, width = width, height = height)
+  else {
+    grDevices::png(tmp, width = round(width * res / 96), height = round(height * res / 96), res = res)
+    tryCatch(draw_fn(), finally = grDevices::dev.off())
+  }
   paste0("data:image/png;base64,", jsonlite::base64_enc(readBin(tmp, "raw", file.info(tmp)$size)))
 }
 

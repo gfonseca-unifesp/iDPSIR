@@ -44,6 +44,10 @@ testthat::test_dir("tests/testthat")          # ou: Rscript tests/testthat.R
 - `R/triggers.R` — gatilhos de Estado (limiar em unidade real, z, direção), leitura
   estática e temporal, alcance efetivo, tabela de níveis.
 - `R/relevance.R` — importância D, confiabilidade ρ, lacuna e prioridade dos Impactos.
+- `R/figure_export.R` — `export_figure()` (PNG/TIFF com dpi, PDF/SVG; largura em mm; fonte em pt),
+  rede estática para impressão (`draw_network_static()`), botão/diálogo "Download figure…"
+  (`figure_export_button()`, `register_figure_export()`) em toda figura do app; usado também por
+  `data-raw/manuscript_figures.R`. Relatório: qualidade 96/300 dpi e rede estática.
 - `R/data_needs.R` — `data_needs()`: tabela ordenada do que medir ou buscar primeiro (passo 5 do
   manuscrito v7): ligações dos vereditos apertados e Estados sem limiar intercalados, limiar sem
   referência/DP, ligações assumidas sem referência no caminho, força aplicada das respostas,

@@ -88,7 +88,8 @@ iDPSIR/
 │   ├── temporal.R             # optional discrete-time-window simulation: runs the pressure/response scenario forward window by window, until the response neutralizes the Impact or for a fixed number of windows
 │   ├── responses.R            # get_feedback_categories(): the Response levels of a schema
 │   ├── reach.R                # response_reach(): how far a response's influence travels through the network - pure graph traversal, independent of both readings above
-│   ├── scenario_plots.R       # per-Impact temporal line chart and prioritization chart, shared by the screen, PNG/SVG downloads and the report
+│   ├── figure_export.R        # every figure in the chosen format, size, dpi and font; the network drawn for print
+│   ├── scenario_plots.R       # per-Impact temporal line chart and prioritization chart, shared by the screen, the downloads and the report
 │   ├── report.R               # self-contained HTML report builder
 │   ├── io.R                   # CSV matrix import, .idpsir.json savepoint read/write, merge_savepoints()
 │   ├── core/                  # shared UI components
@@ -516,8 +517,8 @@ has four tabs:
   also stops there (tolerance 0 = only zero counts). An option runs the baseline
   **without any response** (ignoring Impact → Response links). A chart shows one panel
   per Impact, dashed baseline vs. solid Net, points colored by that window's Verdict,
-  the neutralized zone (Net ≤ 0) shaded and the stop window marked (downloadable as
-  PNG/SVG, and included in the report if selected). The key message: *what makes an
+  the neutralized zone (Net ≤ 0) shaded and the stop window marked (downloadable, and
+  included in the report if selected). The key message: *what makes an
   Impact converge is the chain's self-regulation; the response mode decides the
   effort; the stop criterion says in which window the problem was solved.* It's an
   explicit short-horizon integration, not a calibrated forecast — read it for the
@@ -543,6 +544,11 @@ has four tabs:
   scenario side by side. The same scenario is shown in the Scenarios
   results, the temporal simulation and this tab (one selector in each, kept in sync);
   the report opens its scenario part with the same reading.
+- **Figures** — every chart (and the network, drawn for print in DPSIR columns) has a
+  **Download figure…** button: PNG or TIFF at 150/300/600 dpi, PDF or SVG; journal widths
+  (90, 140, 190 mm) or any width; font size in points as printed. The report has a figure
+  quality option (screen 96 dpi or print 300 dpi) and can include the print drawing of the
+  network.
 - **Metrics** — general network metrics; **strength and confidence** of the network as
   a whole (link classes, explained variance, loop amplification, Driver-to-Impact total
   effects; where the strengths came from, band widths, evidence and references, expected

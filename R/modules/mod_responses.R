@@ -50,13 +50,6 @@
 APP_MAX_SIMULATIONS <- 300L
 APP_SIMULATION_CHOICES <- c(100L, 300L)
 
-plot_download_row <- function(ns, prefix) {
-  fluidRow(
-    column(6, downloadButton(ns(paste0("download_", prefix, "_png")), "Download PNG", class = "btn-sm")),
-    column(6, downloadButton(ns(paste0("download_", prefix, "_svg")), "Download SVG", class = "btn-sm"))
-  )
-}
-
 # Revisao 1, Table 2: every Response node in the network evaluated ALONE at
 # FULL strength (100%) - regardless of whether its checkbox is active, and
 # regardless of whatever % its own slider happens to show - against the
@@ -535,8 +528,10 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
         ),
         DTOutput(ns("prioritization_table")),
         plotOutput(ns("prioritization_plot"), height = "320px"),
+        figure_export_button(ns, "prioritization"),
         # Revisao 3, E4.2.
         plotOutput(ns("rank_stability_plot"), height = "300px"),
+        figure_export_button(ns, "rank_stability"),
         downloadButton(ns("download_prioritization_csv"), "Download CSV", class = "btn-sm"),
         tags$p(class = "text-muted", style = "font-size: 12px; margin-top: 6px;", PRIORITIZATION_METHOD_NOTE),
         uiOutput(ns("prioritization_note"))
@@ -585,6 +580,42 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
       req(sc, sc$priority_robustness)
       draw_rank_stability_plot(sc$priority_robustness)
     })
+
+    # Revisao 3: every chart downloads in the format, size, resolution and
+    # font the user picks (R/figure_export.R).
+    n_impacts_shown <- function() {
+      sc <- shown_scenario()
+      if (is.null(sc) || is.null(sc$prioritization)) 4 else max(1, nrow(sc$prioritization))
+    }
+    register_figure_export(input, output, session, "prioritization", filename = "prioritization",
+      draw = function() draw_prioritization_plot(shown_scenario()$prioritization),
+      height = function(w, font) w * 0.475)
+    register_figure_export(input, output, session, "rank_stability", filename = "rank_stability",
+      draw = function() draw_rank_stability_plot(shown_scenario()$priority_robustness),
+      height = function(w, font) w * max(0.3, 0.12 + 0.075 * n_impacts_shown()))
+    register_figure_export(input, output, session, "interp_priority", filename = "prioritization",
+      draw = function() draw_prioritization_plot(shown_scenario()$prioritization),
+      height = function(w, font) w * 0.475)
+    register_figure_export(input, output, session, "interp_rank", filename = "rank_stability",
+      draw = function() draw_rank_stability_plot(shown_scenario()$priority_robustness),
+      height = function(w, font) w * max(0.3, 0.12 + 0.075 * n_impacts_shown()))
+    register_figure_export(input, output, session, "interp_coverage", filename = "coverage",
+      draw = function() draw_sufficiency_plot(shown_interpretation()$impacts),
+      height = function(w, font) {
+        imp <- shown_interpretation()$impacts
+        n <- max(1, sum(imp$worsening > 1e-9 | abs(imp$mitigation) > 1e-9))
+        w * (140 + 60 * n) / 900
+      })
+    register_figure_export(input, output, session, "temporal_chart", filename = "temporal_chart",
+      draw = function() {
+        tr <- temporal_result()
+        plot_temporal_storyboard(temporal_chart_df(), reinforcing_warning = isTRUE(tr$stability$unbounded), neutralized_at = tr$neutralized_at)
+      },
+      height = function(w, font) {
+        n <- max(1, length(unique(temporal_chart_df()$node)))
+        nc <- ceiling(sqrt(n)); nr <- ceiling(n / nc)
+        w / nc * 0.8 * nr + 14
+      })
 
     output$prioritization_note <- renderUI({
       sc <- shown_scenario()
@@ -823,7 +854,7 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
             "not merely \"below the baseline\"."
           ),
           plotOutput(ns("temporal_chart"), height = "600px"),
-          plot_download_row(ns, "temporal_chart")
+          figure_export_button(ns, "temporal_chart")
         )
       )
     })
@@ -1219,29 +1250,7 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
       plot_temporal_storyboard(temporal_chart_df(), reinforcing_warning = isTRUE(tr$stability$unbounded), neutralized_at = tr$neutralized_at)
     })
 
-    output$download_temporal_chart_png <- downloadHandler(
-      filename = function() paste0("temporal_chart_", Sys.Date(), ".png"),
-      content = function(file) {
-        tr <- temporal_result()
-        req(tr)
-        render_plot_png(
-          function() plot_temporal_storyboard(temporal_chart_df(), reinforcing_warning = isTRUE(tr$stability$unbounded), neutralized_at = tr$neutralized_at),
-          file, width = 900, height = 700
-        )
-      }
-    )
 
-    output$download_temporal_chart_svg <- downloadHandler(
-      filename = function() paste0("temporal_chart_", Sys.Date(), ".svg"),
-      content = function(file) {
-        tr <- temporal_result()
-        req(tr)
-        render_plot_svg(
-          function() plot_temporal_storyboard(temporal_chart_df(), reinforcing_warning = isTRUE(tr$stability$unbounded), neutralized_at = tr$neutralized_at),
-          file, width = 9.4, height = 7.3
-        )
-      }
-    )
 
     # Roadmap Fase 9 item 9.2: "reach" is pure graph traversal from what the
     # active response(s) directly act on (R/reach.R).
@@ -1369,16 +1378,17 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
           "Red: the pressure's worsening of each Impact (dark red, when present: worsening added by the response",
           "itself). Green: what the response offsets. Diamond: the net effect - green when at or below zero (neutralized)."),
         plotOutput(ns("interp_coverage_plot"), height = paste0(140 + 60 * max(1, n_plot), "px")),
-        plot_download_row(ns, "interp_coverage"),
+        figure_export_button(ns, "interp_coverage"),
         h5("Relevance and priority"),
         p(class = "text-muted", "Bars: how much each Impact matters (value v x importance D x reliability). Diamonds: priority,",
           "the relevance times the share of the worsening left uncovered - the Impact to act on first has the largest."),
         plotOutput(ns("interp_priority_plot"), height = "320px"),
+        figure_export_button(ns, "interp_priority"),
         h5("How stable is that order?"),
         p(class = "text-muted", "Each bar: in what share of 500 variations (values v changed by up to 20%, index as a product or a sum)",
           "the Impact ended 1st, 2nd, 3rd... The tick marks its rank above. One colour = a stable rank; two = a near tie."),
         plotOutput(ns("interp_rank_plot"), height = "300px"),
-        plot_download_row(ns, "interp_rank"),
+        figure_export_button(ns, "interp_rank"),
         tags$p(class = "text-muted", style = "font-size: 12px; margin-top: 6px;", PRIORITIZATION_METHOD_NOTE)
       )
     })
@@ -1388,27 +1398,11 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
       req(sc, sc$priority_robustness)
       draw_rank_stability_plot(sc$priority_robustness)
     })
-    output$download_interp_rank_png <- downloadHandler(
-      filename = function() paste0("rank_stability_", Sys.Date(), ".png"),
-      content = function(file) render_plot_png(function() draw_rank_stability_plot(shown_scenario()$priority_robustness), file, width = 1000, height = 420)
-    )
-    output$download_interp_rank_svg <- downloadHandler(
-      filename = function() paste0("rank_stability_", Sys.Date(), ".svg"),
-      content = function(file) render_plot_svg(function() draw_rank_stability_plot(shown_scenario()$priority_robustness), file, width = 10, height = 4.4)
-    )
     output$interp_priority_plot <- renderPlot({
       sc <- shown_scenario()
       req(sc, sc$prioritization)
       draw_prioritization_plot(sc$prioritization)
     })
-    output$download_interp_coverage_png <- downloadHandler(
-      filename = function() paste0("coverage_", Sys.Date(), ".png"),
-      content = function(file) render_plot_png(function() draw_sufficiency_plot(shown_interpretation()$impacts), file, width = 1000, height = 160 + 70 * nrow(shown_interpretation()$impacts))
-    )
-    output$download_interp_coverage_svg <- downloadHandler(
-      filename = function() paste0("coverage_", Sys.Date(), ".svg"),
-      content = function(file) render_plot_svg(function() draw_sufficiency_plot(shown_interpretation()$impacts), file, width = 10, height = 1.8 + 0.8 * nrow(shown_interpretation()$impacts))
-    )
     data_needs_df <- reactive({
       req(graph())
       sc <- shown_scenario()

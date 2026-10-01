@@ -147,7 +147,13 @@ mod_graph_ui <- function(id) {
           column(width = 6, textInput(ns("snapshot_name"), NULL, value = "Snapshot 1", placeholder = "Snapshot name")),
           column(width = 6, actionButton(ns("save_snapshot"), "Save current view for report", icon = icon("camera"), class = "btn-outline-primary", width = "100%"))
         ),
-        uiOutput(ns("snapshot_status"))
+        uiOutput(ns("snapshot_status")),
+        # Revisao 3: the network drawn for print (DPSIR columns, readable
+        # labels, sign legend), in any format, size, resolution and font.
+        tags$div(style = "margin-top: 8px;",
+                 figure_export_button(ns, "network_static", "Download network figure…"),
+                 tags$span(class = "text-muted", style = "font-size: 12px; margin-left: 8px;",
+                           "Drawn for print in DPSIR columns, independent of the view above."))
       )
     )
   )
@@ -577,6 +583,10 @@ mod_graph_server <- function(id, schema, nodes, edges, graph, positions, set_pos
 
       paste0(paste(parts, collapse = "; "), ".")
     }
+
+    register_figure_export(input, output, session, "network_static", filename = "network",
+      draw = function() draw_network_static(graph(), schema()),
+      height = function(w, font) network_static_height_mm(graph(), schema(), w, font))
 
     observeEvent(input$save_snapshot, {
       name <- trimws(input$snapshot_name)

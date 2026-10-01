@@ -82,6 +82,7 @@ source("R/interpretation.R")
 source("R/data_needs.R")
 source("R/temporal.R")
 source("R/scenario_plots.R")
+source("R/figure_export.R")
 source("R/report.R")
 source("R/io.R")
 
