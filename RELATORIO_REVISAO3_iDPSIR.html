@@ -119,6 +119,7 @@ footer { color: var(--muted); font-size: 13.5px; margin-top: 48px; }
     <li><a href="#e7">E7 · Busca de ferramentas</a></li>
     <li><a href="#e8">E8 · Script de números</a></li>
     <li><a href="#app">Mudanças no app</a></li>
+    <li><a href="#dataneeds">Passo 5 · Data needs</a></li>
     <li><a href="#e6">E6 · Fora do plano</a></li>
     <li><a href="#numeros">Números para citar</a></li>
     <li><a href="#secoes">Mapa por seção</a></li>
@@ -464,7 +465,8 @@ footer { color: var(--muted); font-size: 13.5px; margin-top: 48px; }
   <li><code>data-raw/manuscript_build.R</code> gera os números citados: porto, Mangi e Sri Lanka (crus e parametrizados), sensibilidade a s, validação, confiança com e sem incerteza estrutural, robustez da prioridade e os resultados das redes simuladas (lidos de <code>analysis/sim_networks/out</code>, sem rodar de novo).</li>
   <li>Saída em <code>manuscrito_v5/build/numeros.json</code> (fora do git, como o manuscrito).</li>
   <li><code>tests/testthat/fixtures/manuscript_numbers.json</code> congela <b>94 números</b>; <code>test-manuscript-numbers.R</code> falha se algum mudar. Para atualizar de propósito: <code>Rscript data-raw/manuscript_build.R --freeze</code>.</li>
-  <li><b>Falta:</b> gerar as tabelas (CSV) e figuras (PNG 300 dpi e SVG) do texto, assim que a lista final de tabelas e figuras do manuscrito estiver fechada.</li>
+  <li><b>Tabelas do v7</b> (<code>data-raw/manuscript_tables.R</code>): Tabelas 3 a 6 e as tabelas "Data needs" dos três casos, em <code>manuscrito_v7/tables/</code>. O script confere cada número que o texto do v7 cita, e as 10 conferências passam. A única diferença é de arredondamento: a Tabela 4 mostra ×3.9, ×4.0 e ×41 onde o cálculo dá ×3.94, ×3.97 e ×41.3.</li>
+  <li><b>Figuras do v7</b> (<code>data-raw/manuscript_figures.R</code>): as seis figuras em PNG e TIFF a 600 dpi e em PDF vetorial, com 190 mm de largura, texto de 7–9 pt e paleta Okabe-Ito, em <code>manuscrito_v7/fig_hr/</code>. As Figs. 1 e 2 (antes em matplotlib) foram redesenhadas em R; a Fig. 6 só lê <code>analysis/sim_networks/out</code>. O teste <code>test-manuscript-figures.R</code> confere tamanho e formato. A Fig. 6b confirma o "46% contra 8%" do §5.4.</li>
 </ul>
 
 <h2 id="app">Mudanças no app que o texto deve descrever</h2>
@@ -514,6 +516,68 @@ footer { color: var(--muted); font-size: 13.5px; margin-top: 48px; }
 </table></div>
 <div class="caveat"><strong>Duas leituras para o texto.</strong> A fração com sinal determinado dá 100% em todos os exemplos: sem ciclos e com faixas que não cruzam zero, o sinal não tem como virar. A medida só informa com ciclos ou faixas que cruzam zero. O intervalo de 90% do efeito total fica perto ou acima do próprio efeito (99–120%) porque as incertezas se multiplicam ao longo da cadeia; isso reforça que os vereditos devem ser lidos com a sua confiança.</div>
 <div class="where"><h4>No manuscrito</h4><ul><li><b>§2.4 (ambiente de análise):</b> descrever a subaba.</li><li><b>§4.4:</b> a tabela acima pode acompanhar a comparação rede crua × parametrizada.</li></ul></div>
+
+<h2 id="dataneeds"><span class="phase-tag">Passo 5</span>Data needs: o que medir ou buscar primeiro</h2>
+<p>O passo 5 do manuscrito v7 ("Search for data where they would change the decision") agora tem uma tabela única no app (<code>data_needs()</code>, em <code>R/data_needs.R</code>), exportável em CSV, na aba Interpretation e no relatório. Ela junta o que antes estava em três lugares: as ligações dos vereditos apertados, as ligações menos fundamentadas e os Estados sem limiar.</p>
+<p>A ordem segue o experimento de redes simuladas:</p>
+<ol>
+  <li>As ligações dos vereditos apertados (as 5 que mais movem o saldo de cada Impacto) intercaladas com os Estados que alcançam um Impacto piorado e não têm limiar, porque limiares e forças mudam vereditos em proporção parecida e as mudanças se concentram perto da neutralização (H2, H4).</li>
+  <li>Os limiares sem referência ou DP.</li>
+  <li>As ligações de força assumida e sem referência num caminho até um Impacto piorado, ordenadas pelo produto das forças no caminho mais forte.</li>
+  <li>A força com que cada resposta ativa é de fato aplicada (item de monitoramento).</li>
+  <li>Por último, o crescimento dos Drivers, só com a leitura temporal ligada: o crescimento muda o <em>quando</em>, raramente o <em>se</em>.</li>
+</ol>
+<p>Os CSVs completos estão em <code>manuscrito_v7/tables/</code>. A coluna "Efeito" é o quanto o saldo dos Impactos muda (em DP) com β + 10% na ligação.</p>
+
+<h3>Porto, cenário 2 (+ tratamento do escoamento): 23 itens</h3>
+<div class="table-scroll"><table>
+<thead><tr><th class="num">#</th><th>Tipo</th><th>Item</th><th>Afeta</th><th>Fonte atual</th><th class="num">Efeito</th></tr></thead><tbody>
+<tr><td class="num">1</td><td>ligação de veredito apertado</td><td>Cargo terminal (land site) → Surface runoff</td><td>Biota contamination (seafood); Water quality loss (CONAMA classes)</td><td>classe</td><td class="num">0,139</td></tr>
+<tr><td class="num">2</td><td>Estado sem limiar</td><td>Water turbidity</td><td>Behavioral alterations of fauna; Water quality loss (CONAMA classes); Loss of primary production</td><td>nenhuma</td><td class="num"></td></tr>
+<tr><td class="num">3</td><td>ligação de veredito apertado</td><td>Runoff treatment system → Surface runoff</td><td>Biota contamination (seafood); Water quality loss (CONAMA classes)</td><td>classe</td><td class="num">0,139</td></tr>
+<tr><td class="num">4</td><td>Estado sem limiar</td><td>Dissolved Zn in water</td><td>Biota contamination (seafood); Water quality loss (CONAMA classes)</td><td>nenhuma</td><td class="num"></td></tr>
+<tr><td class="num">5</td><td>ligação de veredito apertado</td><td>Maintenance dredging → Sediment resuspension</td><td>Biota contamination (seafood); Water quality loss (CONAMA classes)</td><td>classe</td><td class="num">0,019</td></tr>
+<tr><td class="num">6</td><td>Estado sem limiar</td><td>Dissolved Cu in water</td><td>Biota contamination (seafood); Water quality loss (CONAMA classes)</td><td>nenhuma</td><td class="num"></td></tr>
+<tr><td class="num">7</td><td>ligação de veredito apertado</td><td>Best practices adoption → Maintenance dredging</td><td>Water quality loss (CONAMA classes)</td><td>classe</td><td class="num">0,009</td></tr>
+<tr><td class="num">8</td><td>ligação de veredito apertado</td><td>Dissolved Cu in water → Biota contamination (seafood)</td><td>Biota contamination (seafood)</td><td>classe</td><td class="num">0,008</td></tr>
+</tbody></table></div><p class="muted">Mais 15 itens no CSV.</p>
+<p>As duas primeiras ligações são as que o texto do porto cita (terminal → escoamento e tratamento → escoamento), intercaladas com os três Estados sem limiar. No cenário 1 não há veredito apertado, então a lista começa pelos Estados.</p>
+
+<h3>Quênia, cenário 1 (medidas existentes, como escritas): 12 itens</h3>
+<div class="table-scroll"><table>
+<thead><tr><th class="num">#</th><th>Tipo</th><th>Item</th><th>Afeta</th><th>Fonte atual</th><th class="num">Efeito</th></tr></thead><tbody>
+<tr><td class="num">1</td><td>ligação de veredito apertado</td><td>Gear restrictions → Destructive gear use</td><td>Declining catch per fisher; Livelihood benefits compromised</td><td>classe</td><td class="num">0,103</td></tr>
+<tr><td class="num">2</td><td>Estado sem limiar</td><td>Fish abundance</td><td>Declining catch per fisher; Livelihood benefits compromised; Exclusion and conflicts</td><td>nenhuma</td><td class="num"></td></tr>
+<tr><td class="num">3</td><td>ligação de veredito apertado</td><td>Poverty → Destructive gear use</td><td>Declining catch per fisher; Livelihood benefits compromised</td><td>classe</td><td class="num">0,103</td></tr>
+<tr><td class="num">4</td><td>Estado sem limiar</td><td>Live coral cover</td><td>Declining catch per fisher; Livelihood benefits compromised</td><td>nenhuma</td><td class="num"></td></tr>
+<tr><td class="num">5</td><td>ligação de veredito apertado</td><td>General fishing effort → Fish abundance</td><td>Declining catch per fisher; Livelihood benefits compromised</td><td>classe</td><td class="num">0,095</td></tr>
+<tr><td class="num">6</td><td>Estado sem limiar</td><td>Sea urchin density</td><td>Declining catch per fisher; Livelihood benefits compromised</td><td>nenhuma</td><td class="num"></td></tr>
+<tr><td class="num">7</td><td>ligação de veredito apertado</td><td>Coastal population → General fishing effort</td><td>Declining catch per fisher; Livelihood benefits compromised</td><td>classe</td><td class="num">0,080</td></tr>
+<tr><td class="num">8</td><td>ligação de veredito apertado</td><td>Fish abundance → Declining catch per fisher</td><td>Declining catch per fisher</td><td>classe</td><td class="num">0,034</td></tr>
+</tbody></table></div><p class="muted">Mais 4 itens no CSV.</p>
+<p>Inclui as duas ligações que o texto do Quênia cita (esforço de pesca → abundância de peixes e pobreza → artes destrutivas). No cenário 2 (cumprimento de 30%) não há veredito apertado, e a lista fica com os Estados e a força aplicada de cada resposta, que é a mensagem do caso: a lacuna é o cumprimento.</p>
+
+<h3>Sri Lanka, first run: 7 itens</h3>
+<div class="table-scroll"><table>
+<thead><tr><th class="num">#</th><th>Tipo</th><th>Item</th><th>Afeta</th><th>Fonte atual</th><th class="num">Efeito</th></tr></thead><tbody>
+<tr><td class="num">1</td><td>Estado sem limiar</td><td>Fish stock (biomass)</td><td>Catch decline; Fisher income loss; Conflict with Indian fishermen</td><td>nenhuma</td><td class="num"></td></tr>
+<tr><td class="num">2</td><td>Estado sem limiar</td><td>Fleet motorization (% motorized)</td><td>Catch decline; Conflict with Indian fishermen</td><td>nenhuma</td><td class="num"></td></tr>
+<tr><td class="num">3</td><td>força aplicada da resposta</td><td>Post-tsunami aid (2005-2009)</td><td>Catch decline; Fisher income loss; Conflict with Indian fishermen</td><td>digitada</td><td class="num"></td></tr>
+<tr><td class="num">4</td><td>força aplicada da resposta</td><td>Post-war aid (2010-2012)</td><td>Catch decline; Fisher income loss; Conflict with Indian fishermen</td><td>digitada</td><td class="num"></td></tr>
+<tr><td class="num">5</td><td>força aplicada da resposta</td><td>Effort-based quota</td><td>Catch decline; Fisher income loss; Conflict with Indian fishermen</td><td>digitada</td><td class="num"></td></tr>
+<tr><td class="num">6</td><td>força aplicada da resposta</td><td>Combating poaching</td><td>Catch decline; Fisher income loss; Conflict with Indian fishermen</td><td>digitada</td><td class="num"></td></tr>
+<tr><td class="num">7</td><td>Driver sem crescimento</td><td>Indian trawler incursions</td><td>—</td><td>nenhuma</td><td class="num"></td></tr>
+</tbody></table></div>
+<p>Na rede crua, o primeiro item é o limiar do estoque, que o estudo original forneceu (B<sub>MSY</sub>) e que inverte o veredito na rede parametrizada. Nenhuma ligação aparece: na leitura estática da rede crua não há veredito apertado, e todas as ligações já têm referência (ela documenta a estrutura, não a força). Na rede parametrizada, o estoque já tem limiar e as ligações calibradas nunca aparecem como assumidas.</p>
+
+<div class="where">
+  <h4>No manuscrito</h4>
+  <ul>
+    <li><b>§2, passo 5:</b> citar a tabela "Data needs" e sua ordem (H2, H4).</li>
+    <li><b>§5.1 e §5.2:</b> "the data needs table lists …" com as ligações e os Estados acima.</li>
+    <li><b>§5.3:</b> na rede crua, o limiar do estoque vem primeiro, e foi justamente o dado que inverteu a resposta.</li>
+  </ul>
+</div>
 
 <h2 id="e6"><span class="phase-tag">E6</span>Teste de usabilidade: fora do plano</h2>
 <p>Decisão do autor (30/09): tudo no app e no manuscrito vem da literatura ou de resultados hipotéticos, não há coleta com participantes, e nada depende de CEP. As fases E6.1–E6.3 não foram feitas e o modo de estudo foi retirado do app. O manuscrito não deve reivindicar usabilidade medida (SUS, taxa de sucesso, compreensão por não especialistas).</p>
@@ -577,7 +641,6 @@ footer { color: var(--muted); font-size: 13.5px; margin-top: 48px; }
 </ul>
 <h4>No repositório</h4>
 <ul class="checklist">
-  <li>Tabelas e figuras do E8 assim que a lista do manuscrito estiver fechada.</li>
   <li>Atualizar o PDF da especificação de relevância (seções 4 e 7.4; eficácia = cobertura; forma aditiva e robustez).</li>
   <li>Mesclar as branches das Revisões 2 e 3 em <code>main</code>; release v1.0.0 com DOI (Zenodo).</li>
   <li>Exemplo de Ramos-Quintana (2018) no app: adiado até definir o Impacto.</li>

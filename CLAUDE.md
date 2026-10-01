@@ -44,6 +44,10 @@ testthat::test_dir("tests/testthat")          # ou: Rscript tests/testthat.R
 - `R/triggers.R` — gatilhos de Estado (limiar em unidade real, z, direção), leitura
   estática e temporal, alcance efetivo, tabela de níveis.
 - `R/relevance.R` — importância D, confiabilidade ρ, lacuna e prioridade dos Impactos.
+- `R/data_needs.R` — `data_needs()`: tabela ordenada do que medir ou buscar primeiro (passo 5 do
+  manuscrito v7): ligações dos vereditos apertados e Estados sem limiar intercalados, limiar sem
+  referência/DP, ligações assumidas sem referência no caminho, força aplicada das respostas,
+  crescimento (só com o temporal ligado). Aba Interpretation (CSV) e relatório.
 - `R/interpretation.R` — leitura em linguagem simples de um cenário (`interpret_scenario()`),
   comparação entre cenários e gráfico de cobertura; usado pela aba Interpretation
   (`mod_interpretation_ui()`, saídas em `mod_responses_server()`) e pelo relatório.

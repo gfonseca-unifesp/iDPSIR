@@ -22,6 +22,7 @@ mod_metrics_ui <- function(id) {
         helpText("How strong the network is and how well founded its strengths are, as a whole.",
                  "Static reading, without State triggers; the sign and interval rows resample the link bands (200 draws, fixed seed)."),
         DTOutput(ns("strength_confidence_table")),
+        helpText("For the specific links and States to look up first in a scenario, see the \"Data needs\" table in the Interpretation tab."),
         h4("By transition (where the network is least founded first)"),
         DTOutput(ns("strength_by_transition_table"))
       ),

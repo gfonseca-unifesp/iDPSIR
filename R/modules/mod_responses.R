@@ -238,6 +238,12 @@ mod_interpretation_ui <- function(id) {
       width = 12, title = "Reading", status = "primary", solidHeader = TRUE, collapsible = TRUE,
       uiOutput(ns("interp_body"))
     ),
+    # Revisao 3 (manuscript v7, step 5): one ranked list of what to measure
+    # or look up first (R/data_needs.R).
+    box(
+      width = 12, title = "Data needs — what to measure or look up first", status = "primary", solidHeader = TRUE, collapsible = TRUE,
+      uiOutput(ns("data_needs_ui"))
+    ),
     box(
       width = 12, title = "All scenarios side by side", status = "primary", solidHeader = TRUE, collapsible = TRUE,
       uiOutput(ns("interp_compare_ui"))
@@ -1402,6 +1408,29 @@ mod_responses_server <- function(id, schema, nodes, edges, graph, restore_state 
     output$download_interp_coverage_svg <- downloadHandler(
       filename = function() paste0("coverage_", Sys.Date(), ".svg"),
       content = function(file) render_plot_svg(function() draw_sufficiency_plot(shown_interpretation()$impacts), file, width = 10, height = 1.8 + 0.8 * nrow(shown_interpretation()$impacts))
+    )
+    data_needs_df <- reactive({
+      req(graph())
+      sc <- shown_scenario()
+      data_needs(graph(), sc, temporal = isTRUE(input$show_temporal))
+    })
+    output$data_needs_ui <- renderUI({
+      d <- data_needs_df()
+      tagList(
+        p(DATA_NEEDS_INTRO),
+        if (!is.null(attr(d, "note"))) div(class = "alert alert-secondary", attr(d, "note")),
+        if (nrow(d) == 0) helpText("Nothing to add: every State that matters has a threshold and every link on a path has a value or a reference.")
+        else tagList(DTOutput(ns("data_needs_table")),
+                     downloadButton(ns("download_data_needs_csv"), "Download CSV", class = "btn-sm"))
+      )
+    })
+    output$data_needs_table <- renderDT({
+      datatable(format_data_needs(data_needs_df()), rownames = FALSE,
+                options = list(pageLength = 15, scrollX = TRUE, dom = "tip"))
+    })
+    output$download_data_needs_csv <- downloadHandler(
+      filename = function() paste0("data_needs_", Sys.Date(), ".csv"),
+      content = function(file) utils::write.csv(data_needs_df(), file, row.names = FALSE)
     )
     interp_comparison_df <- reactive({
       req(graph())

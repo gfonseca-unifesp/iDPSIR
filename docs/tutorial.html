@@ -949,6 +949,7 @@ P1,S1,negative,0.55,,monitoring</pre>
             <tr><td class="key">Coverage chart</td><td>Per Impact: the pressure's worsening (red), what the response offsets (green) and the net (diamond; at or left of zero = neutralized). PNG/SVG.</td></tr>
             <tr><td class="key">Relevance and priority</td><td>The prioritization chart: how much each Impact matters and which to act on first.</td></tr>
             <tr><td class="key">How stable is that order?</td><td>One bar per Impact: in what share of 500 variations (values v changed by up to 20%, index as a product or a sum) it ended 1st, 2nd, 3rd…; a tick marks its rank in the reading. One colour is a stable rank, two colours a near tie. PNG/SVG; also in the report.</td></tr>
+            <tr><td class="key">Data needs — what to measure or look up first</td><td>One ranked table, exportable as CSV, of what would most likely change a verdict if you found real values for it: first the links behind tight verdicts (the five that move each net most) alternated with the States that reach a worsened Impact but have no threshold; then thresholds whose reference or SD is a default; then assumed links without a reference on a path to a worsened Impact (by the strongest path through them); then how strongly each active response is actually applied (a monitoring item); last, Drivers without a growth trend (only when the temporal simulation is on). The order follows the simulated-network experiment: thresholds and link strengths change verdicts about equally, growth rarely, and changes concentrate near neutralization. Each source you find goes into the link's or State's record.</td></tr>
             <tr><td class="key">All scenarios side by side</td><td>Every applied and saved scenario in one table: for each Impact, neutralized, % of the worsening covered or worsened; how many are neutralized; the top priority left. CSV.</td></tr>
           </table>
         </div>
@@ -1671,6 +1672,11 @@ P1,S1,negative,0.55,,monitoring</pre>
           <img src="example_port_temporal_4.png" alt="Four panels, one per Impact, over 12 windows. Fauna behaviour and primary production rise in the dredging campaign and fall back with the work window; seafood contamination keeps rising until the late runoff treatment starts and then levels off around 10.">
           <figcaption><strong>Figure 4.</strong> Scenario 4 (runoff treatment from window 6): the dashed line is the pressure alone, the solid line pressure and responses together. The turbidity Impacts are controlled by the work window during the campaign; the seafood contamination, left untreated until window 6, never comes back down.</figcaption>
         </figure>
+        <p>The data needs table (Interpretation tab) says what to look up before trusting these
+          verdicts. With the runoff treatment added (scenario 2) it starts with the two links behind
+          the tight verdicts of seafood contamination and water quality, cargo terminal → surface
+          runoff and runoff treatment → surface runoff, alternated with the three States that have
+          no threshold (water turbidity, dissolved Zn and dissolved Cu).</p>
         <p>The lesson the network gives, in one line: <strong>fund the runoff treatment first and
           keep it running; add the work window only for the dredging campaigns</strong> — and
           leave primary production as the last concern, not because it is small, but because it

@@ -220,7 +220,18 @@ build_full_report_html <- function(
                    style = "max-width: 100%;"),
           caption_tag("Figure", next_figure_n(), sprintf(
             "For \"%s\": the pressure's worsening of each Impact (red; dark red = added by the response itself), what the response offsets (green) and the net effect (diamond; at or left of zero = neutralized). Impacts in priority order, top first.",
-            scenario_name))
+            scenario_name)),
+          {
+            dn <- data_needs(graph, sc)
+            if (nrow(dn) > 0) tagList(
+              tags$h5("Data needs — what to measure or look up first"),
+              tags$p(DATA_NEEDS_INTRO),
+              report_html_table(format_data_needs(dn)),
+              caption_tag("Table", next_table_n(), sprintf(
+                "For \"%s\": what to measure or look up first, ranked by how likely the data are to change a verdict (static reading).",
+                scenario_name))
+            )
+          }
         )
       })
       cmp <- compare_scenario_interpretations(graph, chosen)
