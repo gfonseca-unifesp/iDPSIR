@@ -21,4 +21,9 @@ test_that("supplement tables: every factor, link and scheduled push of the three
   # Data needs: the first-run stock threshold comes first (Sri Lanka).
   expect_equal(r$S3$data_needs$Item[1], "Fish stock (biomass)")
   expect_true(all(file.exists(file.path(out, c("S1_port.md", "S2_kenya.md", "S3_srilanka.md")))))
+  # The savepoints of each case are copied next to the tables, and load.
+  sps <- c("S1_example_port", "S2_example_mangi", "S2_example_mangi_default", "S3_example_gnanapragasam",
+           "S3_example_gnanapragasam_default", "S3_example_gnanapragasam_noaidfleet")
+  for (f in sps) expect_true(file.exists(file.path(out, paste0(f, ".idpsir.json"))), info = f)
+  expect_length(read_savepoint(file.path(out, "S1_example_port.idpsir.json"))$saved_scenarios, 4)
 })

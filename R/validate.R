@@ -56,6 +56,51 @@ get_known_dpsir_edge_fields <- function() {
 # spreadsheet program shows.
 # =====================================================
 
+# Columns people often name differently (a readable table, another tool):
+# when the app's name is missing, or the other name is present, the message
+# says which column to rename - the import never renames by itself.
+.pf_node_aliases <- list(
+  id = c("node_id", "code", "factor_id"),
+  label = c("factor", "name", "node", "node_name", "factor_name"),
+  dpsir_category = c("level", "category", "dpsir_level", "dpsir", "dpsir_class"),
+  descriptor = c("description"),
+  endpoint_class = c("impact_class", "endpoint"),
+  value_v = c("value", "v"),
+  threshold_level = c("threshold", "critical_level"),
+  self_regulation = c("selfregulation", "self_reg")
+)
+.pf_edge_aliases <- list(
+  from = c("source", "cause", "from_id"),
+  to = c("target", "effect", "to_id"),
+  interaction_type = c("sign", "type", "polarity", "direction"),
+  strength_class = c("class", "strength"),
+  weight = c("beta", "strength_value", "coefficient"),
+  evidence_type = c("evidence"),
+  weight_low = c("band_low", "low"),
+  weight_high = c("band_high", "high")
+)
+.pf_value_hint <- c(
+  interaction_type = " with values positive/negative",
+  dpsir_category = " with values Driver, Pressure, State, Impact or Response",
+  strength_class = " with values weak, moderate or strong",
+  endpoint_class = " with values ecological, service or welfare"
+)
+.pf_hint_of <- function(field) if (field %in% names(.pf_value_hint)) .pf_value_hint[[field]] else ""
+# " Found column 'sign'; rename it to 'interaction_type' with values positive/negative."
+.pf_rename_hint <- function(field, present, aliases) {
+  found <- intersect(tolower(aliases[[field]] %||% character()), tolower(present))
+  if (length(found) == 0) return("")
+  orig <- present[match(found[1], tolower(present))]
+  sprintf(" Found column '%s'; rename it to '%s'%s.", orig, field, .pf_hint_of(field))
+}
+# For a column the app does not know: which app column it probably is.
+.pf_unknown_hint <- function(col, present, aliases) {
+  if (tolower(col) == "band") return(" Split it into 'weight_low' and 'weight_high' (two numbers).")
+  target <- names(Filter(function(a) tolower(col) %in% a, aliases))
+  if (length(target) == 0 || target[1] %in% present) return("")
+  sprintf(" If it holds '%s', rename it to '%s'%s.", target[1], target[1], .pf_hint_of(target[1]))
+}
+
 # A cell is "blank" if it's genuinely missing (NA - what an empty CSV cell
 # parses to) or an empty/whitespace-only string - never based on its
 # stringified form, which would turn a real NA into the text "NA" and
@@ -74,15 +119,17 @@ preflight_import_nodes <- function(nodes_raw, schema = get_default_dpsir_schema(
   present <- names(nodes_raw)
   missing_required <- setdiff(get_required_dpsir_node_fields(), present)
   if (length(missing_required) > 0) {
-    blocking <- c(blocking, sprintf(
-      "Nodes file: missing required column '%s'.", missing_required
+    blocking <- c(blocking, paste0(
+      sprintf("Nodes file: missing required column '%s'.", missing_required),
+      vapply(missing_required, .pf_rename_hint, "", present = present, aliases = .pf_node_aliases)
     ))
   }
 
   unknown_cols <- setdiff(present, get_known_dpsir_node_fields())
   if (length(unknown_cols) > 0) {
-    warn <- c(warn, sprintf(
-      "Nodes file: column '%s' is not a recognized field and was ignored.", unknown_cols
+    warn <- c(warn, paste0(
+      sprintf("Nodes file: column '%s' is not a recognized field and was ignored.", unknown_cols),
+      vapply(unknown_cols, .pf_unknown_hint, "", present = present, aliases = .pf_node_aliases)
     ))
   }
 
@@ -301,15 +348,17 @@ preflight_import_edges <- function(edges_raw) {
   present <- names(edges_raw)
   missing_required <- setdiff(get_required_dpsir_edge_fields(), present)
   if (length(missing_required) > 0) {
-    blocking <- c(blocking, sprintf(
-      "Edges file: missing required column '%s'.", missing_required
+    blocking <- c(blocking, paste0(
+      sprintf("Edges file: missing required column '%s'.", missing_required),
+      vapply(missing_required, .pf_rename_hint, "", present = present, aliases = .pf_edge_aliases)
     ))
   }
 
   unknown_cols <- setdiff(present, get_known_dpsir_edge_fields())
   if (length(unknown_cols) > 0) {
-    warn <- c(warn, sprintf(
-      "Edges file: column '%s' is not a recognized field and was ignored.", unknown_cols
+    warn <- c(warn, paste0(
+      sprintf("Edges file: column '%s' is not a recognized field and was ignored.", unknown_cols),
+      vapply(unknown_cols, .pf_unknown_hint, "", present = present, aliases = .pf_edge_aliases)
     ))
   }
 
@@ -333,10 +382,10 @@ preflight_import_edges <- function(edges_raw) {
 
   if (length(missing_required) == 0) {
     if (!"interaction_type" %in% present) {
-      blocking <- c(blocking, paste(
+      blocking <- c(blocking, paste0(paste(
         "Edges file: missing column 'interaction_type'. Every edge needs a sign",
         "(positive = increases the target, negative = reduces it); there is no safe default."
-      ))
+      ), .pf_rename_hint("interaction_type", present, .pf_edge_aliases)))
     } else {
       raw <- edges_raw$interaction_type
       vals <- trimws(as.character(raw))
@@ -462,8 +511,34 @@ preflight_import <- function(nodes_raw, edges_raw = NULL, schema = get_default_d
     preflight_import_edges(edges_raw)
   }
 
+  # Every link must point at node ids. A file that uses the factors' names
+  # (a readable table) is caught here, with the fix, instead of at Review.
+  ends_blocking <- character()
+  if (!is.null(edges_raw) && nrow(as.data.frame(edges_raw)) > 0 && all(c("from", "to") %in% names(edges_raw)) &&
+      "id" %in% names(nodes_raw)) {
+    ids <- trimws(as.character(nodes_raw$id))
+    # The factors' names: `label`, or a column the hints above would rename to it.
+    label_col <- intersect(c("label", .pf_node_aliases$label), names(nodes_raw))
+    labels <- if (length(label_col)) trimws(as.character(nodes_raw[[label_col[1]]])) else character()
+    ends <- unique(c(trimws(as.character(edges_raw$from)), trimws(as.character(edges_raw$to))))
+    unknown <- setdiff(ends[!is.na(ends) & nzchar(ends)], ids)
+    if (length(unknown) > 0) {
+      as_labels <- unknown[unknown %in% labels]
+      if (length(as_labels) > 0) {
+        ends_blocking <- c(ends_blocking, sprintf(
+          "Edges file: 'from' and 'to' must hold node ids, not names - e.g. '%s' is the label of node '%s'. Replace each name by its id from the nodes file.",
+          as_labels[1], ids[match(as_labels[1], labels)]))
+      }
+      other <- setdiff(unknown, as_labels)
+      if (length(other) > 0) {
+        ends_blocking <- c(ends_blocking, sprintf(
+          "Edges file: '%s' (in from/to) is not the id of any node in the nodes file.", utils::head(other, 10)))
+      }
+    }
+  }
+
   list(
-    blocking = c(nodes_result$blocking, edges_result$blocking),
+    blocking = c(nodes_result$blocking, edges_result$blocking, ends_blocking),
     warnings = c(nodes_result$warnings, edges_result$warnings)
   )
 }
