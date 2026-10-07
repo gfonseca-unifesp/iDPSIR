@@ -15,7 +15,42 @@
 # Run from the repository root:
 #   Rscript data-raw/manuscript_supplement.R [out_dir]   (default manuscrito_v8/supplement)
 # Writes one CSV per table and one Markdown file per supplement, ready to
-# paste into the manuscript's supplementary material.
+# paste into the manuscript's supplementary material. The CSVs of factors
+# (S*_factors.csv) and links (S*_links.csv) use the app's import format -
+# the same columns as data/*_nodes.csv and data/*_edges.csv - so they load
+# with Start -> Import CSV files; the Markdown tables are the readable
+# version of the same content.
+
+# The app's import columns, in this order (R/validate.R).
+SUP_APP_NODE_COLS <- c("id", "label", "dpsir_category", "subsystem", "self_regulation", "growth_rate", "growth_cap",
+                       "reference_value", "sd", "threshold_level", "threshold_direction", "endpoint_class", "value_v", "descriptor")
+SUP_APP_EDGE_COLS <- c("from", "to", "interaction_type", "strength_class", "weight", "weight_low", "weight_high",
+                       "weight_source", "evidence_type", "reference")
+
+# Factors in the import format: every column the app knows, blank where the
+# savepoint has nothing.
+sup_app_nodes <- function(x) {
+  n <- x$sp$nodes
+  out <- as.data.frame(lapply(SUP_APP_NODE_COLS, function(k) if (k %in% names(n)) n[[k]] else NA), stringsAsFactors = FALSE)
+  names(out) <- SUP_APP_NODE_COLS
+  imp <- out$dpsir_category == "Impact"
+  out$endpoint_class[!imp] <- NA; out$value_v[!imp] <- NA
+  out$threshold_direction[is.na(out$threshold_level)] <- NA
+  out
+}
+
+# Links in the import format: a strength that comes from a class or the
+# default is written as the class only (weight and band blank), so the app
+# derives them exactly as in the savepoint; an entered, r2 or calibrated
+# strength is written with its weight, band and source.
+sup_app_edges <- function(x) {
+  e <- x$sp$edges
+  out <- as.data.frame(lapply(SUP_APP_EDGE_COLS, function(k) if (k %in% names(e)) e[[k]] else NA), stringsAsFactors = FALSE)
+  names(out) <- SUP_APP_EDGE_COLS
+  derived <- out$weight_source %in% c("class", "default")
+  out$weight[derived] <- NA; out$weight_low[derived] <- NA; out$weight_high[derived] <- NA
+  out
+}
 
 sup_load <- function(name, root = ".") {
   sp <- read_savepoint(file.path(root, "docs", paste0(name, ".idpsir.json")))
@@ -133,17 +168,38 @@ SUP_LINK_NAMES <- c(from = "From", to = "To", sign = "Sign", class = "Class", be
 SUP_SCEN_NAMES <- c(scenario = "Scenario", role = "Push", factor = "Factor", strength_pct = "Strength (%)", mode = "Mode",
                     start = "Start (window)", duration = "Duration (windows)")
 
+# The savepoints of each case, copied into the supplement as S<k>_<name>:
+# loading one (Start -> Load savepoint) brings the network with its sources,
+# saved scenarios and temporal settings, and recomputes every result.
+SUP_SAVEPOINTS <- list(
+  S1 = c("example_port"),
+  S2 = c("example_mangi", "example_mangi_default"),
+  S3 = c("example_gnanapragasam", "example_gnanapragasam_default", "example_gnanapragasam_noaidfleet")
+)
+
 manuscript_supplement <- function(root = ".", out_dir = "manuscrito_v8/supplement") {
   dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
-  w <- function(df, f) utils::write.csv(df, file.path(out_dir, f), row.names = FALSE)
+  for (k in names(SUP_SAVEPOINTS)) for (nm in SUP_SAVEPOINTS[[k]]) {
+    file.copy(file.path(root, "docs", paste0(nm, ".idpsir.json")), file.path(out_dir, sprintf("%s_%s.idpsir.json", k, nm)),
+              overwrite = TRUE)
+  }
+  w <- function(df, f) utils::write.csv(df, file.path(out_dir, f), row.names = FALSE, na = "", fileEncoding = "UTF-8")
+  # Factors and links go out in the app's import format; the readable
+  # versions are the Markdown tables.
+  w_case <- function(tabs, x, prefix) {
+    for (k in names(tabs)) {
+      df <- switch(k, factors = sup_app_nodes(x), links = sup_app_edges(x), tabs[[k]])
+      w(df, sprintf("%s_%s.csv", prefix, k))
+    }
+  }
 
   # ---- S1, port ----
   port <- sup_load("example_port", root)
   s1 <- list(factors = sup_factors(port), links = sup_links(port), scenarios = sup_scenarios(port, 12),
              data_needs = sup_data_needs(port, port$sp$saved_scenarios[[2]]))
-  for (k in names(s1)) w(s1[[k]], sprintf("S1_port_%s.csv", k))
+  w_case(s1, port, "S1_port")
   md <- c("# Supplementary Material S1. Port (hypothetical case, Section 5.1)", "",
-          "Savepoint: `docs/example_port.idpsir.json` (built by `data-raw/port_build.R`). One window = one season; 12 windows. All strengths are classes (weak 0.15, moderate 0.45, strong 0.80), with the class band.", "",
+          "Savepoint: `S1_example_port.idpsir.json` (in the repository, `docs/example_port.idpsir.json`, built by `data-raw/port_build.R`): load it with Start -> Load savepoint to get the network and the four scenarios. Network only, as CSV: `S1_port_factors.csv` and `S1_port_links.csv` (Start -> Import CSV files). One window = one season; 12 windows. All strengths are classes (weak 0.15, moderate 0.45, strong 0.80), with the class band.", "",
           sup_md_table(sup_rename(s1$factors, SUP_FACTOR_NAMES), "Table S1.1. Factors."),
           sup_md_table(sup_rename(s1$links, SUP_LINK_NAMES), "Table S1.2. Links."),
           sup_md_table(sup_rename(s1$scenarios, SUP_SCEN_NAMES), "Table S1.3. The four scenarios and the schedule of each factor (windows = seasons; the dredging campaign is windows 3-5)."),
@@ -155,9 +211,9 @@ manuscript_supplement <- function(root = ".", out_dir = "manuscrito_v8/supplemen
   s2 <- list(factors = sup_factors(ken), links = sup_links(ken, section = TRUE), scenarios = sup_scenarios(ken, 30),
              data_needs = sup_data_needs(ken, ken$sp$saved_scenarios[[1]]))
   s2$links <- s2$links[, c("from", "to", "sign", "class", "beta", "band", "strength_from", "evidence", "section", "reference")]
-  for (k in names(s2)) w(s2[[k]], sprintf("S2_kenya_%s.csv", k))
+  w_case(s2, ken, "S2_kenya")
   md <- c("# Supplementary Material S2. Kenyan reef fishery, rebuilt from Mangi et al. (2007) (Section 5.2)", "",
-          "Savepoints: `docs/example_mangi.idpsir.json` (built by `data-raw/mangi2007_build.R`) and its first-run version `docs/example_mangi_default.idpsir.json` (`data-raw/first_run_build.R`). One window = one year. The article gives no link strengths: every strength is a class. The only number taken from the article is the coastal population growth of 3.7% per year. Each link cites the section of Mangi et al. (2007), doi:10.1016/j.ocecoaman.2006.10.003.", "",
+          "Savepoints: `S2_example_mangi.idpsir.json` (in the repository, `docs/example_mangi.idpsir.json`, built by `data-raw/mangi2007_build.R`) and its first-run version `S2_example_mangi_default.idpsir.json` (`data-raw/first_run_build.R`): load them with Start -> Load savepoint. Network only, as CSV: `S2_kenya_factors.csv` and `S2_kenya_links.csv` (Start -> Import CSV files). One window = one year. The article gives no link strengths: every strength is a class. The only number taken from the article is the coastal population growth of 3.7% per year. Each link cites the section of Mangi et al. (2007), doi:10.1016/j.ocecoaman.2006.10.003.", "",
           sup_md_table(sup_rename(s2$factors, SUP_FACTOR_NAMES), "Table S2.1. Factors."),
           sup_md_table(sup_rename(s2$links, SUP_LINK_NAMES), "Table S2.2. Links, with the section of the article each comes from."),
           sup_md_table(sup_rename(s2$scenarios, SUP_SCEN_NAMES), "Table S2.3. The four scenarios (every push acts in every window; the temporal reading of scenario 4 runs 30 years)."),
@@ -172,9 +228,9 @@ manuscript_supplement <- function(root = ".", out_dir = "manuscrito_v8/supplemen
   s3 <- list(parameters = par, factors = sup_factors(sl), links = sup_links(sl), schedule = sup_scenarios(sl, 26),
              data_needs = sup_data_needs(sl0, list(pressure_active = ss0$pressure_active, pressure_strengths = ss0$pressure_strengths,
                                                    strengths = ss0$response_strengths), temporal = TRUE))
-  for (k in names(s3)) w(s3[[k]], sprintf("S3_srilanka_%s.csv", k))
+  w_case(s3, sl, "S3_srilanka")
   md <- c("# Supplementary Material S3. Sri Lankan small-scale fishery, parameterized from Gnanapragasam et al. (2026) (Section 5.3)", "",
-          "Savepoints: `docs/example_gnanapragasam.idpsir.json` (published network, built by `data-raw/gnanapragasam2026_build.R`), `docs/example_gnanapragasam_default.idpsir.json` (first run) and `docs/example_gnanapragasam_noaidfleet.idpsir.json` (variant without aid -> fleet). One window = one year; window 0 = 2004. Observed effort: `data/gnanapragasam2026_effort_observed.csv`. The fit of the two aid strengths, the out-of-sample test and the comparison of networks are described in Supplement S7.", "",
+          "Savepoints (Start -> Load savepoint): `S3_example_gnanapragasam.idpsir.json` (published network and scenario, 2005-2030; in the repository `docs/example_gnanapragasam.idpsir.json`, built by `data-raw/gnanapragasam2026_build.R`), `S3_example_gnanapragasam_default.idpsir.json` (first run) and `S3_example_gnanapragasam_noaidfleet.idpsir.json` (variant without aid -> fleet). Network only, as CSV: `S3_srilanka_factors.csv` and `S3_srilanka_links.csv` (Start -> Import CSV files). One window = one year; window 0 = 2004. Observed effort: `data/gnanapragasam2026_effort_observed.csv`. The fit of the two aid strengths, the out-of-sample test and the comparison of networks are described in Supplement S7.", "",
           sup_md_table(sup_rename(s3$parameters, c(item = "Item", value = "Value", source = "Source")), "Table S3.1. Parameters and sources."),
           sup_md_table(sup_rename(s3$factors, SUP_FACTOR_NAMES), "Table S3.2. Factors."),
           sup_md_table(sup_rename(s3$links, SUP_LINK_NAMES), "Table S3.3. Links and the source of each strength."),

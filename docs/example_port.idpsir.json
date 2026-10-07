@@ -3,9 +3,9 @@
   "metadata": {
     "project_name": "Example: port operations - which response, and when?",
     "author": "iDPSIR examples",
-    "created_at": "2026-09-30 10:08:21.092221",
+    "created_at": "2026-10-07 17:46:05.037292",
     "notes": "Didactic example. One window = one season; maintenance dredging campaign in windows 3-5.",
-    "updated_at": "2026-09-30 10:08:21.092221",
+    "updated_at": "2026-10-07 17:46:05.037292",
     "weight_mode": "structural"
   },
   "schema": [
@@ -14,28 +14,28 @@
       "order": 1,
       "color": "#0072B2",
       "shape": "square",
-      "role": null
+      "role": "driver"
     },
     {
       "name": "Pressure",
       "order": 2,
       "color": "#D55E00",
       "shape": "triangle",
-      "role": null
+      "role": "pressure"
     },
     {
       "name": "State",
       "order": 3,
       "color": "#009E73",
       "shape": "dot",
-      "role": null
+      "role": "state"
     },
     {
       "name": "Impact",
       "order": 4,
       "color": "#E69F00",
       "shape": "diamond",
-      "role": null
+      "role": "impact"
     },
     {
       "name": "Response",
@@ -628,6 +628,7 @@
         }
       ],
       "n_simulations": 300,
+      "structural_uncertainty": false,
       "temporal_mode_pressure": "window",
       "temporal_mode_response": "window",
       "temporal_stop_rule": "fixed",
@@ -688,6 +689,7 @@
         }
       ],
       "n_simulations": 300,
+      "structural_uncertainty": false,
       "temporal_mode_pressure": "window",
       "temporal_mode_response": "window",
       "temporal_stop_rule": "fixed",
@@ -757,6 +759,7 @@
         }
       ],
       "n_simulations": 300,
+      "structural_uncertainty": false,
       "temporal_mode_pressure": "window",
       "temporal_mode_response": "window",
       "temporal_stop_rule": "fixed",
@@ -831,6 +834,7 @@
         }
       ],
       "n_simulations": 300,
+      "structural_uncertainty": false,
       "temporal_mode_pressure": "window",
       "temporal_mode_response": "window",
       "temporal_stop_rule": "fixed",
