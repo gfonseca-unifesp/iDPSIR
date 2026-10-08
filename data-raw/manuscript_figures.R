@@ -198,7 +198,9 @@ fig2_architecture <- function() {
 # in the article and the one downloaded from the Graph tab are the same.
 ms_line_mm <- function() network_line_mm(MS_PT)
 ms_network_layout <- function(g, schema, wrap = 22) network_static_layout(g, schema, wrap)
-ms_network_panel <- function(g, lay, node_cex = 2.1, label_cex = 0.875) draw_network_static_panel(g, lay, node_cex, label_cex)
+ms_network_panel <- function(g, schema, lay, node_cex = 2.1, label_cex = 0.875) {
+  draw_network_static_panel(g, lay, network_view(g, schema), node_cex, label_cex)
+}
 ms_network_legend <- function(schema) draw_network_static_legend(schema)
 
 # ---------------------------------------------------------------------------
@@ -270,8 +272,9 @@ ms_case_figure <- function(g, schema, lay, draw_b, b_mm, width_mm = 190, node_ce
     ms_letter("a")   # first drawing on the page: no new = TRUE
     top <- top - f(letter_mm)
     graphics::par(fig = c(0, 1, top - f(net_mm), top), new = TRUE)
-    if (identical(layout, "circle")) draw_network_circle_panel(g, lay, node_cex = node_cex, edge_style = edge_style)
-    else draw_network_static_panel(g, lay, node_cex = node_cex, edge_style = edge_style)
+    v <- network_view(g, schema)
+    if (identical(layout, "circle")) draw_network_circle_panel(g, lay, v, node_cex = node_cex, edge_style = edge_style)
+    else draw_network_static_panel(g, lay, v, node_cex = node_cex, edge_style = edge_style)
     top <- top - f(net_mm)
     graphics::par(fig = c(0, 1, top - f(legend_mm), top), new = TRUE)
     draw_network_static_legend(schema, cats = lay$cats, edge_style = edge_style)

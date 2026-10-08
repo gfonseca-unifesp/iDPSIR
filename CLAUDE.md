@@ -47,7 +47,12 @@ testthat::test_dir("tests/testthat")          # ou: Rscript tests/testthat.R
 - `R/relevance.R` — importância D, confiabilidade ρ, lacuna e prioridade dos Impactos.
 - `R/figure_export.R` — `export_figure()` (PNG/TIFF com dpi, PDF/SVG; largura em mm; fonte em pt),
   rede estática para impressão (`draw_network_static()`), botão/diálogo "Download figure…"
-  (`figure_export_button()`, `register_figure_export()`) em toda figura do app; usado também por
+  (`figure_export_button()`, `register_figure_export()`, com pré-visualização PNG no diálogo) em toda
+  figura do app; a rede segue a aba Graph (paleta, filtro, formas DPSIR, tracejado por confiança,
+  cores por comunidade, destaque do caminho ou do nó selecionado; layout "screen" = camadas com o
+  espaçamento e os nós arrastados; opções em `network_view()`) e
+  substitui o "Export as png" do visNetwork (html2canvas agora vem de `html2canvas_dependency()`,
+  `R/graph.R`, para o "Save current view for report"); usado também por
   `data-raw/manuscript_figures.R`. Relatório: qualidade 96/300 dpi e rede estática.
 - `R/data_needs.R` — `data_needs()`: tabela ordenada do que medir ou buscar primeiro (passo 5 do
   manuscrito v7): ligações dos vereditos apertados e Estados sem limiar intercalados, limiar sem

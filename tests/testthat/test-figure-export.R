@@ -96,3 +96,71 @@ test_that("static network: circle layout and line-type links", {
                                                                       network_layout = "circle", network_edge_style = "linetype"))$html)
   expect_true(grepl("on a circle", html, fixed = TRUE))
 })
+
+test_that("static network: DPSIR shapes and dashed low-confidence links, as on the Graph tab", {
+  x <- fx_graph()
+  # Shapes come from the model's levels (square, triangle, dot, diamond, star).
+  cats <- igraph::V(x$g)$dpsir_category
+  expect_true(all(network_node_shapes(cats, x$schema, FALSE) == "dot"))
+  shp <- network_node_shapes(cats, x$schema, TRUE)
+  expect_equal(unique(shp[cats == "Response"]), "star")
+  expect_equal(unique(shp[cats == "Driver"]), "square")
+  # Dashed = confidence below the threshold; 0 or NA = none.
+  conf <- igraph::E(x$g)$confidence
+  expect_equal(sum(network_dash_flags(x$g, 0.5)), sum(conf < 0.5))
+  expect_false(any(network_dash_flags(x$g, 0)))
+  expect_false(any(network_dash_flags(x$g, NA)))
+  expect_identical(network_edge_look("positive", 0.45, "color", dashed = TRUE)$lty, 2)
+  expect_identical(network_edge_look("negative", 0.45, "linetype", dashed = TRUE)$lty, 3)
+  expect_identical(network_edge_look("negative", 0.45, "linetype", dashed = TRUE)$head, "bar")
+  # The dashed links get a legend row, so the figure is a little taller.
+  expect_gt(network_static_height_mm(x$g, x$schema, 190, 9, dash_below = 0.5),
+            network_static_height_mm(x$g, x$schema, 190, 9))
+  for (lay in c("columns", "circle")) for (es in c("color", "linetype")) {
+    f <- tempfile(fileext = ".png")
+    expect_silent(export_figure(function() draw_network_static(x$g, x$schema, layout = lay, edge_style = es, shapes = TRUE,
+                                                               dash_below = 0.5), f, "png", 190, 150, 100, 9))
+    expect_true(file.size(f) > 1000)
+  }
+})
+
+test_that("the interactive graph has no 'Export as png' button (the download dialog replaces it)", {
+  expect_false(any(grepl("visExport", deparse(build_network_visual))))
+  expect_false(any(grepl("visExport", deparse(build_community_visual))))
+  expect_true(file.exists(file.path(html2canvas_dependency()$src$file, "html2canvas.js")))
+})
+
+test_that("static network: highlight, community colours and the on-screen layout", {
+  x <- fx_graph()
+  g <- x$g; el <- igraph::as_edgelist(g)
+  # Pathway highlight: only links between highlighted nodes stay in colour.
+  v <- network_view(g, x$schema, highlight = c("D1", "P2", "S1"))
+  expect_equal(sum(!v$node_dim), 3)
+  expect_equal(sum(!v$edge_dim), sum(el[, 1] %in% c("D1", "P2", "S1") & el[, 2] %in% c("D1", "P2", "S1")))
+  expect_true(network_edge_look("positive", 0.8, "color", dim = TRUE)$col == NETWORK_DIM_LINE)
+  # Selected node: its own links, given explicitly.
+  own <- el[, 1] == "S1" | el[, 2] == "S1"
+  v2 <- network_view(g, x$schema, highlight = c("S1", "P1"), highlight_edges = own)
+  expect_equal(sum(!v2$edge_dim), sum(own))
+  # The greyed part gets a legend row; communities with shapes add the levels' row.
+  expect_equal(network_legend_rows("color", v), 2)
+  vc <- network_view(g, x$schema, shapes = TRUE, node_colors = c(D1 = "#ff0000"), color_legend = c("Community 1" = "#ff0000"))
+  expect_equal(vc$fill[igraph::V(g)$name == "D1"], "#ff0000")
+  expect_equal(network_legend_rows("color", vc), 2)
+  # "As on screen": the layered layout with its spacing and a dragged node.
+  pos <- compute_effective_layout(graph_to_nodes(g), x$schema, "layered", 200, 80, data.frame(id = "R5", x = 700, y = -260))
+  lay <- network_screen_layout(g, x$schema, pos, 190, 9)
+  expect_equal(lay$y[igraph::V(g)$name == "R5"], 260)
+  wide <- compute_effective_layout(graph_to_nodes(g), x$schema, "layered", 200, 160)
+  expect_gt(network_static_height_mm(g, x$schema, 190, 9, layout = "screen", positions = wide),
+            network_static_height_mm(g, x$schema, 190, 9, layout = "screen", positions = pos))
+  for (a in list(list(layout = "screen", positions = pos, highlight = c("D1", "P2")),
+                 list(layout = "columns", node_colors = c(D1 = "#ff0000"), color_legend = c("Community 1" = "#ff0000"), shapes = TRUE),
+                 list(layout = "circle", highlight = c("S1", "P1"), highlight_edges = own, edge_style = "linetype"))) {
+    f <- tempfile(fileext = ".png")
+    expect_silent(export_figure(function() do.call(draw_network_static, c(list(g = g, schema = x$schema), a)), f, "png", 190, 150, 100, 9))
+    expect_true(file.size(f) > 1000)
+  }
+  # Without positions the "screen" layout falls back to the columns.
+  expect_silent(export_figure(function() draw_network_static(g, x$schema, layout = "screen"), tempfile(fileext = ".png"), "png", 190, 120, 100, 9))
+})

@@ -291,6 +291,17 @@ get_interaction_type_colors <- function() {
   )
 }
 
+# html2canvas, used by "Save current view for report" to capture the graph
+# (mod_report.R), from visNetwork's own files - no extra package, also in the
+# browser-only build. It used to come with visExport()'s "Export as png"
+# button, removed in Revisao 3 (the "Download network figure…" dialog
+# replaced it).
+html2canvas_dependency <- function() {
+  htmltools::htmlDependency("html2canvas", as.character(utils::packageVersion("visNetwork")),
+                            src = system.file("htmlwidgets/lib/export/html2canvas", package = "visNetwork"),
+                            script = "html2canvas.js")
+}
+
 build_edge_legend <- function(confidence_threshold = 0.5) {
   colors <- get_interaction_type_colors()
 
@@ -564,10 +575,6 @@ build_network_visual <- function(
       keyboard = TRUE,
       multiselect = TRUE
     ) %>%
-    visExport(
-      type = "png",
-      name = "iDPSIR_network"
-    ) %>%
     visOptions(
       highlightNearest = list(
         enabled = TRUE,
@@ -716,10 +723,6 @@ build_community_visual <- function(
       navigationButtons = TRUE,
       keyboard = TRUE,
       multiselect = TRUE
-    ) %>%
-    visExport(
-      type = "png",
-      name = "iDPSIR_communities"
     ) %>%
     visOptions(
       highlightNearest = list(
