@@ -148,12 +148,13 @@ mod_graph_ui <- function(id) {
           column(width = 6, actionButton(ns("save_snapshot"), "Save current view for report", icon = icon("camera"), class = "btn-outline-primary", width = "100%"))
         ),
         uiOutput(ns("snapshot_status")),
-        # Revisao 3: the network drawn for print (DPSIR columns, readable
-        # labels, sign legend), in any format, size, resolution and font.
+        # Revisao 3: the network drawn for print (readable labels, sign
+        # legend), in any format, size, resolution and font, with a preview.
+        # It replaces visNetwork's "Export as png" (a screen grab).
         tags$div(style = "margin-top: 8px;",
                  figure_export_button(ns, "network_static", "Download network figure…"),
                  tags$span(class = "text-muted", style = "font-size: 12px; margin-left: 8px;",
-                           "Drawn for print in DPSIR columns, independent of the view above."))
+                           "Drawn for print with this tab's settings (shapes, dashed links, communities, highlight, spacing); preview in the dialog."))
       )
     )
   )
@@ -319,6 +320,9 @@ mod_graph_server <- function(id, schema, nodes, edges, graph, positions, set_pos
     d_legend_font <- debounce(reactive(input$legend_font_size %||% 14), 400)
     d_conf_threshold <- debounce(reactive(input$confidence_threshold %||% 0.5), 400)
     redraw_counter <- reactiveVal(0)
+    display_schema <- reactive({
+      if (is.null(input$palette) || identical(input$palette, "model")) schema() else apply_schema_palette(schema(), input$palette)
+    })
 
     output$network <- renderVisNetwork({
       req(graph())
@@ -326,7 +330,7 @@ mod_graph_server <- function(id, schema, nodes, edges, graph, positions, set_pos
       redraw_counter()
       manual_positions <- isolate(positions())
 
-      display_schema <- if (is.null(input$palette) || identical(input$palette, "model")) schema() else apply_schema_palette(schema(), input$palette)
+      display_schema <- display_schema()
 
       widget <- if (identical(input$color_by, "community")) {
         build_community_visual(
@@ -475,9 +479,12 @@ mod_graph_server <- function(id, schema, nodes, edges, graph, positions, set_pos
     # re-emit vis.js's "select" event, so the graph -> table direction has
     # no feedback loop to guard against.
     suppress_table_sync <- reactiveVal(FALSE)
+    # The node selected on the graph or in the table (for the download).
+    selected_node_ids <- reactiveVal(character())
 
     observeEvent(input$node_click, {
       ids <- input$node_click
+      selected_node_ids(as.character(ids))
       proxy <- dataTableProxy("nodes_table")
 
       if (length(ids) == 0) {
@@ -502,10 +509,12 @@ mod_graph_server <- function(id, schema, nodes, edges, graph, positions, set_pos
       if (is.null(sel)) return()
 
       node_id <- filtered_nodes()$id[sel]
+      selected_node_ids(node_id)
       visNetworkProxy(session$ns("network")) %>% visSelectNodes(id = node_id)
     })
 
     observeEvent(input$clear_selection, {
+      selected_node_ids(character())
       selectRows(dataTableProxy("nodes_table"), NULL)
       visNetworkProxy(session$ns("network")) %>% visUnselectAll()
     })
@@ -584,18 +593,100 @@ mod_graph_server <- function(id, schema, nodes, edges, graph, positions, set_pos
       paste0(paste(parts, collapse = "; "), ".")
     }
 
-    # Layout (columns by level, or a circle with radial labels) and link
-    # style (colour, or line type for black and white) of the print drawing.
+    # The print figure follows what the tab shows, as the dialog's starting
+    # values: palette, subsystem filter, "Use DPSIR shapes", "Dash edges below
+    # confidence", the colouring by community, the pathway highlight or the
+    # node selected (Nodes box or a click on the graph, shown with its
+    # neighbours, as on screen), and - with the layout "As on screen" - the
+    # layered layout with its spacing and the nodes dragged by hand. The
+    # dialog adds the link style (colour, or line type for black and white).
     net_opt <- function(x, default) input[[paste0("figexp_network_static_", x)]] %||% default
+    net_dash <- function() {
+      d <- suppressWarnings(as.numeric(net_opt("dash", input$confidence_threshold %||% 0.5)))
+      if (length(d) == 0 || is.na(d)) NA else d
+    }
+    net_label <- function(ids) {
+      n <- filtered_nodes()
+      lab <- n$label[match(ids, n$id)]
+      ifelse(is.na(lab) | !nzchar(lab), ids, lab)
+    }
+    # Highlight options available now: the pathway picked on the tab and the
+    # selected node.
+    net_highlight_choices <- function() {
+      ch <- c("None" = "none")
+      hl <- highlighted_nodes()
+      if (length(hl) > 0 && !identical(input$color_by, "community")) {
+        ch <- c(ch, setNames("pathway", paste("Pathway:", paste(net_label(hl), collapse = " → "))))
+      }
+      sel <- intersect(selected_node_ids(), filtered_nodes()$id)
+      if (length(sel) > 0) {
+        ch <- c(ch, setNames("selected", sprintf("Selected node: %s and its links", paste(net_label(sel), collapse = ", "))))
+      }
+      ch
+    }
+    net_highlight <- function(g) {
+      mode <- net_opt("highlight", "none")
+      if (identical(mode, "pathway")) {
+        return(list(highlight = highlighted_nodes(), highlight_label = "outside the highlighted pathway"))
+      }
+      sel <- intersect(selected_node_ids(), igraph::V(g)$name)
+      if (identical(mode, "selected") && length(sel) > 0) {
+        el <- igraph::as_edgelist(g, names = TRUE)
+        nb <- unique(c(sel, el[el[, 1] %in% sel, 2], el[el[, 2] %in% sel, 1]))
+        return(list(highlight = nb, highlight_edges = el[, 1] %in% sel | el[, 2] %in% sel,
+                    highlight_label = "not linked to the selected node"))
+      }
+      list()
+    }
+    net_community <- function() {
+      if (!identical(net_opt("colors", "level"), "community") || !identical(input$color_by, "community")) return(list())
+      mem <- membership_vector()
+      leg <- build_community_legend(mem)
+      cols <- setNames(leg$color, leg$label)
+      list(node_colors = setNames(unname(cols[paste("Community", unname(mem))]), names(mem)),
+           color_legend = setNames(leg$color, leg$label))
+    }
+    net_args <- function() {
+      g <- filtered_graph()
+      layout <- net_opt("layout", "columns")
+      c(list(g = g, schema = display_schema(), layout = layout, edge_style = net_opt("edges", "color"),
+             shapes = isTRUE(net_opt("shapes", isTRUE(input$use_shapes))), dash_below = net_dash(),
+             positions = if (identical(layout, "screen") && !is.null(filtered_nodes()) && nrow(filtered_nodes()) > 0)
+               compute_effective_layout(filtered_nodes(), schema(), layout_mode = "layered", x_spacing = d_x_spacing(),
+                                        y_spacing = d_y_spacing(), manual_positions = positions())),
+        if (!is.null(g)) net_highlight(g), net_community())
+    }
     register_figure_export(input, output, session, "network_static", filename = "network",
-      draw = function() draw_network_static(graph(), schema(), layout = net_opt("layout", "columns"),
-                                            edge_style = net_opt("edges", "color")),
-      height = function(w, font) network_static_height_mm(graph(), schema(), w, font, layout = net_opt("layout", "columns"),
-                                                          edge_style = net_opt("edges", "color")),
-      extra_ui = function(key) fluidRow(
-        column(6, selectInput(key("layout"), "Layout", choices = NETWORK_LAYOUT_CHOICES, selected = net_opt("layout", "columns"))),
-        column(6, selectInput(key("edges"), "Links", choices = NETWORK_EDGE_CHOICES, selected = net_opt("edges", "color")))
-      ))
+      draw = function() do.call(draw_network_static, net_args()),
+      height = function(w, font) { a <- net_args(); a$width_mm <- w; a$font_pt <- font; do.call(network_static_height_mm, a) },
+      extra_ui = function(key) {
+        hl_choices <- net_highlight_choices()
+        hl_default <- if ("pathway" %in% hl_choices) "pathway" else if ("selected" %in% hl_choices) "selected" else "none"
+        community <- identical(input$color_by, "community")
+        tagList(
+          fluidRow(
+            column(6, selectInput(key("layout"), "Layout", choices = NETWORK_LAYOUT_CHOICES, selected = net_opt("layout", "columns"))),
+            column(6, selectInput(key("edges"), "Links", choices = NETWORK_EDGE_CHOICES, selected = net_opt("edges", "color")))
+          ),
+          conditionalPanel(sprintf("input['%s'] == 'screen'", key("layout")),
+                           helpText("Uses the Graph tab's layered layout as it is on screen: the spacing set in",
+                                    "'Layout & spacing' and any node dragged by hand. If labels overlap, raise the vertical spacing there.")),
+          fluidRow(
+            column(6, checkboxInput(key("shapes"), "Use DPSIR shapes", value = isTRUE(input$use_shapes))),
+            column(6, numericInput(key("dash"), "Dash links below confidence (0 = none)",
+                                   value = input$confidence_threshold %||% 0.5, min = 0, max = 1, step = 0.05))
+          ),
+          fluidRow(
+            column(6, selectInput(key("colors"), "Node colours",
+                                  choices = c("DPSIR level" = "level",
+                                              if (community) setNames("community", sprintf("Community (%s)", input$community_algorithm))),
+                                  selected = if (community) "community" else "level")),
+            column(6, selectInput(key("highlight"), "Highlight", choices = hl_choices, selected = hl_default))
+          ),
+          if (!community) helpText("To colour the nodes by community, choose it in the Communities box first."),
+          if (length(hl_choices) == 1) helpText("To highlight, pick a pathway (Pathway highlight box) or select a node (graph or Nodes box).")
+        )
+      })
 
     observeEvent(input$save_snapshot, {
       name <- trimws(input$snapshot_name)

@@ -8,8 +8,10 @@
 # scenarios. Nothing here recomputes anything the other tabs don't already
 # compute - this module just lets the user pick what goes into the file.
 #
-# Graph snapshots are captured client-side with html2canvas (already loaded
-# by visNetwork's visExport() on the Graph widget, so no extra dependency)
+# Graph snapshots are captured client-side with html2canvas (the copy that
+# ships with visNetwork, loaded by html2canvas_dependency() in R/graph.R - it used
+# to come with visExport()'s "Export as png" button, removed in Revisao 3
+# because the "Download network figure…" dialog replaced it)
 # and sent back to the server as a data URL via a custom message handler -
 # this avoids adding a headless-rendering package (webshot2/phantomjs) just
 # to get PNGs into an HTML file, same reasoning that kept the report off
@@ -31,7 +33,7 @@
 #
 # 1. LOW RESOLUTION: html2canvas's modern `scale` option does nothing here -
 #    confirmed by inspecting `html2canvas.toString()` directly: the version
-#    visNetwork's visExport() bundles predates v1.0 and has no such option
+#    visNetwork bundles predates v1.0 and has no such option
 #    (captures always come out at plain CSS pixel size, ~760x800). Since
 #    vis-network's own <canvas> DOES redraw sharp at whatever CSS size its
 #    container is given (confirmed: resizing the container 2.5x made the
@@ -78,6 +80,8 @@ mod_report_ui <- function(id) {
     title = "Report",
     status = "primary",
     solidHeader = TRUE,
+
+    html2canvas_dependency(),
 
     tags$script(HTML(
       "if (!window.idpsirCaptureHandlerRegistered) {
